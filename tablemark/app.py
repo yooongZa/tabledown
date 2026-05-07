@@ -103,7 +103,7 @@ class TabledownApp(rumps.App):
             if updated is None:
                 return
 
-            write_clipboard(**updated)
+            write_clipboard(**updated, mark_generated=True)
             self._last_change_count = clipboard_change_count()
             log("clipboard formats updated")
         except Exception as e:
