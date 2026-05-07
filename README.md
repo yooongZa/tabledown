@@ -1,0 +1,115 @@
+# Tabledown
+
+> Excel ↔ Markdown 표를 일반 복사/붙여넣기로 변환해주는 macOS 메뉴바 유틸리티
+
+## 동작 방식
+
+| 입력 | 붙여넣는 곳 | 출력 |
+|------|------------|------|
+| Excel/스프레드시트 표 (`Cmd+C`) | 마크다운 에디터 (`Cmd+V`) | 마크다운 표 |
+| 마크다운 표 (`Cmd+C`) | Excel (`Cmd+V`) | 셀에 분리된 표 |
+
+Tabledown은 clipboard(클립보드)를 감시하다가 표를 발견하면 Markdown plain text(일반 텍스트)와 HTML table(HTML 표) 형식을 같이 넣습니다. 붙여넣는 앱이 자기에게 맞는 형식을 골라 사용합니다.
+
+기존 clipboard format(클립보드 형식)은 보존하고 필요한 text/html 형식만 추가 또는 갱신합니다. 표가 아닌 일반 텍스트일 때는 clipboard를 바꾸지 않습니다.
+
+## 설치 (개발 모드)
+
+### 1. 의존성 설치
+
+```bash
+cd Tabledown
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 2. 실행
+
+```bash
+python run.py
+```
+
+메뉴바에 3x2 table(표) 아이콘이 나타납니다.
+
+### 3. macOS 권한
+
+기본 사용에는 손쉬운 사용(Accessibility)이나 입력 모니터링(Input Monitoring) 권한이 필요하지 않습니다.
+
+## 사용법
+
+1. Excel에서 셀 영역 선택 → `Cmd+C`
+2. Obsidian/Claude/마크다운 에디터에서 `Cmd+V`
+3. 마크다운 표로 붙는지 확인
+
+성공 여부는 붙여넣기 결과 또는 진단 로그로 확인합니다.
+
+역방향:
+
+1. 마크다운 표 전체 선택 → `Cmd+C`
+2. Excel에서 시작 셀 선택 → `Cmd+V`
+3. 셀별로 분리되어 붙는지 확인
+
+## 문제 확인
+
+붙여넣기 결과가 기대와 다르면 Tabledown이 실행 중인지, 진단 로그에 변환 기록이 남는지 확인하세요.
+
+복사 직후 너무 빠르게 붙여넣으면 앱이 clipboard를 보강하기 전에 원본이 붙을 수 있습니다. 보통 0.1초 안팎에 처리됩니다.
+
+진단 로그는 아래 파일에 기록됩니다.
+
+```bash
+tail -f ~/Library/Logs/Tabledown.log
+```
+
+## 변경 이력
+
+- 2026-05-07: 앱 이름을 Tabledown으로 변경하고 bundle metadata(번들 메타데이터), app bundle(앱 번들), 로그 경로를 새 이름에 맞게 갱신
+- 2026-05-07: `Cmd+Ctrl+M` 전역 단축키 방식에서 clipboard watcher(클립보드 감시) 방식으로 변경
+- 2026-05-07: Excel 표 복사 시 Markdown plain text(일반 텍스트)를 추가해 마크다운 에디터에서 바로 붙여넣기 가능
+- 2026-05-07: Markdown 표 복사 시 HTML table(HTML 표)을 추가해 Excel에서 셀 단위로 바로 붙여넣기 가능
+- 2026-05-07: Excel native format(네이티브 형식)을 보존해 Excel → Excel 일반 붙여넣기 호환성 개선
+- 2026-05-07: Excel 병합 셀의 `rowspan`/`colspan`을 빈 셀로 확장해 Markdown 변환 시 행/열 정렬 보존
+- 2026-05-07: 메뉴바 아이콘을 3x2 table(표) 모티브의 40px retina template icon(레티나 템플릿 아이콘)으로 변경
+- 2026-05-07: 기본 사용에서 손쉬운 사용(Accessibility), 입력 모니터링(Input Monitoring) 권한 요구 제거
+- 2026-05-06: crash(충돌) 원인이 되던 `pynput` keyboard hook(키보드 후킹)을 제거하고 Quartz(쿼츠) 기반 구현으로 정리
+
+## .app 빌드 (배포용)
+
+```bash
+pip install py2app
+python setup.py py2app
+```
+
+`dist/Tabledown.app` 생성됨. `/Applications/`로 옮겨서 사용.
+
+## 프로젝트 구조
+
+```
+Tabledown/
+├── run.py                      # 진입점
+├── setup.py                    # py2app 빌드 설정
+├── requirements.txt
+├── assets/                     # 메뉴바/앱 아이콘
+└── tablemark/
+    ├── app.py                  # 메뉴바 메인 (rumps)
+    ├── hotkey.py               # 이전 전역 단축키 리스너 (Quartz)
+    ├── clipboard.py            # NSPasteboard 래퍼 + changeCount 확인
+    ├── logger.py               # 진단 로그 기록
+    └── converter/
+        ├── html_to_md.py       # Excel HTML → 마크다운
+        └── md_to_tsv.py        # 마크다운 → TSV/HTML table
+```
+
+내부 Python package path(패키지 경로)는 기존 import compatibility(임포트 호환성)를 위해 `tablemark/`로 유지합니다.
+
+## 알려진 제한사항
+
+- 병합 셀: 병합 모양은 Markdown에서 표현되지 않지만, 빈 셀을 추가해 행/열 정렬은 유지됨
+- 셀 내부 줄바꿈: 공백으로 치환됨
+- 단일 행 표: 헤더만 있는 표로 변환됨
+- 일부 rich text(서식 있는 텍스트) 에디터는 HTML table 형식을 우선 선택할 수 있음
+
+## 라이선스
+
+MIT
