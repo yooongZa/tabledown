@@ -1,5 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" rx="220" fill="#1f2937"/>
-  <rect x="236" y="260" width="552" height="504" rx="52" fill="none" stroke="#f9fafb" stroke-width="72"/>
-  <path d="M420 260v504M604 260v504M236 512h552" fill="none" stroke="#f9fafb" stroke-width="72" stroke-linecap="square"/>
+  <defs>
+    <linearGradient id="bg" x1="168" y1="100" x2="856" y2="924" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="sheet" x1="216" y1="172" x2="808" y2="852" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#eaf7f5"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="632" y1="644" x2="812" y2="824" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ccfbf1"/>
+      <stop offset="1" stop-color="#5eead4"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
+  <rect x="206" y="162" width="612" height="700" rx="132" fill="#020617" opacity="0.18"/>
+  <rect x="184" y="140" width="612" height="700" rx="132" fill="url(#sheet)"/>
+  <path d="M644 840h20c73 0 132-59 132-132v-20L644 840z" fill="url(#fold)"/>
+  <path d="M644 840l152-152" fill="none" stroke="#99f6e4" stroke-width="18" stroke-linecap="round"/>
+
+  <rect x="276" y="274" width="472" height="364" rx="44" fill="#f8fafc" stroke="#0f766e" stroke-width="32"/>
+  <path d="M432 292v328M592 292v328M294 396h436M294 512h436" fill="none" stroke="#0f766e" stroke-width="26" stroke-linecap="round"/>
+  <rect x="304" y="304" width="416" height="80" rx="22" fill="#99f6e4"/>
+
+  <rect x="312" y="690" width="24" height="92" rx="12" fill="#0f172a"/>
+  <rect x="688" y="690" width="24" height="92" rx="12" fill="#0f172a"/>
+  <rect x="384" y="704" width="88" height="18" rx="9" fill="#0f766e"/>
+  <rect x="552" y="704" width="88" height="18" rx="9" fill="#0f766e"/>
+  <rect x="384" y="756" width="104" height="18" rx="9" fill="#94a3b8"/>
+  <rect x="552" y="756" width="72" height="18" rx="9" fill="#94a3b8"/>
 </svg>

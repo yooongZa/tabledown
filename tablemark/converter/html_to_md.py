@@ -21,6 +21,8 @@ def html_table_to_markdown(html: str) -> str:
     # Pad rows to equal column count
     max_cols = max(len(r) for r in rows)
     rows = [r + [" "] * (max_cols - len(r)) for r in rows]
+    rows = _trim_trailing_empty_columns(rows)
+    max_cols = max(len(r) for r in rows)
 
     # First row = header. If only one row, treat it as header with empty body.
     header = rows[0]
@@ -87,6 +89,26 @@ def _table_to_grid(table) -> list[list[str]]:
             rows.append(row)
 
     return rows
+
+
+def _trim_trailing_empty_columns(rows: list[list[str]]) -> list[list[str]]:
+    """Drop columns at the right edge only when every row is empty there."""
+    if not rows:
+        return rows
+
+    max_cols = max(len(row) for row in rows)
+    keep_cols = max_cols
+    while keep_cols > 1:
+        col_index = keep_cols - 1
+        if any(_has_content(row[col_index]) for row in rows if col_index < len(row)):
+            break
+        keep_cols -= 1
+
+    return [row[:keep_cols] for row in rows]
+
+
+def _has_content(cell: str) -> bool:
+    return bool(cell.strip())
 
 
 def _span_value(value) -> int:

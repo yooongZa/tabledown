@@ -5,7 +5,12 @@ import time
 
 import rumps
 
-from .clipboard import clipboard_change_count, read_clipboard, write_clipboard
+from .clipboard import (
+    RENDERED_TABLE_TYPES,
+    clipboard_change_count,
+    read_clipboard,
+    write_clipboard,
+)
 from .converter.html_to_md import html_table_to_markdown
 from .converter.md_to_tsv import (
     is_markdown_table,
@@ -104,13 +109,15 @@ class TabledownApp(rumps.App):
                 return
 
             write_clipboard(**updated, mark_generated=True)
-            self._last_change_count = clipboard_change_count()
             log("clipboard formats updated")
         except Exception as e:
             log(f"clipboard update failed: {e}")
 
     def _converted_clipboard(self, content):
         """Return clipboard formats to write, or None when no update is needed."""
+        if content.get("generated"):
+            return None
+
         html = content.get("html", "")
         text = content.get("text", "")
 
@@ -131,6 +138,7 @@ class TabledownApp(rumps.App):
             return {
                 "text": markdown,
                 "html": html,
+                "drop_types": RENDERED_TABLE_TYPES,
             }
 
         return None
