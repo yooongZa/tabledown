@@ -47,6 +47,12 @@ Tabledown을 활성화하면 spreadsheet(스프레드시트) 표가 Markdown sou
 | Tabledown | 표를 Markdown으로 붙이기 |
 ```
 
+같은 spreadsheet 표를 복사해도 Tabledown이 켜져 있으면 Markdown source로, 꺼져 있으면 TextEdit 같은 rich text editor에서는 렌더링된 HTML table(HTML 표)로 붙습니다.
+
+<p align="center">
+  <img src="assets/tabledown-paste-comparison.png" width="760" alt="Tabledown enabled pastes Markdown source, disabled pastes a rendered table">
+</p>
+
 비활성화하면 TextEdit 같은 rich text editor(서식 있는 텍스트 편집기)는 clipboard(클립보드)에 들어 있는 HTML table(HTML 표)을 그대로 사용해 렌더링된 표로 붙일 수 있습니다. 즉 Tabledown은 "예쁜 표 렌더러"가 아니라 "Markdown 문서용 표 변환기"입니다.
 
 ## 동작 방식
@@ -124,6 +130,7 @@ tail -f ~/Library/Logs/Tabledown.log
 
 ## 변경 이력
 
+- 2026-05-11: Tabledown 활성화/비활성화 붙여넣기 차이를 보여주는 비교 스크린샷을 README에 추가
 - 2026-05-11: English README(영어 README)를 추가하고 한국어/영어 문서 간 language link(언어 링크)를 연결
 - 2026-05-11: 공개 GitHub repo(저장소)용 다운로드 안내, 소개문, release badge(릴리스 배지), 설치 안내를 README 상단에 추가
 - 2026-05-11: Tabledown 활성화/비활성화에 따른 Markdown source(마크다운 원문) 변환과 rich text HTML table(서식 있는 텍스트 HTML 표) 붙여넣기 차이를 문서화

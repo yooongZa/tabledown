@@ -47,6 +47,12 @@ When Tabledown is enabled, spreadsheet tables paste as Markdown source.
 | Tabledown | Paste tables as Markdown |
 ```
 
+The same copied spreadsheet table pastes as Markdown source when Tabledown is enabled, and as a rendered HTML table in rich text editors such as TextEdit when Tabledown is disabled.
+
+<p align="center">
+  <img src="assets/tabledown-paste-comparison.png" width="760" alt="Tabledown enabled pastes Markdown source, disabled pastes a rendered table">
+</p>
+
 When Tabledown is disabled, rich text editors such as TextEdit can use the HTML table already present on the clipboard and paste a rendered table instead. In other words, Tabledown is not a pretty table renderer. It is a table converter for Markdown documents.
 
 ## How It Works
@@ -124,6 +130,7 @@ When the diagnostic log exceeds 1 MB, it is rotated to `Tabledown.log.1` and a n
 
 ## Changelog
 
+- 2026-05-11: Added a README comparison screenshot showing the paste difference between Tabledown enabled and disabled
 - 2026-05-11: Added an English README and connected language links between the Korean and English docs
 - 2026-05-11: Added public GitHub repository download instructions, introduction copy, release badges, and install instructions
 - 2026-05-11: Documented the difference between Markdown source conversion when Tabledown is enabled and rich text HTML table paste behavior when disabled
