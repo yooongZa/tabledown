@@ -128,8 +128,19 @@ tail -f ~/Library/Logs/Tabledown.log
 
 진단 로그가 1MB를 넘으면 `Tabledown.log.1`로 rotation(로테이션)되고 새 로그 파일을 다시 씁니다.
 
+## 개인정보 처리방침
+
+Tabledown은 사용자의 개인정보를 수집, 저장, 판매, 공유하지 않습니다.
+
+앱은 macOS clipboard(클립보드)의 현재 내용을 로컬에서 읽고, 표 변환에 필요한 text/html format(텍스트/HTML 형식)을 같은 clipboard에 다시 기록합니다. 변환은 사용자의 Mac 안에서만 처리되며 외부 server(서버)로 전송되지 않습니다.
+
+Tabledown은 계정 생성, analytics(분석), 광고 추적, 위치 정보, 연락처, 사진, 파일 업로드 기능을 사용하지 않습니다.
+
+진단 로그는 앱 동작 확인을 위해 사용자의 Mac 안의 `~/Library/Logs/Tabledown.log`에만 저장됩니다. 로그는 clipboard 원문 전체를 외부로 전송하지 않으며, 사용자가 직접 삭제할 수 있습니다.
+
 ## 변경 이력
 
+- 2026-05-11: App Store 제출을 위해 README에 privacy policy(개인정보 처리방침)를 추가
 - 2026-05-11: Tabledown 활성화/비활성화 붙여넣기 차이를 보여주는 비교 스크린샷을 README에 추가
 - 2026-05-11: English README(영어 README)를 추가하고 한국어/영어 문서 간 language link(언어 링크)를 연결
 - 2026-05-11: 공개 GitHub repo(저장소)용 다운로드 안내, 소개문, release badge(릴리스 배지), 설치 안내를 README 상단에 추가

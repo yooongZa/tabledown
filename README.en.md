@@ -128,8 +128,19 @@ tail -f ~/Library/Logs/Tabledown.log
 
 When the diagnostic log exceeds 1 MB, it is rotated to `Tabledown.log.1` and a new log file is started.
 
+## Privacy Policy
+
+Tabledown does not collect, store, sell, or share personal information.
+
+The app reads the current macOS clipboard locally and writes the text/html formats needed for table conversion back to the same clipboard. Conversion happens only on the user's Mac and is not sent to an external server.
+
+Tabledown does not use account creation, analytics, ad tracking, location data, contacts, photos, or file uploads.
+
+Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.log` for behavior checks. Logs are not sent externally and can be deleted by the user.
+
 ## Changelog
 
+- 2026-05-11: Added a README privacy policy for App Store submission
 - 2026-05-11: Added a README comparison screenshot showing the paste difference between Tabledown enabled and disabled
 - 2026-05-11: Added an English README and connected language links between the Korean and English docs
 - 2026-05-11: Added public GitHub repository download instructions, introduction copy, release badges, and install instructions
