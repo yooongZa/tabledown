@@ -6,6 +6,7 @@ import time
 import rumps
 
 from .clipboard import (
+    HTML_TYPES,
     RENDERED_TABLE_TYPES,
     clipboard_change_count,
     read_clipboard,
@@ -21,7 +22,7 @@ from .logger import log
 
 def _markdown_paste_block(markdown: str) -> str:
     """Return markdown padded so block parsers see a standalone table."""
-    return "\n\n" + markdown.strip() + "\n"
+    return "\n" + markdown.strip() + "\n"
 
 
 class TabledownApp(rumps.App):
@@ -142,8 +143,7 @@ class TabledownApp(rumps.App):
             log("detected html table")
             return {
                 "text": _markdown_paste_block(markdown),
-                "html": html,
-                "drop_types": RENDERED_TABLE_TYPES,
+                "drop_types": RENDERED_TABLE_TYPES | HTML_TYPES,
             }
 
         return None

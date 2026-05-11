@@ -26,6 +26,7 @@ from AppKit import NSPasteboard, NSPasteboardTypeHTML, NSPasteboardTypeString
 
 from tablemark.clipboard import (
     GENERATED_MARKER_TYPES,
+    HTML_TYPES,
     LEGACY_HTML_TYPE,
     RENDERED_TABLE_TYPES,
     TABLEDOWN_GENERATED_TYPE,
@@ -144,7 +145,17 @@ def run_converter_tests() -> list[TestResult]:
                 None,
                 {"html": HTML_BASIC, "text": "Name\tScore\nAlice\t95"},
             )["text"],
-            "\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |\n",
+            "\n| Name | Score |\n| --- | --- |\n| Alice | 95 |\n",
+        ),
+    )
+    check(
+        "html_clipboard_drops_html_formats",
+        lambda: _assert_equal(
+            TabledownApp._converted_clipboard(
+                None,
+                {"html": HTML_BASIC, "text": "Name\tScore\nAlice\t95"},
+            ).get("drop_types"),
+            RENDERED_TABLE_TYPES | HTML_TYPES,
         ),
     )
 
@@ -279,11 +290,14 @@ def _test_watcher_html_adds_markdown() -> str:
     content = _wait_for(
         lambda: {
             "text": str(pb.stringForType_(NSPasteboardTypeString) or ""),
+            "html": str(pb.stringForType_(NSPasteboardTypeHTML) or ""),
             "types": [str(pb_type) for pb_type in pb.types() or []],
         },
         lambda value: (
-            value["text"].startswith("\n\n| Name | Score |")
+            value["text"].startswith("\n| Name | Score |")
             and "| Alice | 95 |" in value["text"]
+            and not value["html"]
+            and all(pb_type not in value["types"] for pb_type in HTML_TYPES)
             and "public.png" not in value["types"]
         ),
     )
