@@ -1,19 +1,55 @@
 # Tabledown
 
-> 스프레드시트 표를 Markdown 원문 표로 바꿔주는 macOS 메뉴바 유틸리티
+<p align="center">
+  <img src="assets/generated/tablemark_app_1024.png" width="96" alt="Tabledown icon">
+</p>
 
-## 동작 방식
+<p align="center">
+  <a href="https://github.com/yooongZa/tabledown/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/yooongZa/tabledown?label=download"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/platform-macOS-111111">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
+</p>
+
+> 스프레드시트 표를 Markdown source(마크다운 원문)로 바꿔주는 macOS menu bar(메뉴바) 앱
+
+Tabledown은 Excel/Google Sheets에서 복사한 표를 Obsidian, GitHub README, Markdown editor(마크다운 에디터)에 붙이기 좋은 `| ... |` 표로 바꿔줍니다. 별도 창을 열거나 export(내보내기)하지 않고, 평소처럼 `Cmd+C`와 `Cmd+V`만 사용합니다.
+
+## 다운로드
+
+최신 버전은 GitHub Releases(깃허브 릴리스)에서 받을 수 있습니다.
+
+**[Tabledown.dmg 다운로드](https://github.com/yooongZa/tabledown/releases/latest/download/Tabledown.dmg)**
+
+설치:
+
+1. `Tabledown.dmg` 열기
+2. `Tabledown.app`을 Applications(응용 프로그램)로 드래그
+3. 앱 실행 후 메뉴바의 table(표) 아이콘 확인
+
+배포용 DMG는 Developer ID signing(개발자 ID 서명)과 Apple notarization(애플 공증)을 통과한 빌드입니다.
+
+## 왜 쓰나요
 
 | 입력 | 붙여넣는 곳 | 출력 |
 |------|------------|------|
-| Excel/스프레드시트 표 (`Cmd+C`) | 마크다운 에디터 (`Cmd+V`) | 마크다운 표 |
+| Excel/Google Sheets 표 (`Cmd+C`) | Obsidian/GitHub/마크다운 에디터 (`Cmd+V`) | Markdown 원문 표 |
 | 마크다운 표 (`Cmd+C`) | Excel (`Cmd+V`) | 셀에 분리된 표 |
 
-Tabledown은 clipboard(클립보드)를 감시하다가 표를 발견하면 붙여넣기 방향에 맞는 text/html format(텍스트/HTML 형식)을 보강합니다. Excel 표는 Markdown plain text(일반 텍스트)로, Markdown 표는 Excel이 읽을 수 있는 HTML table(HTML 표)로 보강합니다.
+Tabledown을 활성화하면 spreadsheet(스프레드시트) 표가 Markdown source(마크다운 원문)로 붙습니다.
+
+```markdown
+| 이름 | 할 일 |
+| --- | --- |
+| Tabledown | 표를 Markdown으로 붙이기 |
+```
+
+비활성화하면 TextEdit 같은 rich text editor(서식 있는 텍스트 편집기)는 clipboard(클립보드)에 들어 있는 HTML table(HTML 표)을 그대로 사용해 렌더링된 표로 붙일 수 있습니다. 즉 Tabledown은 "예쁜 표 렌더러"가 아니라 "Markdown 문서용 표 변환기"입니다.
+
+## 동작 방식
+
+Tabledown은 clipboard를 감시하다가 표를 발견하면 붙여넣기 방향에 맞는 text/html format(텍스트/HTML 형식)을 보강합니다. Excel 표는 Markdown plain text(일반 텍스트)로, Markdown 표는 Excel이 읽을 수 있는 HTML table로 보강합니다.
 
 기존 clipboard format(클립보드 형식)은 보존하고 필요한 text/html 형식만 추가 또는 갱신합니다. 표가 아닌 일반 텍스트일 때는 clipboard를 바꾸지 않습니다.
-
-Tabledown을 활성화하면 Excel/Google Sheets 같은 spreadsheet(스프레드시트) 표를 `| ... |` 형태의 Markdown source(마크다운 원문)로 붙일 수 있게 만듭니다. Tabledown을 비활성화하면 TextEdit 같은 rich text editor(서식 있는 텍스트 편집기)는 clipboard에 들어 있는 HTML table(HTML 표)을 그대로 사용해 렌더링된 표로 붙일 수 있습니다.
 
 Excel 표를 복사할 때 함께 들어오는 PNG/PDF/RTF 같은 rendered format(렌더링 형식)은 채팅/마크다운 앱에서 이미지로 선택될 수 있어 제거합니다. Excel native format(네이티브 형식)은 유지합니다.
 
@@ -84,6 +120,7 @@ tail -f ~/Library/Logs/Tabledown.log
 
 ## 변경 이력
 
+- 2026-05-11: 공개 GitHub repo(저장소)용 다운로드 안내, 소개문, release badge(릴리스 배지), 설치 안내를 README 상단에 추가
 - 2026-05-11: Tabledown 활성화/비활성화에 따른 Markdown source(마크다운 원문) 변환과 rich text HTML table(서식 있는 텍스트 HTML 표) 붙여넣기 차이를 문서화
 - 2026-05-11: Excel 표에서 만든 Markdown plain text(일반 텍스트)에 block spacing(블록 공백)을 추가하고 HTML table(HTML 표) clipboard format(클립보드 형식)을 제거해 Obsidian에서 기존 문단/목록 바로 아래 붙여넣어도 표 인식 안정화
 - 2026-05-11: Obsidian에서 pipe text(파이프 텍스트)로 붙는 경우를 구분할 수 있도록 troubleshooting(문제 확인)과 known limitations(알려진 제한사항) 문서 정리
@@ -107,14 +144,14 @@ tail -f ~/Library/Logs/Tabledown.log
 - 2026-05-07: 기본 사용에서 손쉬운 사용(Accessibility), 입력 모니터링(Input Monitoring) 권한 요구 제거
 - 2026-05-06: crash(충돌) 원인이 되던 `pynput` keyboard hook(키보드 후킹)을 제거하고 Quartz(쿼츠) 기반 구현으로 정리
 
-## .app 빌드 (배포용)
+## .app 빌드
 
 ```bash
 pip install -r requirements-build.txt
 scripts/build_release.sh
 ```
 
-`dist/Tabledown.app`, `dist/Tabledown.zip` 생성됨. 배포에는 `dist/Tabledown.zip` 사용.
+`dist/Tabledown.app`, `dist/Tabledown.zip`이 생성됩니다. 공개 배포에는 notarization(공증)을 거친 `Tabledown.dmg`를 GitHub Release에 첨부합니다.
 
 ## 프로젝트 구조
 
@@ -149,4 +186,4 @@ Tabledown/
 
 ## 라이선스
 
-MIT
+[MIT](LICENSE)
