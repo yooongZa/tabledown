@@ -48,9 +48,14 @@ find_provision_profile() {
 sign_macho_files() {
   local app_path="$1"
   local identity="$2"
+  local entitlements="$3"
   while IFS= read -r -d '' file_path; do
     if file "$file_path" | grep -q 'Mach-O'; then
-      /usr/bin/codesign --force --sign "$identity" "$file_path"
+      if [[ "$file_path" == "$app_path/Contents/MacOS/"* ]]; then
+        /usr/bin/codesign --force --sign "$identity" --entitlements "$entitlements" "$file_path"
+      else
+        /usr/bin/codesign --force --sign "$identity" "$file_path"
+      fi
     fi
   done < <(find "$app_path/Contents" -type f -print0)
 }
@@ -85,8 +90,9 @@ APP_STAGE="$STAGE_DIR/$APP_NAME.app"
 ditto --noextattr --noacl "$APP" "$APP_STAGE"
 cp "$PROFILE" "$APP_STAGE/Contents/embedded.provisionprofile"
 xattr -cr "$APP_STAGE"
+chmod -R u+rwX,go+rX "$APP_STAGE"
 
-sign_macho_files "$APP_STAGE" "$APP_SIGN_IDENTITY"
+sign_macho_files "$APP_STAGE" "$APP_SIGN_IDENTITY" "$ENTITLEMENTS"
 /usr/bin/codesign \
   --force \
   --sign "$APP_SIGN_IDENTITY" \
