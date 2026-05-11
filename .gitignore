@@ -9,6 +9,9 @@ dist/
 outputs/
 *.zip
 *.log
+*.cer
+*.csr
+*.key
 
 assets/TableMark.icns
 assets/TableMark.iconset/
