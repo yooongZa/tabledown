@@ -10,6 +10,10 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
 </p>
 
+<p align="center">
+  <a href="README.en.md">English</a> | 한국어
+</p>
+
 > 스프레드시트 표를 Markdown source(마크다운 원문)로 바꿔주는 macOS menu bar(메뉴바) 앱
 
 Tabledown은 Excel/Google Sheets에서 복사한 표를 Obsidian, GitHub README, Markdown editor(마크다운 에디터)에 붙이기 좋은 `| ... |` 표로 바꿔줍니다. 별도 창을 열거나 export(내보내기)하지 않고, 평소처럼 `Cmd+C`와 `Cmd+V`만 사용합니다.
@@ -120,6 +124,7 @@ tail -f ~/Library/Logs/Tabledown.log
 
 ## 변경 이력
 
+- 2026-05-11: English README(영어 README)를 추가하고 한국어/영어 문서 간 language link(언어 링크)를 연결
 - 2026-05-11: 공개 GitHub repo(저장소)용 다운로드 안내, 소개문, release badge(릴리스 배지), 설치 안내를 README 상단에 추가
 - 2026-05-11: Tabledown 활성화/비활성화에 따른 Markdown source(마크다운 원문) 변환과 rich text HTML table(서식 있는 텍스트 HTML 표) 붙여넣기 차이를 문서화
 - 2026-05-11: Excel 표에서 만든 Markdown plain text(일반 텍스트)에 block spacing(블록 공백)을 추가하고 HTML table(HTML 표) clipboard format(클립보드 형식)을 제거해 Obsidian에서 기존 문단/목록 바로 아래 붙여넣어도 표 인식 안정화
