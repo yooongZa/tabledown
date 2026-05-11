@@ -19,6 +19,11 @@ from .converter.md_to_tsv import (
 from .logger import log
 
 
+def _markdown_paste_block(markdown: str) -> str:
+    """Return markdown padded so block parsers see a standalone table."""
+    return "\n\n" + markdown.strip() + "\n"
+
+
 class TabledownApp(rumps.App):
     ICON_NAME = "tablemark_menu_40.png"
 
@@ -136,7 +141,7 @@ class TabledownApp(rumps.App):
                 return None
             log("detected html table")
             return {
-                "text": markdown,
+                "text": _markdown_paste_block(markdown),
                 "html": html,
                 "drop_types": RENDERED_TABLE_TYPES,
             }

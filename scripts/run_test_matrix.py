@@ -137,6 +137,16 @@ def run_converter_tests() -> list[TestResult]:
             None,
         ),
     )
+    check(
+        "html_clipboard_markdown_is_block_spaced",
+        lambda: _assert_equal(
+            TabledownApp._converted_clipboard(
+                None,
+                {"html": HTML_BASIC, "text": "Name\tScore\nAlice\t95"},
+            )["text"],
+            "\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |\n",
+        ),
+    )
 
     return tests
 
@@ -272,7 +282,7 @@ def _test_watcher_html_adds_markdown() -> str:
             "types": [str(pb_type) for pb_type in pb.types() or []],
         },
         lambda value: (
-            value["text"].startswith("| Name | Score |")
+            value["text"].startswith("\n\n| Name | Score |")
             and "| Alice | 95 |" in value["text"]
             and "public.png" not in value["types"]
         ),

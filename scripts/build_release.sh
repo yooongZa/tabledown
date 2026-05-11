@@ -11,7 +11,7 @@ trap 'rm -rf "$VERIFY_DIR"' EXIT
 cd "$ROOT"
 
 rm -rf "$ROOT/build" "$APP" "$ZIP"
-.venv/bin/python setup.py py2app
+COPYFILE_DISABLE=1 .venv/bin/python setup.py py2app
 
 # macOS can attach FinderInfo xattrs to bundles in synced folders. Codesign
 # treats those as resource-fork detritus, so remove only that disallowed xattr.
