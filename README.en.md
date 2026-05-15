@@ -140,6 +140,7 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 
 ## Changelog
 
+- 2026-05-15: Localized the menu bar UI and help dialog into Korean and English. Auto-detects the macOS system language and lets users switch manually via the "Language / 언어" submenu; the choice is persisted in `NSUserDefaults`
 - 2026-05-11: Added a README privacy policy for App Store submission
 - 2026-05-11: Added a README comparison screenshot showing the paste difference between Tabledown enabled and disabled
 - 2026-05-11: Added an English README and connected language links between the Korean and English docs

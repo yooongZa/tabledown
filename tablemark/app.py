@@ -17,6 +17,12 @@ from .converter.md_to_tsv import (
     is_markdown_table,
     markdown_table_to_html,
 )
+from .i18n import (
+    SUPPORTED_LANGUAGES,
+    resolve_language,
+    save_preferred_language,
+    t,
+)
 from .logger import log
 
 
@@ -37,12 +43,32 @@ class TabledownApp(rumps.App):
             quit_button=None,
         )
         self.enabled = True
-        self.toggle_item = rumps.MenuItem("활성화 ✓", callback=self.toggle)
+        self.lang = resolve_language()
+        log(f"language resolved to {self.lang}")
+
+        self.toggle_item = rumps.MenuItem(
+            self._toggle_title(),
+            callback=self.toggle,
+        )
+        self.language_item = rumps.MenuItem(t("menu.language", self.lang))
+        self.language_options = {}
+        for code in SUPPORTED_LANGUAGES:
+            item = rumps.MenuItem(
+                self._language_option_title(code),
+                callback=self._make_language_setter(code),
+            )
+            self.language_options[code] = item
+        self.language_item.update(list(self.language_options.values()))
+
+        self.help_item = rumps.MenuItem(t("menu.help", self.lang), callback=self.show_help)
+        self.quit_item = rumps.MenuItem(t("menu.quit", self.lang), callback=self.quit_app)
+
         self.menu = [
             self.toggle_item,
             None,  # separator
-            rumps.MenuItem("도움말", callback=self.show_help),
-            rumps.MenuItem("종료", callback=self.quit_app),
+            self.language_item,
+            self.help_item,
+            self.quit_item,
         ]
 
         self._stop_watcher = threading.Event()
@@ -69,23 +95,44 @@ class TabledownApp(rumps.App):
         log("menu icon not found; falling back to title")
         return None
 
+    # --- Localization ---
+
+    def _toggle_title(self) -> str:
+        return t("menu.toggle_on" if self.enabled else "menu.toggle_off", self.lang)
+
+    def _language_option_title(self, code: str) -> str:
+        mark = " ✓" if code == self.lang else ""
+        return t(f"menu.language.{code}", self.lang) + mark
+
+    def _apply_language(self):
+        """Refresh every menu title for the current language."""
+        self.toggle_item.title = self._toggle_title()
+        self.language_item.title = t("menu.language", self.lang)
+        for code, item in self.language_options.items():
+            item.title = self._language_option_title(code)
+        self.help_item.title = t("menu.help", self.lang)
+        self.quit_item.title = t("menu.quit", self.lang)
+
+    def _make_language_setter(self, code: str):
+        def _set_language(_sender):
+            if self.lang == code:
+                return
+            self.lang = code
+            save_preferred_language(code)
+            log(f"language set to {code}")
+            self._apply_language()
+        return _set_language
+
     # --- Menu actions ---
 
-    def toggle(self, sender):
+    def toggle(self, _sender):
         self.enabled = not self.enabled
-        sender.title = "활성화 ✓" if self.enabled else "비활성화"
+        self.toggle_item.title = self._toggle_title()
 
     def show_help(self, _):
         rumps.alert(
-            title="Tabledown",
-            message=(
-                "Excel ↔ Markdown 표 변환기\n\n"
-                "사용법:\n"
-                "1. Excel/스프레드시트 또는 마크다운 표를 복사 (Cmd+C)\n"
-                "2. 원하는 앱에서 그대로 붙여넣기 (Cmd+V)\n\n"
-                "Excel 표를 복사하면 마크다운 에디터에서 Markdown 표로 붙고,\n"
-                "Markdown 표를 복사하면 Excel에서 셀에 분리되어 붙습니다."
-            ),
+            title=t("help.title", self.lang),
+            message=t("help.message", self.lang),
         )
 
     def quit_app(self, _):

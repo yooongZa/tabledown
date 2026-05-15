@@ -140,6 +140,7 @@ Tabledown은 계정 생성, analytics(분석), 광고 추적, 위치 정보, 연
 
 ## 변경 이력
 
+- 2026-05-15: 메뉴바 UI(사용자 인터페이스)와 도움말을 한국어/영어로 다국어화. macOS 시스템 언어를 자동 감지하고, 메뉴의 "언어 / Language" 서브메뉴에서 수동 전환 가능. 선택은 `NSUserDefaults`에 영구 저장
 - 2026-05-11: App Store 제출을 위해 README에 privacy policy(개인정보 처리방침)를 추가
 - 2026-05-11: Tabledown 활성화/비활성화 붙여넣기 차이를 보여주는 비교 스크린샷을 README에 추가
 - 2026-05-11: English README(영어 README)를 추가하고 한국어/영어 문서 간 language link(언어 링크)를 연결

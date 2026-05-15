@@ -35,6 +35,7 @@ from tablemark.clipboard import (
 )
 from tablemark.converter.html_to_md import html_table_to_markdown
 from tablemark.converter.md_to_tsv import markdown_table_to_html, markdown_table_to_rows
+from tablemark.i18n import SUPPORTED_LANGUAGES, detect_system_language, t
 from tablemark.app import TabledownApp
 
 
@@ -157,6 +158,41 @@ def run_converter_tests() -> list[TestResult]:
             ).get("drop_types"),
             RENDERED_TABLE_TYPES | HTML_TYPES,
         ),
+    )
+
+    return tests
+
+
+def run_i18n_tests() -> list[TestResult]:
+    tests = []
+
+    def check(name: str, fn) -> None:
+        started = time.perf_counter()
+        try:
+            detail = fn()
+            tests.append(TestResult(name, True, "i18n", detail or "ok", _elapsed(started)))
+        except Exception as exc:  # noqa: BLE001
+            tests.append(TestResult(name, False, "i18n", str(exc), _elapsed(started)))
+
+    check("translate_korean_menu_help", lambda: _assert_equal(t("menu.help", "ko"), "도움말"))
+    check("translate_english_menu_help", lambda: _assert_equal(t("menu.help", "en"), "Help"))
+    check("translate_korean_toggle_on", lambda: _assert_equal(t("menu.toggle_on", "ko"), "활성화 ✓"))
+    check("translate_english_toggle_off", lambda: _assert_equal(t("menu.toggle_off", "en"), "Disabled"))
+    check(
+        "unknown_key_returns_key",
+        lambda: _assert_equal(t("does.not.exist", "ko"), "does.not.exist"),
+    )
+    check(
+        "unknown_language_falls_back_to_english",
+        lambda: _assert_equal(t("menu.help", "fr"), "Help"),
+    )
+    check(
+        "detect_system_language_returns_supported",
+        lambda: _assert_in(detect_system_language(), SUPPORTED_LANGUAGES),
+    )
+    check(
+        "help_message_localized_differs",
+        lambda: _assert_not_equal(t("help.message", "ko"), t("help.message", "en")),
     )
 
     return tests
@@ -352,6 +388,18 @@ def _assert_contains(actual: str, expected: str) -> str:
     return "ok"
 
 
+def _assert_in(value, expected) -> str:
+    if value not in expected:
+        raise AssertionError(f"expected one of {expected!r}, got {value!r}")
+    return "ok"
+
+
+def _assert_not_equal(actual, other) -> str:
+    if actual == other:
+        raise AssertionError(f"expected difference, both were {actual!r}")
+    return "ok"
+
+
 def _elapsed(started: float) -> int:
     return round((time.perf_counter() - started) * 1000)
 
@@ -368,6 +416,7 @@ def main() -> int:
 
     results = []
     results.extend(run_converter_tests())
+    results.extend(run_i18n_tests())
     results.extend(run_clipboard_direct_tests())
     if args.watcher or args.require_watcher:
         results.extend(run_watcher_tests(args.require_watcher))
