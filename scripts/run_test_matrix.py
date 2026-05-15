@@ -35,6 +35,7 @@ from tablemark.clipboard import (
 )
 from tablemark.converter.html_to_md import html_table_to_markdown
 from tablemark.converter.md_to_tsv import markdown_table_to_html, markdown_table_to_rows
+from tablemark import login_item
 from tablemark.i18n import SUPPORTED_LANGUAGES, detect_system_language, t
 from tablemark.app import TabledownApp
 
@@ -193,6 +194,47 @@ def run_i18n_tests() -> list[TestResult]:
     check(
         "help_message_localized_differs",
         lambda: _assert_not_equal(t("help.message", "ko"), t("help.message", "en")),
+    )
+    check(
+        "login_item_keys_localized",
+        lambda: _assert_not_equal(
+            t("menu.login_item_on", "ko"),
+            t("menu.login_item_on", "en"),
+        ),
+    )
+    check(
+        "hide_icon_keys_present",
+        lambda: _assert_not_equal(
+            t("menu.hide_icon", "ko"),
+            t("menu.hide_icon", "en"),
+        ),
+    )
+    check(
+        "hide_alert_message_present",
+        lambda: _assert_not_equal(t("hide.alert_message", "ko"), "hide.alert_message"),
+    )
+
+    return tests
+
+
+def run_login_item_tests() -> list[TestResult]:
+    tests = []
+
+    def check(name: str, fn) -> None:
+        started = time.perf_counter()
+        try:
+            detail = fn()
+            tests.append(TestResult(name, True, "login_item", detail or "ok", _elapsed(started)))
+        except Exception as exc:  # noqa: BLE001
+            tests.append(TestResult(name, False, "login_item", str(exc), _elapsed(started)))
+
+    check(
+        "is_supported_returns_bool",
+        lambda: _assert_isinstance(login_item.is_supported(), bool),
+    )
+    check(
+        "is_enabled_returns_bool",
+        lambda: _assert_isinstance(login_item.is_enabled(), bool),
     )
 
     return tests
@@ -400,6 +442,12 @@ def _assert_not_equal(actual, other) -> str:
     return "ok"
 
 
+def _assert_isinstance(value, expected_type) -> str:
+    if not isinstance(value, expected_type):
+        raise AssertionError(f"expected {expected_type!r}, got {type(value).__name__}: {value!r}")
+    return "ok"
+
+
 def _elapsed(started: float) -> int:
     return round((time.perf_counter() - started) * 1000)
 
@@ -417,6 +465,7 @@ def main() -> int:
     results = []
     results.extend(run_converter_tests())
     results.extend(run_i18n_tests())
+    results.extend(run_login_item_tests())
     results.extend(run_clipboard_direct_tests())
     if args.watcher or args.require_watcher:
         results.extend(run_watcher_tests(args.require_watcher))

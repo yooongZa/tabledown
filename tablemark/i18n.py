@@ -18,6 +18,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "menu.language": "언어",
         "menu.language.ko": "한국어",
         "menu.language.en": "English",
+        "menu.login_item_on": "로그인 시 자동 실행 ✓",
+        "menu.login_item_off": "로그인 시 자동 실행",
+        "menu.hide_icon": "메뉴바 아이콘 숨기기",
         "menu.help": "도움말",
         "menu.quit": "종료",
         "help.title": "Tabledown",
@@ -29,6 +32,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Excel 표를 복사하면 마크다운 에디터에서 Markdown 표로 붙고,\n"
             "Markdown 표를 복사하면 Excel에서 셀에 분리되어 붙습니다."
         ),
+        "hide.alert_title": "메뉴바 아이콘을 숨겼습니다",
+        "hide.alert_message": (
+            "Tabledown은 계속 백그라운드에서 동작합니다.\n"
+            "다시 표시하려면 앱을 종료한 뒤 다시 실행하세요."
+        ),
     },
     "en": {
         "menu.toggle_on": "Enabled ✓",
@@ -36,6 +44,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "menu.language": "Language",
         "menu.language.ko": "한국어",
         "menu.language.en": "English",
+        "menu.login_item_on": "Open at Login ✓",
+        "menu.login_item_off": "Open at Login",
+        "menu.hide_icon": "Hide menu bar icon",
         "menu.help": "Help",
         "menu.quit": "Quit",
         "help.title": "Tabledown",
@@ -46,6 +57,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "2. Paste in any app (Cmd+V)\n\n"
             "Excel tables paste as Markdown in a Markdown editor,\n"
             "and Markdown tables paste into separate cells in Excel."
+        ),
+        "hide.alert_title": "Menu bar icon hidden",
+        "hide.alert_message": (
+            "Tabledown keeps running in the background.\n"
+            "Quit and relaunch the app to show the icon again."
         ),
     },
 }

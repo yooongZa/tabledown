@@ -140,6 +140,8 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 
 ## Changelog
 
+- 2026-05-15: Added an "Open at Login" toggle backed by macOS 13+ `SMAppService.mainAppService`, which works under App Sandbox and Mac App Store builds. The menu item is hidden on macOS 12 (graceful fallback)
+- 2026-05-15: Added a "Hide menu bar icon" action that calls `NSStatusItem.setVisible_(False)` for the current session only. The icon reappears after quitting and relaunching the app (no persistence)
 - 2026-05-15: Localized the menu bar UI and help dialog into Korean and English. Auto-detects the macOS system language and lets users switch manually via the "Language / 언어" submenu; the choice is persisted in `NSUserDefaults`
 - 2026-05-11: Added a README privacy policy for App Store submission
 - 2026-05-11: Added a README comparison screenshot showing the paste difference between Tabledown enabled and disabled

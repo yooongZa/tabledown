@@ -23,6 +23,7 @@ from .i18n import (
     save_preferred_language,
     t,
 )
+from . import login_item
 from .logger import log
 
 
@@ -60,13 +61,31 @@ class TabledownApp(rumps.App):
             self.language_options[code] = item
         self.language_item.update(list(self.language_options.values()))
 
+        self.login_item_supported = login_item.is_supported()
+        self.login_item_menu = (
+            rumps.MenuItem(self._login_item_title(), callback=self.toggle_login_item)
+            if self.login_item_supported
+            else None
+        )
+
+        self.hide_icon_item = rumps.MenuItem(
+            t("menu.hide_icon", self.lang),
+            callback=self.hide_menu_bar_icon,
+        )
+
         self.help_item = rumps.MenuItem(t("menu.help", self.lang), callback=self.show_help)
         self.quit_item = rumps.MenuItem(t("menu.quit", self.lang), callback=self.quit_app)
+
+        settings_items = [self.language_item]
+        if self.login_item_menu is not None:
+            settings_items.append(self.login_item_menu)
+        settings_items.append(self.hide_icon_item)
 
         self.menu = [
             self.toggle_item,
             None,  # separator
-            self.language_item,
+            *settings_items,
+            None,  # separator
             self.help_item,
             self.quit_item,
         ]
@@ -104,12 +123,19 @@ class TabledownApp(rumps.App):
         mark = " ✓" if code == self.lang else ""
         return t(f"menu.language.{code}", self.lang) + mark
 
+    def _login_item_title(self) -> str:
+        key = "menu.login_item_on" if login_item.is_enabled() else "menu.login_item_off"
+        return t(key, self.lang)
+
     def _apply_language(self):
         """Refresh every menu title for the current language."""
         self.toggle_item.title = self._toggle_title()
         self.language_item.title = t("menu.language", self.lang)
         for code, item in self.language_options.items():
             item.title = self._language_option_title(code)
+        if self.login_item_menu is not None:
+            self.login_item_menu.title = self._login_item_title()
+        self.hide_icon_item.title = t("menu.hide_icon", self.lang)
         self.help_item.title = t("menu.help", self.lang)
         self.quit_item.title = t("menu.quit", self.lang)
 
@@ -128,6 +154,24 @@ class TabledownApp(rumps.App):
     def toggle(self, _sender):
         self.enabled = not self.enabled
         self.toggle_item.title = self._toggle_title()
+
+    def toggle_login_item(self, _sender):
+        new_state = not login_item.is_enabled()
+        login_item.set_enabled(new_state)
+        log(f"login item toggle requested -> {new_state}, actual={login_item.is_enabled()}")
+        if self.login_item_menu is not None:
+            self.login_item_menu.title = self._login_item_title()
+
+    def hide_menu_bar_icon(self, _sender):
+        rumps.alert(
+            title=t("hide.alert_title", self.lang),
+            message=t("hide.alert_message", self.lang),
+        )
+        try:
+            self._nsapp.nsstatusitem.setVisible_(False)
+            log("menu bar icon hidden")
+        except Exception as exc:
+            log(f"failed to hide menu bar icon: {exc}")
 
     def show_help(self, _):
         rumps.alert(
