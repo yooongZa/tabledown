@@ -37,6 +37,7 @@ class TabledownApp(rumps.App):
 
     def __init__(self):
         log("app starting")
+        self._clear_stale_status_item_visibility()
         super().__init__(
             "Tabledown",
             icon=self._icon_path(),
@@ -68,18 +69,12 @@ class TabledownApp(rumps.App):
             else None
         )
 
-        self.hide_icon_item = rumps.MenuItem(
-            t("menu.hide_icon", self.lang),
-            callback=self.hide_menu_bar_icon,
-        )
-
         self.help_item = rumps.MenuItem(t("menu.help", self.lang), callback=self.show_help)
         self.quit_item = rumps.MenuItem(t("menu.quit", self.lang), callback=self.quit_app)
 
         settings_items = [self.language_item]
         if self.login_item_menu is not None:
             settings_items.append(self.login_item_menu)
-        settings_items.append(self.hide_icon_item)
 
         self.menu = [
             self.toggle_item,
@@ -114,6 +109,35 @@ class TabledownApp(rumps.App):
         log("menu icon not found; falling back to title")
         return None
 
+    @staticmethod
+    def _clear_stale_status_item_visibility():
+        """Strip leftover NSStatusItem visibility flags from NSUserDefaults.
+
+        Earlier 0.1.0 builds shipped a "hide menu bar icon" action that flipped
+        NSStatusItem's autosave-backed visibility flag to 0. Once set, the
+        LSUIElement app started invisible on every launch, leaving no UI to
+        bring it back. The action is gone in 0.1.1, but lingering "NSStatusItem
+        Visible*" keys would still hide the icon on first run of the new build.
+        Wiping any such key on startup makes the icon reappear, and because the
+        hide action no longer exists, autosave will only ever record the
+        visible state from here on.
+        """
+        try:
+            from Foundation import NSUserDefaults
+            defaults = NSUserDefaults.standardUserDefaults()
+            stale = [
+                str(key)
+                for key in defaults.dictionaryRepresentation().keys()
+                if str(key).startswith("NSStatusItem Visible")
+            ]
+            for key in stale:
+                defaults.removeObjectForKey_(key)
+                log(f"removed stale visibility key: {key}")
+            if stale:
+                defaults.synchronize()
+        except Exception as exc:
+            log(f"failed to clear stale visibility defaults: {exc}")
+
     # --- Localization ---
 
     def _toggle_title(self) -> str:
@@ -135,7 +159,6 @@ class TabledownApp(rumps.App):
             item.title = self._language_option_title(code)
         if self.login_item_menu is not None:
             self.login_item_menu.title = self._login_item_title()
-        self.hide_icon_item.title = t("menu.hide_icon", self.lang)
         self.help_item.title = t("menu.help", self.lang)
         self.quit_item.title = t("menu.quit", self.lang)
 
@@ -161,17 +184,6 @@ class TabledownApp(rumps.App):
         log(f"login item toggle requested -> {new_state}, actual={login_item.is_enabled()}")
         if self.login_item_menu is not None:
             self.login_item_menu.title = self._login_item_title()
-
-    def hide_menu_bar_icon(self, _sender):
-        rumps.alert(
-            title=t("hide.alert_title", self.lang),
-            message=t("hide.alert_message", self.lang),
-        )
-        try:
-            self._nsapp.nsstatusitem.setVisible_(False)
-            log("menu bar icon hidden")
-        except Exception as exc:
-            log(f"failed to hide menu bar icon: {exc}")
 
     def show_help(self, _):
         rumps.alert(

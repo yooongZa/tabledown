@@ -140,8 +140,9 @@ Tabledown은 계정 생성, analytics(분석), 광고 추적, 위치 정보, 연
 
 ## 변경 이력
 
+- 2026-05-19: Mac App Store 스크린샷을 실제 앱 UI capture(캡처)로 교체. 1차 거절(Guideline 2.3.3, marketing/promotional 머티리얼 사용 사유) 에 대응해 마케팅 그래픽 4 장을 제거하고, 메뉴바 드롭다운·언어 서브메뉴·변환 결과(Numbers + TextEdit) 등 실제 동작 화면 캡처로 교체
+- 2026-05-19: "메뉴바 아이콘 숨기기" 메뉴 항목 제거. `LSUIElement: True` 앱에서 메뉴바 아이콘이 유일한 UI 였는데 숨기면 종료조차 할 수 없었고, NSStatusItem 의 autosaveName 이 visibility 를 `NSUserDefaults` 에 영구 저장해 앱을 재실행해도 아이콘이 돌아오지 않았음. 시작 시 `NSUserDefaults` 의 stale `NSStatusItem Visible*` 키를 정리해 이전 빌드에서 숨김 상태가 저장된 사용자도 자동 복구
 - 2026-05-15: "로그인 시 자동 실행" 토글 추가. macOS 13+ 의 `SMAppService.mainAppService` API(에이피아이)를 사용해 App Sandbox(앱 샌드박스)와 Mac App Store 빌드와 호환. macOS 12 환경에서는 메뉴 항목을 숨김 (graceful fallback)
-- 2026-05-15: "메뉴바 아이콘 숨기기" 항목 추가. 클릭 시 `NSStatusItem.setVisible_(False)`로 현 세션에서만 숨기고, 다시 표시하려면 앱 종료 후 재실행 필요 (영구 저장 안 함)
 - 2026-05-15: 메뉴바 UI(사용자 인터페이스)와 도움말을 한국어/영어로 다국어화. macOS 시스템 언어를 자동 감지하고, 메뉴의 "언어 / Language" 서브메뉴에서 수동 전환 가능. 선택은 `NSUserDefaults`에 영구 저장
 - 2026-05-11: App Store 제출을 위해 README에 privacy policy(개인정보 처리방침)를 추가
 - 2026-05-11: Tabledown 활성화/비활성화 붙여넣기 차이를 보여주는 비교 스크린샷을 README에 추가
