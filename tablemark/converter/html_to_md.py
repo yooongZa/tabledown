@@ -61,7 +61,7 @@ def _table_to_grid(table) -> list[list[str]]:
 
             rowspan = _span_value(cell.get("rowspan"))
             colspan = _span_value(cell.get("colspan"))
-            row.append(_clean_cell(cell.get_text()))
+            row.append(_clean_cell(_cell_text(cell)))
 
             for offset in range(1, colspan):
                 row.append(" ")
@@ -119,9 +119,34 @@ def _span_value(value) -> int:
     return max(span, 1)
 
 
+def _cell_text(cell) -> str:
+    """Extract cell text, rendering <br> as a literal newline.
+
+    BeautifulSoup's get_text() drops <br> entirely, which would collapse
+    Excel/Sheets multi-line cells into a single line. Mutating the cell in
+    place is safe because each cell is visited once during grid expansion.
+    """
+    for br in cell.find_all("br"):
+        br.replace_with("\n")
+    return cell.get_text()
+
+
 def _clean_cell(text: str) -> str:
-    """Escape pipes, collapse whitespace, ensure non-empty."""
+    """Escape pipes, preserve in-cell line breaks as <br>, ensure non-empty.
+
+    Excel Alt+Enter and Sheets Ctrl+Enter put a literal newline inside a cell.
+    Markdown table cells cannot contain a raw newline, but GFM (Obsidian,
+    GitHub) renders <br> inside a cell as a line break.
+    """
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = text.replace("|", "\\|")
-    text = text.replace("\n", " ").replace("\r", " ")
-    text = " ".join(text.split())  # collapse whitespace
+    # Collapse runs of spaces/tabs within a line, then join lines with <br>.
+    lines = [" ".join(line.split()) for line in text.split("\n")]
+    # Drop empty leading/trailing lines so wrap-only whitespace doesn't add
+    # phantom breaks, but keep blank lines between content as a single <br>.
+    while lines and not lines[0]:
+        lines.pop(0)
+    while lines and not lines[-1]:
+        lines.pop()
+    text = "<br>".join(lines)
     return text if text else " "

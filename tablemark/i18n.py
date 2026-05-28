@@ -13,13 +13,11 @@ DEFAULT_LANGUAGE = "en"
 
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "ko": {
-        "menu.toggle_on": "활성화 ✓",
-        "menu.toggle_off": "비활성화",
+        "menu.toggle": "Tabledown 사용",
         "menu.language": "언어",
         "menu.language.ko": "한국어",
         "menu.language.en": "English",
-        "menu.login_item_on": "로그인 시 자동 실행 ✓",
-        "menu.login_item_off": "로그인 시 자동 실행",
+        "menu.login_item": "로그인 시 자동 실행",
         "menu.help": "도움말",
         "menu.quit": "종료",
         "help.title": "Tabledown",
@@ -29,17 +27,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "1. Excel/스프레드시트 또는 마크다운 표를 복사 (Cmd+C)\n"
             "2. 원하는 앱에서 그대로 붙여넣기 (Cmd+V)\n\n"
             "Excel 표를 복사하면 마크다운 에디터에서 Markdown 표로 붙고,\n"
-            "Markdown 표를 복사하면 Excel에서 셀에 분리되어 붙습니다."
+            "Markdown 표를 복사하면 Excel에서 셀에 분리되어 붙습니다.\n\n"
+            "메뉴의 ‘Tabledown 사용’ 항목 왼쪽 체크 표시가 현재 상태입니다.\n"
+            "체크가 켜져 있으면 변환이 동작하고, 꺼져 있으면 변환이 멈춥니다.\n"
+            "메뉴바 아이콘에 사선이 그어져 있으면 변환이 꺼져 있는 상태입니다."
         ),
     },
     "en": {
-        "menu.toggle_on": "Enabled ✓",
-        "menu.toggle_off": "Disabled",
+        "menu.toggle": "Use Tabledown",
         "menu.language": "Language",
         "menu.language.ko": "한국어",
         "menu.language.en": "English",
-        "menu.login_item_on": "Open at Login ✓",
-        "menu.login_item_off": "Open at Login",
+        "menu.login_item": "Open at Login",
         "menu.help": "Help",
         "menu.quit": "Quit",
         "help.title": "Tabledown",
@@ -49,7 +48,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "1. Copy a table from Excel/Sheets or a Markdown table (Cmd+C)\n"
             "2. Paste in any app (Cmd+V)\n\n"
             "Excel tables paste as Markdown in a Markdown editor,\n"
-            "and Markdown tables paste into separate cells in Excel."
+            "and Markdown tables paste into separate cells in Excel.\n\n"
+            "The checkmark next to ‘Use Tabledown’ shows the current state.\n"
+            "When checked, conversion is on. When unchecked, conversion pauses.\n"
+            "A slash through the menu bar icon means conversion is off."
         ),
     },
 }

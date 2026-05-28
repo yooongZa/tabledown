@@ -41,7 +41,10 @@ OPTIONS = {
         "NSHumanReadableCopyright": "© 2026 Tabledown",
     },
     "packages": ["rumps", "bs4", "AppKit"],
-    "resources": ["assets/generated/tablemark_menu_40.png"],
+    "resources": [
+        "assets/generated/tablemark_menu_40.png",
+        "assets/generated/tablemark_menu_40_off.png",
+    ],
     "iconfile": "assets/Tabledown.icns",
 }
 

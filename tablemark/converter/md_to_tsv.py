@@ -4,14 +4,32 @@ import re
 
 
 def is_markdown_table(text: str) -> bool:
-    """Heuristic check for markdown table format."""
+    """Heuristic check for markdown table format.
+
+    Requires (a) the first line to contain pipes, (b) the second line to be a
+    separator of `-`/`:` segments, and (c) the separator to have the same cell
+    count as the header. The cell-count check rejects coincidental `| ... |`
+    text where the second line happens to start with `-` (e.g. shell output,
+    ASCII art) but does not actually describe the same columns.
+    """
     lines = [line.strip() for line in text.strip().split("\n") if line.strip()]
     if len(lines) < 2:
         return False
-    # First line must contain pipes, second line must be separator
     if "|" not in lines[0]:
         return False
-    return _is_separator_line(lines[1])
+    if not _is_separator_line(lines[1]):
+        return False
+    return _cell_count(lines[0]) == _cell_count(lines[1])
+
+
+def _cell_count(line: str) -> int:
+    """Count cells in a markdown table row, ignoring leading/trailing pipes."""
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|"):
+        stripped = stripped[:-1]
+    return len(_split_cells(stripped))
 
 
 def markdown_table_to_tsv(md: str) -> str:

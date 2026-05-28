@@ -7,6 +7,18 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-28
+
+### Added
+- 메뉴바 아이콘에 disabled state(상태) 시각화 — 변환 OFF 시 사선(slash) 오버레이된 아이콘으로 전환되어 메뉴를 열지 않아도 ON/OFF 를 식별 가능
+
+### Changed
+- 토글 메뉴 라벨을 macOS HIG(휴먼 인터페이스 가이드라인) 컨벤션에 맞게 단일화 — "활성화 ✓" / "비활성화" 두 라벨 대신 항상 "Tabledown 사용" (en: "Use Tabledown") 한 라벨을 쓰고 NSMenuItem `state` 의 체크마크로 ON/OFF 표현. 로그인 자동 실행 항목과 언어 선택 항목도 동일 방식으로 통일
+- Excel/Sheets 셀 내부 줄바꿈(Alt+Enter) 을 공백 대신 `<br>` 로 보존 — Obsidian / GitHub Flavored Markdown 에서 셀 안 줄바꿈이 그대로 렌더링됨
+
+### Fixed
+- `is_markdown_table` heuristic(휴리스틱) 의 false positive(거짓양성) 감소 — 헤더와 separator(구분선) 의 cell count(셀 개수) 가 일치할 때만 markdown 표로 판정. 두 번째 줄이 우연히 `-` 로 시작하는 일반 텍스트(예: shell 출력) 가 표로 오인되어 변환되던 케이스 차단
+
 ## [0.1.1] - 2026-05-19
 
 ### Added
@@ -44,6 +56,7 @@
 - Obsidian 에서 표 paste 시 발생하던 공백 처리 문제
 - Excel 로 Markdown paste 시 HTML clipboard format(클립보드 형식) 충돌 — HTML format 을 제거하여 plain text 만 사용
 
-[Unreleased]: https://github.com/yooongZa/tabledown/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/yooongZa/tabledown/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/yooongZa/tabledown/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/yooongZa/tabledown/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/yooongZa/tabledown/releases/tag/v0.1.0
