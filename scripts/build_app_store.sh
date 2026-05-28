@@ -6,6 +6,7 @@ APP_NAME="Tabledown"
 APP="$ROOT/dist/$APP_NAME.app"
 PKG="$ROOT/dist/$APP_NAME-mas.pkg"
 ENTITLEMENTS="$ROOT/entitlements/mac-app-store.plist"
+INHERIT_ENTITLEMENTS="$ROOT/entitlements/mac-app-store-inherit.plist"
 STAGE_DIR="$(mktemp -d)"
 
 trap 'rm -rf "$STAGE_DIR"' EXIT
@@ -48,11 +49,23 @@ find_provision_profile() {
 sign_macho_files() {
   local app_path="$1"
   local identity="$2"
-  local entitlements="$3"
+  local entitlements="$3"          # full entitlements (with application-identifier)
+  local inherit_entitlements="$4"  # sandbox + inherit only (no application-identifier)
+  local main_exe
+  main_exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_path/Contents/Info.plist")"
   while IFS= read -r -d '' file_path; do
     if file "$file_path" | grep -q 'Mach-O'; then
-      if [[ "$file_path" == "$app_path/Contents/MacOS/"* ]]; then
+      if [[ "$file_path" == "$app_path/Contents/MacOS/$main_exe" ]]; then
+        # Main executable: full entitlements; the app bundle carries the
+        # embedded provisioning profile that matches application-identifier.
         /usr/bin/codesign --force --sign "$identity" --entitlements "$entitlements" "$file_path"
+      elif [[ "$file_path" == "$app_path/Contents/MacOS/"* ]]; then
+        # Other nested executables (e.g. py2app's python interpreter) must NOT
+        # carry application-identifier, or App Store Connect rejects the build
+        # (error 90885: nested executable has app id but no provisioning
+        # profile). Give them sandbox-inherit so they inherit the main app's
+        # profile instead of requiring their own.
+        /usr/bin/codesign --force --sign "$identity" --entitlements "$inherit_entitlements" "$file_path"
       else
         /usr/bin/codesign --force --sign "$identity" "$file_path"
       fi
@@ -92,7 +105,7 @@ cp "$PROFILE" "$APP_STAGE/Contents/embedded.provisionprofile"
 xattr -cr "$APP_STAGE"
 chmod -R u+rwX,go+rX "$APP_STAGE"
 
-sign_macho_files "$APP_STAGE" "$APP_SIGN_IDENTITY" "$ENTITLEMENTS"
+sign_macho_files "$APP_STAGE" "$APP_SIGN_IDENTITY" "$ENTITLEMENTS" "$INHERIT_ENTITLEMENTS"
 /usr/bin/codesign \
   --force \
   --sign "$APP_SIGN_IDENTITY" \
