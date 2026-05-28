@@ -27,9 +27,11 @@ def read_version() -> str:
 VERSION = read_version()
 # CFBundleShortVersionString is the user-facing marketing version (VERSION).
 # CFBundleVersion is the build number, which App Store Connect requires to be
-# unique and monotonically increasing within a version train. Override it per
-# upload via TABLEDOWN_BUILD (e.g. TABLEDOWN_BUILD=0.2.0.1) when re-submitting
-# the same marketing version; defaults to VERSION for the first build.
+# unique and monotonically increasing within a version train, and which must
+# be at most three period-separated non-negative integers (e.g. 0.2.1 — NOT
+# 0.2.0.1, which has four components and is rejected with error 236550). When
+# re-submitting the same marketing version, override it per upload via
+# TABLEDOWN_BUILD (e.g. TABLEDOWN_BUILD=0.2.1); defaults to VERSION otherwise.
 BUILD = os.environ.get("TABLEDOWN_BUILD", VERSION)
 APP = ["run.py"]
 OPTIONS = {
