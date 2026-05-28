@@ -140,10 +140,11 @@ Tabledown은 계정 생성, analytics(분석), 광고 추적, 위치 정보, 연
 
 ## 변경 이력
 
+- 2026-05-28: Tabledown 0.2.0(빌드 0.2.1)을 Mac App Store 에 심사 제출
 - 2026-05-28: 토글 메뉴를 macOS HIG(휴먼 인터페이스 가이드라인) 컨벤션으로 정리. "활성화 ✓"/"비활성화" 두 라벨 대신 체크마크가 붙는 "Tabledown 사용"(en: "Use Tabledown") 한 라벨로 통일하고, NSMenuItem `state` 로 ON/OFF 를 표시. 변환 OFF 시 메뉴바 아이콘에 사선(slash)을 표시해 메뉴를 열지 않아도 상태 식별 가능. 로그인 자동 실행·언어 선택 항목도 동일한 체크마크 방식으로 통일
 - 2026-05-28: Excel/Sheets 셀 내부 줄바꿈(Alt+Enter)을 공백 대신 `<br>` 로 보존해 Obsidian / GitHub Flavored Markdown 에서 셀 안 줄바꿈이 그대로 렌더링되도록 변경
 - 2026-05-28: `is_markdown_table` 의 false positive(거짓양성) 감소. 헤더와 separator(구분선)의 셀 개수가 일치할 때만 표로 판정해, 둘째 줄이 우연히 `-` 로 시작하는 일반 텍스트가 표로 오인 변환되던 경우를 차단
-- 2026-05-28: Mac App Store 빌드 수정. py2app 의 nested executable(`Contents/MacOS/python`)에 `application-identifier` 대신 sandbox `inherit` entitlements 를 적용해 App Store Connect error 90885 해결. `CFBundleVersion` 을 `TABLEDOWN_BUILD` 환경변수로 분리해 marketing version(`0.2.0`) 을 유지하며 build number 만 올릴 수 있게 해 재업로드 시 error -19232 회피
+- 2026-05-28: Mac App Store 빌드 수정. py2app 의 nested executable(`Contents/MacOS/python`)에 `application-identifier` 대신 sandbox `inherit` entitlements 를 적용해 App Store Connect error 90885 해결. `CFBundleVersion` 을 `TABLEDOWN_BUILD` 환경변수로 분리해 marketing version(`0.2.0`) 을 유지하며 build number 만 올릴 수 있게 해 재업로드 시 error -19232 회피. build number 는 정수 최대 3개여야 하므로 `0.2.0.1`(4개·error 236550) 대신 `0.2.1`(3개) 형식을 사용
 - 2026-05-19: Mac App Store 스크린샷을 실제 앱 UI capture(캡처)로 교체. 1차 거절(Guideline 2.3.3, marketing/promotional 머티리얼 사용 사유) 에 대응해 마케팅 그래픽 4 장을 제거하고, 메뉴바 드롭다운·언어 서브메뉴·변환 결과(Numbers + TextEdit) 등 실제 동작 화면 캡처로 교체
 - 2026-05-19: "메뉴바 아이콘 숨기기" 메뉴 항목 제거. `LSUIElement: True` 앱에서 메뉴바 아이콘이 유일한 UI 였는데 숨기면 종료조차 할 수 없었고, NSStatusItem 의 autosaveName 이 visibility 를 `NSUserDefaults` 에 영구 저장해 앱을 재실행해도 아이콘이 돌아오지 않았음. 시작 시 `NSUserDefaults` 의 stale `NSStatusItem Visible*` 키를 정리해 이전 빌드에서 숨김 상태가 저장된 사용자도 자동 복구
 - 2026-05-15: "로그인 시 자동 실행" 토글 추가. macOS 13+ 의 `SMAppService.mainAppService` API(에이피아이)를 사용해 App Sandbox(앱 샌드박스)와 Mac App Store 빌드와 호환. macOS 12 환경에서는 메뉴 항목을 숨김 (graceful fallback)

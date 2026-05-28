@@ -20,6 +20,7 @@
 - `is_markdown_table` heuristic(휴리스틱) 의 false positive(거짓양성) 감소 — 헤더와 separator(구분선) 의 cell count(셀 개수) 가 일치할 때만 markdown 표로 판정. 두 번째 줄이 우연히 `-` 로 시작하는 일반 텍스트(예: shell 출력) 가 표로 오인되어 변환되던 케이스 차단
 - Mac App Store 빌드의 nested executable(중첩 실행파일) 서명 수정 — py2app 이 번들에 넣는 `Contents/MacOS/python` 에 `application-identifier` 대신 sandbox `inherit` entitlements 를 적용. 메인 실행파일만 full entitlements 를 유지해 App Store Connect error 90885(중첩 실행파일이 application-identifier 를 가졌으나 provisioning profile 이 없음) 해결
 - 동일 marketing version 재업로드 시 build number 충돌(App Store Connect error -19232) 회피 — `CFBundleVersion` 을 `TABLEDOWN_BUILD` 환경변수로 분리해, marketing version(`CFBundleShortVersionString`, `0.2.0`) 은 유지하면서 build number 만 증가 가능
+- `CFBundleVersion` 형식 오류(App Store Connect error 236550) 수정 — build number 는 period(점)로 구분된 정수 최대 3개만 허용되므로 `0.2.0.1`(4개) 대신 `0.2.1`(3개) 형식 사용
 
 ## [0.1.1] - 2026-05-19
 
