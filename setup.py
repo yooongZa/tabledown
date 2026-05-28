@@ -4,6 +4,7 @@ Build with:
     python setup.py py2app
 """
 import ast
+import os
 from pathlib import Path
 
 from setuptools import find_packages, setup
@@ -24,6 +25,12 @@ def read_version() -> str:
 
 
 VERSION = read_version()
+# CFBundleShortVersionString is the user-facing marketing version (VERSION).
+# CFBundleVersion is the build number, which App Store Connect requires to be
+# unique and monotonically increasing within a version train. Override it per
+# upload via TABLEDOWN_BUILD (e.g. TABLEDOWN_BUILD=0.2.0.1) when re-submitting
+# the same marketing version; defaults to VERSION for the first build.
+BUILD = os.environ.get("TABLEDOWN_BUILD", VERSION)
 APP = ["run.py"]
 OPTIONS = {
     "argv_emulation": False,
@@ -33,7 +40,7 @@ OPTIONS = {
         "CFBundleName": "Tabledown",
         "CFBundleDisplayName": "Tabledown",
         "CFBundleIdentifier": "com.tabledown.app",
-        "CFBundleVersion": VERSION,
+        "CFBundleVersion": BUILD,
         "CFBundleShortVersionString": VERSION,
         "CFBundleSupportedPlatforms": ["MacOSX"],
         "LSApplicationCategoryType": "public.app-category.productivity",
