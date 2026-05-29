@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-05-29
+
+### Changed
+- 순수 Excel/Sheets 표를 마크다운으로 변환할 때도 HTML `<table>` 슬롯을 유지하도록 통일 — 0.2.3 까지는 이 경우(Excel 표 → 마크다운 에디터)만 HTML 을 제거했으나, 그 표를 다시 Excel·Word 에 붙이면 표 형식이 깨지는 손실이 있었음. 이제 모든 표 케이스(웹표·문서·Excel 표)에서 **HTML 유지 + text 슬롯 마크다운 보강**으로 동작해, 한 번 복사로 Excel·Word 는 표 형식을, 마크다운 에디터는 마크다운을 받음. PNG/PDF/RTF 등 rendered format(렌더링 형식) 만 제거. (트레이드오프: HTML 자동변환이 켜진 마크다운 에디터는 HTML 을 우선해 리치 표로 붙일 수 있음 — 도착지 앱 정책)
+
 ## [0.2.3] - 2026-05-29
 
 ### Changed
@@ -74,7 +79,8 @@
 - Obsidian 에서 표 paste 시 발생하던 공백 처리 문제
 - Excel 로 Markdown paste 시 HTML clipboard format(클립보드 형식) 충돌 — HTML format 을 제거하여 plain text 만 사용
 
-[Unreleased]: https://github.com/yooongZa/tabledown/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/yooongZa/tabledown/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/yooongZa/tabledown/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/yooongZa/tabledown/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/yooongZa/tabledown/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/yooongZa/tabledown/compare/v0.2.0...v0.2.1

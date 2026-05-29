@@ -6,7 +6,6 @@ import time
 import rumps
 
 from .clipboard import (
-    HTML_TYPES,
     RENDERED_TABLE_TYPES,
     clipboard_change_count,
     read_clipboard,
@@ -284,13 +283,18 @@ class TabledownApp(rumps.App):
                     "text": converted,
                     "drop_types": RENDERED_TABLE_TYPES,
                 }
+            # A bare table (Excel/Sheets): put a Markdown table in the text slot
+            # but KEEP the original HTML <table>. A Markdown editor reading text
+            # gets Markdown; Excel/Word reading HTML still paste a real table, so
+            # one copy works for every destination (same rule as web tables and
+            # documents). Only RENDERED image formats are dropped, never HTML.
             markdown = html_table_to_markdown(html)
             if text.strip() == markdown.strip():
                 return None
             log("detected html table")
             return {
                 "text": _markdown_paste_block(markdown),
-                "drop_types": RENDERED_TABLE_TYPES | HTML_TYPES,
+                "drop_types": RENDERED_TABLE_TYPES,
             }
 
         return None

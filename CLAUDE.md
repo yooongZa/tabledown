@@ -41,20 +41,21 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
 - html `<table>` 이 있으면 이 판정이 불필요(이미 진짜 표 증거)하므로 검사를 끈다(불변식 1).
 - 즉 셀개수 검사를 **삭제하지도, 무조건 적용하지도 말 것.** 적용 범위가 핵심이다.
 
-### 3. html 슬롯 제거(`drop_types` 에 `HTML_TYPES`)는 변환과 독립 — 함부로 묶지 말 것
+### 3. html 슬롯은 어떤 표 변환에서도 제거하지 않는다 (0.2.4 에서 통일)
 - text 슬롯에 마크다운을 넣는 것과 html 슬롯을 지우는 것은 **완전히 별개**의 조작이다.
-- html 이 사라지는 건 오직 `write_clipboard(..., drop_types=세트에 HTML_TYPES 포함)` 일 때뿐.
-  text 보강에 **자동으로 따라오지 않는다.**
-- html 제거가 적용되는 **유일한** 경우: **순수 Excel/Sheets 표 → 마크다운 에디터.**
-  - 이유: Excel 에서 복사한 표(text=탭구분 TSV, html=`<table>`)는 "마크다운으로 가져가려는 것"
-    이라고 **출발지로 도착지를 추론**한다. html 을 남기면 Obsidian 등이 html 을 우선 받아
-    리치 표로 붙여 마크다운이 안 되므로, html 을 치워 마크다운(text)을 강제한다 (커밋 `7c677b8`).
-  - **한계 / 재검토 여지**: 이 경우 그 표를 다시 Excel·Word 에 붙이면 표 형식이 깨진다
-    (불변식 1 이 막으려던 것과 같은 손실). 불변식 1·4 와 방향이 반대이므로, 일관성을 위해
-    이것도 "html 유지 + text 마크다운 보강"으로 통일할 수 있다 — 다만 그러면 Obsidian(html
-    자동변환 ON)에서 마크다운이 안 나올 수 있다는 트레이드오프가 있다. 바꾸기 전 실제 도착지
-    앱에서 검증할 것.
-- **웹표·표가 든 문서는 html 을 유지**해야 Excel·Word 붙여넣기가 산다. 절대 html 을 지우지 말 것.
+  html 이 사라지는 건 오직 `write_clipboard(..., drop_types=세트에 HTML_TYPES 포함)` 일 때뿐.
+- **모든 표 케이스(웹표·문서·순수 Excel/Sheets 표)에서 html `<table>` 을 유지한다.**
+  text 슬롯엔 마크다운을 보강하고 html 은 원본 그대로 둔다. 그래야 한 번 복사로 Excel·Word 는
+  표 형식을, 마크다운 에디터는 마크다운을 받는다. `_converted_clipboard` 의 모든 분기는
+  `drop_types` 에 `RENDERED_TABLE_TYPES`(PNG/PDF/RTF 등 이미지)만 넣고
+  **`HTML_TYPES` 는 절대 넣지 않는다.**
+- **이력**: 0.2.3 까지는 "순수 Excel 표 → 마크다운 에디터" 한 경우만 html 을 제거했다
+  (Obsidian 이 html 을 우선해 마크다운이 안 되는 것 회피 — 커밋 `7c677b8`). 그러나 그 표를
+  다시 Excel·Word 에 붙이면 표가 깨지는 손실이 있어(불변식 1 과 같은 문제), 0.2.4 에서 다른
+  표 케이스와 동일하게 **html 유지로 통일**했다.
+- **트레이드오프(주의)**: html 자동변환이 켜진 마크다운 에디터(Obsidian 등)는 html 을 우선
+  받아 리치 표로 붙일 수 있다(text 의 마크다운이 무시될 수 있음). 이는 도착지 앱 정책이라
+  TableDown 통제 밖이며, "표 형식 붙여넣기를 잃지 않는다"는 이득과의 교환이다.
 
 ### 4. 표가 포함된 "문서" → text 에 마크다운 표 보강 + html 유지 (0.2.3)
 - 문단·헤딩·리스트 사이에 표가 섞인 문서(`html_has_content_outside_table` 가 True)는
@@ -66,7 +67,7 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
 ### 회귀 방지 테스트 (변환 로직 수정 후 반드시 통과)
 `scripts/run_test_matrix.py` 의 converter 테스트군:
 - `html_table_with_markdown_text_preserved` → 불변식 1
-- `html_clipboard_drops_html_formats` → 불변식 3 (순수 Excel 표만 html drop)
+- `html_clipboard_keeps_html` → 불변식 3 (순수 Excel 표도 html 유지)
 - `html_table_in_document_augments_text`, `html_table_in_document_keeps_html` → 불변식 4
 
 실행 (시스템 클립보드 안 건드리는 순수 변환 테스트만):

@@ -151,13 +151,15 @@ def run_converter_tests() -> list[TestResult]:
         ),
     )
     check(
-        "html_clipboard_drops_html_formats",
+        "html_clipboard_keeps_html",
         lambda: _assert_equal(
+            # a bare Excel/Sheets table now KEEPS the HTML slot so Excel/Word
+            # still paste a real table; only RENDERED image formats are dropped.
             TabledownApp._converted_clipboard(
                 None,
                 {"html": HTML_BASIC, "text": "Name\tScore\nAlice\t95"},
             ).get("drop_types"),
-            RENDERED_TABLE_TYPES | HTML_TYPES,
+            RENDERED_TABLE_TYPES,
         ),
     )
     check(
