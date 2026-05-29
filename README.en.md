@@ -149,6 +149,7 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 
 ## Changelog
 
+- 2026-05-29: Fixed a regression (0.2.1) where tables copied from web or chat apps (e.g. Claude) pasted into Excel as raw Markdown in a single cell. Such tables carry both Markdown text and an HTML `<table>` on the clipboard; the 0.2.0 `is_markdown_table` cell-count check rejected them when the separator column count was off, so the HTML was stripped and the text converted to Markdown. When an HTML `<table>` is present, the cell-count check is now skipped (`strict` parameter) and the original clipboard is preserved. The check still guards html-less text to block false positives
 - 2026-05-28: Submitted Tabledown 0.2.0 (build 0.2.1) to the Mac App Store for review
 - 2026-05-28: Standardized the toggle menu to macOS HIG conventions. A single "Use Tabledown" item with a state checkmark replaces the old "Enabled ✓" / "Disabled" labels, and the menu bar icon now shows a slash overlay when conversion is off, so the on/off state is visible without opening the menu. The login-at-startup and language items use the same checkmark pattern
 - 2026-05-28: Preserve cell-internal line breaks (Excel Alt+Enter, Sheets Ctrl+Enter) as `<br>` instead of collapsing them to spaces, so Obsidian and GitHub Flavored Markdown render them correctly
