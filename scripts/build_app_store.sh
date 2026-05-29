@@ -26,9 +26,14 @@ profile_app_id() {
     rm -f "$decoded"
     return 1
   }
-  plutil -extract Entitlements.com.apple.application-identifier raw -o - "$decoded" 2>/dev/null \
-    || plutil -extract Entitlements.application-identifier raw -o - "$decoded" 2>/dev/null
+  # PlistBuddy uses ':' path separators, so the key's own dots (e.g.
+  # com.apple.application-identifier) are kept literal. `plutil -extract` treats
+  # dots as path separators and fails to find the key.
+  local app_id
+  app_id="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$decoded" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$decoded" 2>/dev/null)"
   rm -f "$decoded"
+  [[ -n "$app_id" ]] && printf '%s\n' "$app_id"
 }
 
 find_provision_profile() {
