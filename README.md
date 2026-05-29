@@ -149,6 +149,7 @@ Tabledown은 계정 생성, analytics(분석), 광고 추적, 위치 정보, 연
 
 ## 변경 이력
 
+- 2026-05-29: Tabledown 0.2.3 을 Mac App Store(TestFlight) 에 build 0.2.3 으로 제출
 - 2026-05-29: 표가 일부 포함된 문서를 붙여넣을 때 text(일반 텍스트) 슬롯의 표 부분만 마크다운 표로 보강하고 HTML `<table>` 슬롯은 유지하도록 변경 (0.2.3). 마크다운 에디터는 마크다운 표를, Word·Excel 등은 원본 표 형식을 그대로 받음. 표 외 문단·헤딩·리스트는 plain text 로 유지
 - 2026-05-29: 표가 일부만 포함된 문서(웹·채팅·Word 등) 를 복사·붙여넣을 때 표만 남고 나머지 텍스트(헤딩·문단·리스트) 가 사라지던 문제 수정 (0.2.2). clipboard HTML 에 `<table>` 외 의미있는 콘텐츠가 있으면 '문서' 로 보고 변환을 건너뛰어 원본을 그대로 보존하고, Excel/Sheets 의 순수 표만 마크다운으로 변환
 - 2026-05-29: Tabledown 0.2.1 을 Mac App Store(TestFlight) 에 제출. App Store Connect 는 build number(`CFBundleVersion`) 가 marketing version 과 무관하게 직전 업로드(0.2.0 의 build 0.2.1)보다 높아야 하므로, build 를 0.2.2 로 올려 빌드 (`TABLEDOWN_BUILD=0.2.2`)

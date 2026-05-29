@@ -149,6 +149,7 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 
 ## Changelog
 
+- 2026-05-29: Submitted Tabledown 0.2.3 to the Mac App Store (TestFlight) as build 0.2.3
 - 2026-05-29: When pasting a document that partly contains a table, the text slot now gains a Markdown table for the table portion while the original HTML `<table>` slot is preserved (0.2.3). Markdown editors read the text and get a Markdown table; Word/Excel read the original HTML and paste a real table. Headings, paragraphs, and lists outside the table stay as plain text
 - 2026-05-29: Fixed a bug (0.2.2) where copying a document that only partly contains a table (web page, chat answer, Word, etc.) pasted just the table and dropped the surrounding text (headings, paragraphs, lists). When the clipboard HTML has meaningful content beyond the `<table>`, it is treated as a document and left untouched; only a bare Excel/Sheets table is converted to Markdown
 - 2026-05-29: Submitted Tabledown 0.2.1 to the Mac App Store (TestFlight). App Store Connect requires the build number (`CFBundleVersion`) to be higher than the previous upload (0.2.0's build 0.2.1) regardless of marketing version, so the build was bumped to 0.2.2 (`TABLEDOWN_BUILD=0.2.2`)
