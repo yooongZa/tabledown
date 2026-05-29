@@ -149,6 +149,7 @@ Tabledown은 계정 생성, analytics(분석), 광고 추적, 위치 정보, 연
 
 ## 변경 이력
 
+- 2026-05-29: Tabledown 0.2.1 을 Mac App Store(TestFlight) 에 제출. App Store Connect 는 build number(`CFBundleVersion`) 가 marketing version 과 무관하게 직전 업로드(0.2.0 의 build 0.2.1)보다 높아야 하므로, build 를 0.2.2 로 올려 빌드 (`TABLEDOWN_BUILD=0.2.2`)
 - 2026-05-29: 웹·채팅 앱(Claude 등)에서 복사한 표를 Excel 에 붙여넣을 때 마크다운 원문이 한 셀에 박히던 회귀 수정 (0.2.1). 이런 표는 clipboard 에 마크다운 text 와 HTML `<table>` 이 함께 실려오는데, 0.2.0 의 `is_markdown_table` 셀 개수 검사 때문에 칸수가 어긋나면 표로 인정되지 않아 HTML 이 제거되고 마크다운으로 변환되던 문제. HTML `<table>` 이 동반된 경우 셀 개수 검사를 건너뛰고(`strict` 파라미터) 원본 clipboard 를 보존하도록 수정. 셀 개수 검사는 HTML 이 없는 순수 텍스트의 false positive(거짓양성) 차단용으로 유지
 - 2026-05-28: Tabledown 0.2.0(빌드 0.2.1)을 Mac App Store 에 심사 제출
 - 2026-05-28: 토글 메뉴를 macOS HIG(휴먼 인터페이스 가이드라인) 컨벤션으로 정리. "활성화 ✓"/"비활성화" 두 라벨 대신 체크마크가 붙는 "Tabledown 사용"(en: "Use Tabledown") 한 라벨로 통일하고, NSMenuItem `state` 로 ON/OFF 를 표시. 변환 OFF 시 메뉴바 아이콘에 사선(slash)을 표시해 메뉴를 열지 않아도 상태 식별 가능. 로그인 자동 실행·언어 선택 항목도 동일한 체크마크 방식으로 통일
