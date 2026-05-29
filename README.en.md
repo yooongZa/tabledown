@@ -31,7 +31,7 @@ The Mac App Store is the recommended way to install (automatic updates).
 
 Or get it directly from GitHub Releases.
 
-**[Download Tabledown.dmg](https://github.com/yooongZa/tabledown/releases/download/v0.2.0/Tabledown.dmg)**
+**[Download Tabledown.dmg](https://github.com/yooongZa/tabledown/releases/latest/download/Tabledown.dmg)**
 
 Install (DMG):
 

@@ -31,7 +31,7 @@ Mac App Store에서 받는 것을 권장합니다 (자동 업데이트).
 
 또는 GitHub Releases(깃허브 릴리스)에서 직접 받을 수 있습니다.
 
-**[Tabledown.dmg 다운로드](https://github.com/yooongZa/tabledown/releases/download/v0.2.0/Tabledown.dmg)**
+**[Tabledown.dmg 다운로드](https://github.com/yooongZa/tabledown/releases/latest/download/Tabledown.dmg)**
 
 설치 (DMG):
 
