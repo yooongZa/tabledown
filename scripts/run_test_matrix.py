@@ -173,6 +173,18 @@ def run_converter_tests() -> list[TestResult]:
             None,
         ),
     )
+    check(
+        "html_table_in_document_preserved",
+        lambda: _assert_equal(
+            TabledownApp._converted_clipboard(
+                None,
+                # a table embedded in a document (paragraphs around it) must be
+                # left alone, not reduced to only the table.
+                {"html": HTML_NOISE, "text": "Before\n제품 수량\n키보드 3\nAfter"},
+            ),
+            None,
+        ),
+    )
 
     return tests
 

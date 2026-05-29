@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-05-29
+
+### Fixed
+- 표가 일부만 포함된 문서(웹·채팅·Word 등) 를 복사·붙여넣을 때 표만 남고 나머지 텍스트(헤딩·문단·리스트) 가 사라지던 문제 수정 — clipboard HTML 에 `<table>` 외 의미있는 콘텐츠가 있으면 '문서' 로 보고 변환을 건너뛰어 원본을 그대로 보존. Excel/Sheets 의 순수 표(표 외 콘텐츠 없음) 만 마크다운으로 변환 (`html_has_content_outside_table`)
+
 ## [0.2.1] - 2026-05-29
 
 ### Fixed
@@ -64,7 +69,8 @@
 - Obsidian 에서 표 paste 시 발생하던 공백 처리 문제
 - Excel 로 Markdown paste 시 HTML clipboard format(클립보드 형식) 충돌 — HTML format 을 제거하여 plain text 만 사용
 
-[Unreleased]: https://github.com/yooongZa/tabledown/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/yooongZa/tabledown/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/yooongZa/tabledown/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/yooongZa/tabledown/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/yooongZa/tabledown/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/yooongZa/tabledown/compare/v0.1.0...v0.1.1

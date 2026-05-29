@@ -12,7 +12,10 @@ from .clipboard import (
     read_clipboard,
     write_clipboard,
 )
-from .converter.html_to_md import html_table_to_markdown
+from .converter.html_to_md import (
+    html_has_content_outside_table,
+    html_table_to_markdown,
+)
 from .converter.md_to_tsv import (
     is_markdown_table,
     markdown_table_to_html,
@@ -259,6 +262,12 @@ class TabledownApp(rumps.App):
             }
 
         if has_html_table:
+            # A table embedded in a document (headings, paragraphs, lists) must
+            # not be reduced to only the table — converting would discard the
+            # surrounding text. Leave such clipboards untouched; only a bare
+            # table (Excel/Sheets) is converted to Markdown.
+            if html_has_content_outside_table(html):
+                return None
             markdown = html_table_to_markdown(html)
             if text.strip() == markdown.strip():
                 return None

@@ -150,3 +150,20 @@ def _clean_cell(text: str) -> str:
         lines.pop()
     text = "<br>".join(lines)
     return text if text else " "
+
+
+def html_has_content_outside_table(html: str) -> bool:
+    """True if the HTML carries meaningful content beyond its table(s).
+
+    Excel/Sheets put a bare <table> on the clipboard (plus style/meta noise),
+    which is safe to convert to Markdown. A copied *document* (web page, chat
+    answer, Word) embeds a table among headings, paragraphs, and lists —
+    converting it would discard everything but the table. Detect that so the
+    caller can leave the clipboard untouched.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    for noise in soup(["style", "script", "meta", "title", "head", "link"]):
+        noise.decompose()
+    for table in soup.find_all("table"):
+        table.decompose()
+    return bool(soup.get_text(strip=True))
