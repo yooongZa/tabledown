@@ -5,7 +5,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/yooongZa/tabledown/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/yooongZa/tabledown?label=download"></a>
+  <a href="https://apps.apple.com/app/id6768205551"><img alt="Mac App Store" src="https://img.shields.io/itunes/v/6768205551?label=Mac%20App%20Store"></a>
+  <a href="https://github.com/yooongZa/tabledown/releases/latest"><img alt="GitHub release" src="https://img.shields.io/github/v/release/yooongZa/tabledown?label=GitHub"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-macOS-111111">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
 </p>
@@ -20,17 +21,25 @@ Tabledown은 Excel/Google Sheets에서 복사한 표를 Obsidian, GitHub README,
 
 ## 다운로드
 
-최신 버전은 GitHub Releases(깃허브 릴리스)에서 받을 수 있습니다.
+Mac App Store에서 받는 것을 권장합니다 (자동 업데이트).
+
+<p>
+  <a href="https://apps.apple.com/app/id6768205551">
+    <img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-mac-app-store/black/ko-kr" alt="Mac App Store에서 다운로드" height="48">
+  </a>
+</p>
+
+또는 GitHub Releases(깃허브 릴리스)에서 직접 받을 수 있습니다.
 
 **[Tabledown.dmg 다운로드](https://github.com/yooongZa/tabledown/releases/latest/download/Tabledown.dmg)**
 
-설치:
+설치 (DMG):
 
 1. `Tabledown.dmg` 열기
 2. `Tabledown.app`을 Applications(응용 프로그램)로 드래그
 3. 앱 실행 후 메뉴바의 table(표) 아이콘 확인
 
-배포용 DMG는 Developer ID signing(개발자 ID 서명)과 Apple notarization(애플 공증)을 통과한 빌드입니다.
+배포용 DMG는 Developer ID signing(개발자 ID 서명)과 Apple notarization(애플 공증)을 통과한 빌드입니다. Mac App Store 빌드는 App Sandbox(앱 샌드박스)에서 동작합니다.
 
 ## 왜 쓰나요
 

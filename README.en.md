@@ -5,7 +5,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/yooongZa/tabledown/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/yooongZa/tabledown?label=download"></a>
+  <a href="https://apps.apple.com/app/id6768205551"><img alt="Mac App Store" src="https://img.shields.io/itunes/v/6768205551?label=Mac%20App%20Store"></a>
+  <a href="https://github.com/yooongZa/tabledown/releases/latest"><img alt="GitHub release" src="https://img.shields.io/github/v/release/yooongZa/tabledown?label=GitHub"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-macOS-111111">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
 </p>
@@ -20,17 +21,25 @@ Tabledown converts tables copied from Excel or Google Sheets into `| ... |` tabl
 
 ## Download
 
-Get the latest version from GitHub Releases.
+The Mac App Store is the recommended way to install (automatic updates).
+
+<p>
+  <a href="https://apps.apple.com/app/id6768205551">
+    <img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-mac-app-store/black/en-us" alt="Download on the Mac App Store" height="48">
+  </a>
+</p>
+
+Or get it directly from GitHub Releases.
 
 **[Download Tabledown.dmg](https://github.com/yooongZa/tabledown/releases/latest/download/Tabledown.dmg)**
 
-Install:
+Install (DMG):
 
 1. Open `Tabledown.dmg`
 2. Drag `Tabledown.app` into Applications
 3. Launch the app and check for the table icon in the menu bar
 
-The release DMG is built with Developer ID signing and Apple notarization.
+The release DMG is built with Developer ID signing and Apple notarization. The Mac App Store build runs in the App Sandbox.
 
 ## Why Use It
 
