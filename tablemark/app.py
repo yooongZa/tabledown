@@ -240,7 +240,13 @@ class TabledownApp(rumps.App):
             log(f"clipboard update failed: {e}")
 
     def _converted_clipboard(self, content):
-        """Return clipboard formats to write, or None when no update is needed."""
+        """Return clipboard formats to write, or None when no update is needed.
+
+        The branch logic here encodes hard-won clipboard invariants — see the
+        "클립보드 변환 불변식 (회귀 금지)" section in CLAUDE.md before changing
+        it. In short: never strip the HTML slot for web tables or documents,
+        and only apply the strict cell-count check to html-less text.
+        """
         if content.get("generated"):
             return None
 
