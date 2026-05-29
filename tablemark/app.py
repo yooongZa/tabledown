@@ -13,6 +13,7 @@ from .clipboard import (
     write_clipboard,
 )
 from .converter.html_to_md import (
+    convert_document_tables,
     html_has_content_outside_table,
     html_table_to_markdown,
 )
@@ -262,12 +263,21 @@ class TabledownApp(rumps.App):
             }
 
         if has_html_table:
-            # A table embedded in a document (headings, paragraphs, lists) must
-            # not be reduced to only the table — converting would discard the
-            # surrounding text. Leave such clipboards untouched; only a bare
-            # table (Excel/Sheets) is converted to Markdown.
+            # A table embedded in a document (headings, paragraphs, lists):
+            # render its tables as Markdown in the text slot but KEEP the
+            # original HTML slot. A Markdown editor reading text gets Markdown
+            # tables; rich editors (Word, Excel) still read the original
+            # <table> from HTML and paste a real table. Only RENDERED image
+            # formats are dropped, never the HTML.
             if html_has_content_outside_table(html):
-                return None
+                converted = convert_document_tables(html)
+                if not converted.strip() or converted.strip() == text.strip():
+                    return None
+                log("detected table in document")
+                return {
+                    "text": converted,
+                    "drop_types": RENDERED_TABLE_TYPES,
+                }
             markdown = html_table_to_markdown(html)
             if text.strip() == markdown.strip():
                 return None

@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-05-29
+
+### Changed
+- 표가 일부 포함된 문서(웹·채팅·Word 등) 를 붙여넣을 때, 0.2.2 의 "원본 그대로 보존" 대신 **text(일반 텍스트) 슬롯의 표 부분만 마크다운 표로 보강**하고 HTML `<table>` 슬롯은 그대로 유지하도록 변경 (`convert_document_tables`). 마크다운 에디터(Obsidian 등) 는 text 를 받아 표가 마크다운 표로 들어가고, Word·Excel 등 리치 에디터는 HTML 슬롯의 원본 `<table>` 을 받아 표 형식으로 그대로 붙음 — 양쪽 도착지를 동시에 만족. 표 외 헤딩·문단·리스트는 plain text 로 유지(마크다운 `#`·`-` 문법은 추가하지 않음). PNG/PDF/RTF 등 rendered format(렌더링 형식) 만 제거하고 HTML 은 절대 제거하지 않음
+
 ## [0.2.2] - 2026-05-29
 
 ### Fixed
@@ -69,7 +74,8 @@
 - Obsidian 에서 표 paste 시 발생하던 공백 처리 문제
 - Excel 로 Markdown paste 시 HTML clipboard format(클립보드 형식) 충돌 — HTML format 을 제거하여 plain text 만 사용
 
-[Unreleased]: https://github.com/yooongZa/tabledown/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/yooongZa/tabledown/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/yooongZa/tabledown/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/yooongZa/tabledown/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/yooongZa/tabledown/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/yooongZa/tabledown/compare/v0.1.1...v0.2.0

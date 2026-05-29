@@ -1,5 +1,12 @@
 """Convert HTML <table> (e.g. from Excel) to Markdown table."""
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
+
+
+_BLOCK_TAGS = {
+    "p", "div", "section", "article", "header", "footer", "main", "aside",
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "ul", "ol", "li", "blockquote", "pre", "table", "tr", "hr",
+}
 
 
 def html_table_to_markdown(html: str) -> str:
@@ -167,3 +174,65 @@ def html_has_content_outside_table(html: str) -> bool:
     for table in soup.find_all("table"):
         table.decompose()
     return bool(soup.get_text(strip=True))
+
+
+def convert_document_tables(html: str) -> str:
+    """Render each <table> in a document as Markdown, keep other text as-is.
+
+    Every <table> becomes a GFM Markdown table; the surrounding content
+    (headings, paragraphs, lists) is flattened to plain text — their Markdown
+    syntax (`#`, `-`) is NOT added, only tables are converted. Block elements
+    are separated by newlines so the result keeps the document's line layout.
+
+    Intended for the text/plain clipboard slot while the original HTML slot is
+    left intact: a Markdown editor that reads text sees Markdown tables, while
+    rich editors (Word, Excel) still read the original <table> from the HTML
+    slot and paste a real table.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    for noise in soup(["style", "script", "meta", "title", "head", "link"]):
+        noise.decompose()
+
+    placeholders = {}
+    for index, table in enumerate(soup.find_all("table")):
+        key = f"\x00TABLE{index}\x00"
+        try:
+            placeholders[key] = html_table_to_markdown(str(table))
+        except ValueError:
+            placeholders[key] = ""
+        table.replace_with(key)
+
+    text = _block_text(soup)
+    for key, markdown in placeholders.items():
+        text = text.replace(key, "\n" + markdown + "\n")
+    return _collapse_blank_lines(text)
+
+
+def _block_text(node) -> str:
+    """Extract text, inserting newlines around block-level elements."""
+    parts = []
+    for child in node.children:
+        if isinstance(child, NavigableString):
+            parts.append(str(child))
+        elif child.name == "br":
+            parts.append("\n")
+        elif child.name in _BLOCK_TAGS:
+            parts.append("\n" + _block_text(child) + "\n")
+        else:
+            parts.append(_block_text(child))
+    return "".join(parts)
+
+
+def _collapse_blank_lines(text: str) -> str:
+    """Strip each line and collapse runs of blank lines to a single one."""
+    lines = [line.strip() for line in text.split("\n")]
+    out = []
+    for line in lines:
+        if not line and (not out or not out[-1]):
+            continue
+        out.append(line)
+    while out and not out[-1]:
+        out.pop()
+    while out and not out[0]:
+        out.pop(0)
+    return "\n".join(out)
