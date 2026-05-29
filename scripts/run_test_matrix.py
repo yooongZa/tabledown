@@ -160,6 +160,19 @@ def run_converter_tests() -> list[TestResult]:
             RENDERED_TABLE_TYPES | HTML_TYPES,
         ),
     )
+    check(
+        "html_table_with_markdown_text_preserved",
+        lambda: _assert_equal(
+            TabledownApp._converted_clipboard(
+                None,
+                # markdown text + html <table> = real table (web/chat); a mismatched
+                # separator must NOT trigger html->md, which would strip html and
+                # break Excel paste.
+                {"html": HTML_BASIC, "text": "| # | A | B |\n| --- | --- |\n| 1 | x | y |"},
+            ),
+            None,
+        ),
+    )
 
     return tests
 

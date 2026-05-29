@@ -242,9 +242,15 @@ class TabledownApp(rumps.App):
 
         html = content.get("html", "")
         text = content.get("text", "")
+        has_html_table = bool(html) and "<table" in html.lower()
 
-        if text and is_markdown_table(text):
-            if html and "<table" in html.lower():
+        # An accompanying HTML <table> is independent proof of a real table, so
+        # skip the strict cell-count check (which only guards html-less text
+        # that merely looks like a table). text+html is already multi-format —
+        # leave it untouched so the destination picks its own format
+        # (Excel -> table, markdown editor -> text).
+        if text and is_markdown_table(text, strict=not has_html_table):
+            if has_html_table:
                 return None
             log("detected markdown table")
             return {
@@ -252,7 +258,7 @@ class TabledownApp(rumps.App):
                 "html": markdown_table_to_html(text),
             }
 
-        if html and "<table" in html.lower():
+        if has_html_table:
             markdown = html_table_to_markdown(html)
             if text.strip() == markdown.strip():
                 return None

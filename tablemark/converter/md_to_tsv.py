@@ -3,14 +3,19 @@ from html import escape
 import re
 
 
-def is_markdown_table(text: str) -> bool:
+def is_markdown_table(text: str, *, strict: bool = True) -> bool:
     """Heuristic check for markdown table format.
 
-    Requires (a) the first line to contain pipes, (b) the second line to be a
-    separator of `-`/`:` segments, and (c) the separator to have the same cell
-    count as the header. The cell-count check rejects coincidental `| ... |`
-    text where the second line happens to start with `-` (e.g. shell output,
-    ASCII art) but does not actually describe the same columns.
+    Requires (a) the first line to contain pipes and (b) the second line to be a
+    separator of `-`/`:` segments. When ``strict`` (the default), also requires
+    (c) the separator to have the same cell count as the header — this rejects
+    coincidental `| ... |` text whose second line happens to start with `-`
+    (shell output, ASCII art) but does not describe the same columns.
+
+    Callers with independent proof the clipboard holds a real table (e.g. an
+    accompanying HTML ``<table>``) pass ``strict=False`` to keep the looser
+    check, so a genuine table with a slightly mismatched separator is not
+    misclassified as plain text.
     """
     lines = [line.strip() for line in text.strip().split("\n") if line.strip()]
     if len(lines) < 2:
@@ -19,6 +24,8 @@ def is_markdown_table(text: str) -> bool:
         return False
     if not _is_separator_line(lines[1]):
         return False
+    if not strict:
+        return True
     return _cell_count(lines[0]) == _cell_count(lines[1])
 
 

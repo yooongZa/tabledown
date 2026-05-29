@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-29
+
+### Fixed
+- 웹·채팅(Claude 등) 에서 복사한 표를 Excel 에 붙여넣을 때 마크다운 원문이 한 셀에 박히던 회귀 수정 — 이런 표는 clipboard 에 마크다운 text 와 HTML `<table>` 이 함께 실려오는데, 0.2.0 에서 추가된 `is_markdown_table` 의 cell count(셀 개수) 일치 검사 때문에 칸수가 어긋나면 markdown 표로 인정되지 않아 HTML 이 제거되고 마크다운으로 변환되던 문제. HTML `<table>` 이 동반된 경우 cell count 검사를 건너뛰고(`strict` 파라미터) 원본 clipboard 를 보존하도록 수정. cell count 검사는 HTML `<table>` 이 없는 순수 텍스트의 false positive 차단 용도로 유지
+
 ## [0.2.0] - 2026-05-28
 
 ### Added
@@ -59,7 +64,8 @@
 - Obsidian 에서 표 paste 시 발생하던 공백 처리 문제
 - Excel 로 Markdown paste 시 HTML clipboard format(클립보드 형식) 충돌 — HTML format 을 제거하여 plain text 만 사용
 
-[Unreleased]: https://github.com/yooongZa/tabledown/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/yooongZa/tabledown/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/yooongZa/tabledown/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/yooongZa/tabledown/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/yooongZa/tabledown/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/yooongZa/tabledown/releases/tag/v0.1.0
