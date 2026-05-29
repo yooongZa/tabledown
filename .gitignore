@@ -15,3 +15,6 @@ outputs/
 
 assets/TableMark.icns
 assets/TableMark.iconset/
+
+# iCloud sync conflict copies (e.g. "foo 2.py")
+* 2.*
