@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Tabledown — MSIX manifest (full-trust desktop / mediumIL)
+
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │ ⚠️ Identity / Publisher 는 Partner Center 값으로 반드시 교체해야 한다.        │
+  │                                                                            │
+  │  1) Partner Center 에서 앱 이름을 예약하면 (Product > Product identity)      │
+  │     아래 3개 값이 부여된다:                                                  │
+  │       - Package/Identity/@Name           예) 12345LIMOD.Tabledown          │
+  │       - Package/Identity/@Publisher      예) CN=ABCD1234-...               │
+  │       - Properties/PublisherDisplayName  예) LIMOD                          │
+  │  2) build_msix.ps1 의 -StoreName / -StorePublisher / -StorePublisherDisplay │
+  │     인자로 넘기면 빌드 시 자동 치환된다(아래 토큰을 그대로 둘 것).             │
+  │                                                                            │
+  │  로컬 sideload 테스트(자체 서명) 시에는 @Publisher 가 서명 인증서의 Subject  │
+  │  와 정확히 일치해야 한다. PACKAGING.md 의 "로컬 테스트" 절 참조.             │
+  └──────────────────────────────────────────────────────────────────────────┘
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap5 rescap">
+
+  <Identity
+    Name="__IDENTITY_NAME__"
+    Publisher="__IDENTITY_PUBLISHER__"
+    Version="__VERSION__"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Tabledown</DisplayName>
+    <PublisherDisplayName>__PUBLISHER_DISPLAY__</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <!-- 10.0.17763 (1809): uap5 startupTask + FullTrustApplication 지원 최소선 -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-US" />
+    <Resource Language="ko-KR" />
+  </Resources>
+
+  <Applications>
+    <Application
+      Id="Tabledown"
+      Executable="app\Tabledown-Windows.exe"
+      EntryPoint="Windows.FullTrustApplication">
+
+      <uap:VisualElements
+        DisplayName="Tabledown"
+        Description="Convert Excel/Google Sheets tables to Markdown — and back — with just Ctrl+C / Ctrl+V."
+        BackgroundColor="#121826"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile
+          ShortName="Tabledown"
+          Square71x71Logo="Assets\Square71x71Logo.png"
+          Square310x310Logo="Assets\Square310x310Logo.png"
+          Wide310x150Logo="Assets\Wide310x150Logo.png">
+          <uap:ShowNameOnTiles>
+            <uap:ShowOn Tile="square150x150Logo" />
+          </uap:ShowNameOnTiles>
+        </uap:DefaultTile>
+      </uap:VisualElements>
+
+      <Extensions>
+        <!--
+          startupTask: 로그인 시 자동 실행. Enabled="false" 로 두면 사용자가
+          최초 1회 앱을 실행하거나 Windows 설정 > 앱 > 시작 에서 켜야 활성화된다.
+          (사용자가 작업 관리자/설정에서 언제든 끌 수 있음 — MS 정책 준수)
+        -->
+        <uap5:Extension
+          Category="windows.startupTask"
+          Executable="app\Tabledown-Windows.exe"
+          EntryPoint="Windows.FullTrustApplication">
+          <uap5:StartupTask
+            TaskId="TabledownStartup"
+            Enabled="false"
+            DisplayName="Tabledown" />
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!--
+      runFullTrust (restricted capability):
+        클립보드 전역 감시 + win32clipboard 읽기/쓰기를 위해 full-trust(mediumIL)
+        실행이 필수. AppContainer 로는 "포커스 있을 때만 클립보드 접근" 제약 때문에
+        백그라운드 감시가 불가능하다.
+        → Store 제출 시 Submission > Properties 에서 이 capability 사용 사유를
+          서술해야 한다(거절 사유는 아니나 심사가 길어질 수 있음). PACKAGING.md 참조.
+    -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
