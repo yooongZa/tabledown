@@ -79,6 +79,12 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   (`drop_types=RENDERED_TABLE_TYPES | HTML_TYPES`). 그래야 어디에 붙여도 "표가 아니라 XML"이
   나온다. 불변식 3 은 **자동 변환(`_converted_clipboard`)** 에만 적용되는 규칙이므로, 이
   메뉴 동작의 html drop 을 "회귀"로 보고 되돌리지 말 것.
+- **병합 셀은 XML 경로 전용 `html_table_to_rows` 가 처리** (마크다운 경로 `html_table_to_markdown`
+  은 건드리지 말 것 — Markdown 은 병합 표현 불가라 포기). XML 경로는: ① rowspan 값을 아래로
+  채우고(forward-fill), ② 전체 열 병합 제목 행(단일 cell colspan=전체)은 건너뛰고, ③ 다단
+  그룹 헤더는 `<th>`/`<thead>` 가 있으면 그걸로, 없으면(=실제 Excel 은 전부 `<td>`) **colspan 으로
+  추론**해(상단의 가로병합 있는 행들 + 그 아래 leaf 한 줄) 복합 컬럼명으로 합친다. 실제 Excel 은
+  `th` 를 안 쓰므로 **colspan 기반 헤더 추론을 제거하면 다단 헤더가 다시 깨진다.**
 
 ### 회귀 방지 테스트 (변환 로직 수정 후 반드시 통과)
 `scripts/run_test_matrix.py` 의 converter 테스트군:

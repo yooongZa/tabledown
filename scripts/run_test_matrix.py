@@ -33,7 +33,7 @@ from tablemark.clipboard import (
     read_clipboard,
     write_clipboard,
 )
-from tablemark.converter.html_to_md import html_table_to_markdown
+from tablemark.converter.html_to_md import html_table_to_markdown, html_table_to_rows
 from tablemark.converter.md_to_tsv import markdown_table_to_html, markdown_table_to_rows
 from tablemark.converter.table_xml import (
     is_table_xml,
@@ -71,6 +71,18 @@ XML_TABLE = (
 # A config-shaped XML that merely looks nested — must NOT be mistaken for a table.
 XML_NOT_TABLE = (
     "<config>\n  <server>\n    <host>localhost</host>\n    <port>8080</port>\n  </server>\n</config>"
+)
+
+# A real Excel paste (all <td>): a full-width title row, a two-row group header
+# (colspan), and a left column with vertical merges (rowspan).
+HTML_MERGED_EXCEL = (
+    "<table>"
+    "<tr><td colspan='4'>2024 인사 평가</td></tr>"
+    "<tr><td></td><td></td><td colspan='2'>매출</td></tr>"
+    "<tr><td>직급</td><td>직책</td><td>1분기</td><td>2분기</td></tr>"
+    "<tr><td rowspan='2'>부장</td><td>팀장</td><td>12</td><td>34</td></tr>"
+    "<tr><td>파트장</td><td>56</td><td>78</td></tr>"
+    "</table>"
 )
 
 
@@ -290,6 +302,30 @@ def run_converter_tests() -> list[TestResult]:
         lambda: _assert_equal(
             TabledownApp._clipboard_table_rows({"text": PLAIN_TEXT}),
             None,
+        ),
+    )
+    check(
+        "merged_excel_skips_title_and_builds_composite_header",
+        lambda: _assert_equal(
+            # title row dropped; the two-row group header (colspan) is combined.
+            html_table_to_rows(HTML_MERGED_EXCEL)[0],
+            ["직급", "직책", "매출 1분기", "매출 2분기"],
+        ),
+    )
+    check(
+        "merged_excel_forward_fills_rowspan",
+        lambda: _assert_equal(
+            # the vertically merged "부장" is repeated into both of its rows.
+            html_table_to_rows(HTML_MERGED_EXCEL)[1:],
+            [["부장", "팀장", "12", "34"], ["부장", "파트장", "56", "78"]],
+        ),
+    )
+    check(
+        "merged_excel_to_xml_preserves_subheaders",
+        lambda: _assert_contains(
+            # the XML keeps the 1분기/2분기 distinction a single header would lose.
+            rows_to_xml(html_table_to_rows(HTML_MERGED_EXCEL)),
+            '<매출_2분기 header="매출 2분기">34</매출_2분기>',
         ),
     )
 

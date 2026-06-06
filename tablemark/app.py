@@ -16,6 +16,7 @@ from .converter.html_to_md import (
     convert_document_tables,
     html_has_content_outside_table,
     html_table_to_markdown,
+    html_table_to_rows,
 )
 from .converter.md_to_tsv import (
     is_markdown_table,
@@ -256,7 +257,9 @@ class TabledownApp(rumps.App):
         text = content.get("text", "")
         if html and "<table" in html.lower():
             try:
-                return markdown_table_to_rows(html_table_to_markdown(html))
+                # Merge-aware: forward-fills rowspan, skips a full-width title
+                # row, and combines multi-row headers — see html_table_to_rows.
+                return html_table_to_rows(html)
             except ValueError:
                 pass
         if text and is_table_xml(text):

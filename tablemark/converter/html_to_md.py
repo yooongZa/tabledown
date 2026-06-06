@@ -45,6 +45,166 @@ def html_table_to_markdown(html: str) -> str:
     return "\n".join(lines)
 
 
+def html_table_to_rows(html: str) -> list[list[str]]:
+    """Parse an HTML <table> into rows (first row = header), merge-aware.
+
+    Unlike ``html_table_to_markdown`` (which targets Markdown's single-header,
+    no-merge model), this feeds the XML path, so it handles merged cells the way
+    a record-style export wants:
+
+    - Vertically merged cells (``rowspan``) are *forward-filled* — the value is
+      repeated down its span instead of leaving blanks, so every row is a
+      complete record.
+    - A full-width merged *title* row at the top (a single cell spanning every
+      column) is dropped, so the real header row below becomes the header
+      (otherwise the title would become the column names).
+    - Multiple header rows (``<thead>`` or rows made entirely of ``<th>``) are
+      combined into composite column names ("매출" over "1분기" -> "매출 1분기"),
+      preserving sub-headers that a single Markdown header row would collapse.
+
+    When there is no explicit header markup (the common all-``<td>`` Excel
+    paste), the first row is treated as the header, exactly like Markdown.
+
+    Raises:
+        ValueError: if no table is found or it's empty.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    table = soup.find("table")
+    if not table:
+        raise ValueError("HTML에 <table>이 없습니다")
+
+    grid, row_meta = _table_to_filled_grid(table)
+    if not grid:
+        raise ValueError("표가 비어있습니다")
+
+    ncols = max(len(row) for row in grid)
+    grid = [row + [""] * (ncols - len(row)) for row in grid]
+
+    # A row whose single origin cell spans the whole width is a title, not data.
+    title_rows = {
+        index
+        for index, origins in enumerate(row_meta)
+        if len(origins) == 1 and origins[0][0] >= ncols
+    }
+    kept = [index for index in range(len(grid)) if index not in title_rows]
+    if not kept:
+        raise ValueError("표가 비어있습니다")
+
+    header_rows = _detect_header_rows(kept, row_meta)
+    data_rows = [index for index in kept if index not in header_rows]
+
+    headers = []
+    for col in range(ncols):
+        labels = []
+        for index in header_rows:
+            value = grid[index][col].strip()
+            if value and (not labels or labels[-1] != value):
+                labels.append(value)
+        headers.append(" ".join(labels))
+
+    rows = [headers] + [grid[index] for index in data_rows]
+    return _trim_trailing_empty_columns(rows)
+
+
+def _detect_header_rows(kept: list[int], row_meta: list[list[tuple[int, bool]]]) -> list[int]:
+    """Pick which (kept) rows make up the header.
+
+    Priority:
+    1. Explicit markup — rows whose every cell is a ``<th>`` / inside ``<thead>``.
+    2. Inferred group headers — the common all-``<td>`` Excel export has no ``th``,
+       but a group header is given away by a cell spanning multiple columns
+       (``colspan``). Count the leading rows that carry such a span, then add the
+       one leaf sub-header row beneath them.
+    3. Otherwise the single first row, exactly like a Markdown header.
+
+    Never consumes every row — at least one data row is always left.
+    """
+    explicit = [
+        index
+        for index in kept
+        if row_meta[index] and all(is_header for _, is_header in row_meta[index])
+    ]
+    if explicit:
+        return explicit
+
+    group_rows = 0
+    for index in kept:
+        if row_meta[index] and any(colspan > 1 for colspan, _ in row_meta[index]):
+            group_rows += 1
+        else:
+            break
+    header_count = group_rows + 1 if group_rows >= 1 else 1
+    if header_count >= len(kept):
+        header_count = 1
+    return kept[:header_count]
+
+
+def _table_to_filled_grid(table) -> tuple[list[list[str]], list[list[tuple[int, bool]]]]:
+    """Expand spans into a grid, filling merged positions with the origin value.
+
+    Returns the grid plus, per source row, the ``(colspan, is_header)`` of each
+    origin cell (used to spot title rows and header rows). ``rowspan`` repeats
+    the value downward and ``colspan`` to the right, so merged cells carry their
+    value into every position they cover.
+    """
+    grid: list[list[str]] = []
+    meta: list[list[tuple[int, bool]]] = []
+    occupied: dict[tuple[int, int], tuple[str, bool]] = {}
+
+    for row_index, tr in enumerate(table.find_all("tr")):
+        cells = tr.find_all(["td", "th"], recursive=False)
+        if not cells and not any(key[0] == row_index for key in occupied):
+            continue
+
+        is_thead = tr.find_parent("thead") is not None
+        row: list[str] = []
+        origins: list[tuple[int, bool]] = []
+        col = 0
+
+        for cell in cells:
+            while (row_index, col) in occupied:
+                value, _ = occupied.pop((row_index, col))
+                row.append(value)
+                col += 1
+
+            rowspan = _span_value(cell.get("rowspan"))
+            colspan = _span_value(cell.get("colspan"))
+            value = _cell_text_plain(cell)
+            is_header = is_thead or cell.name == "th"
+            origins.append((colspan, is_header))
+
+            for _ in range(colspan):
+                row.append(value)
+                for row_offset in range(1, rowspan):
+                    occupied[(row_index + row_offset, col)] = (value, is_header)
+                col += 1
+
+        while (row_index, col) in occupied:
+            value, _ = occupied.pop((row_index, col))
+            row.append(value)
+            col += 1
+
+        grid.append(row)
+        meta.append(origins)
+
+    return grid, meta
+
+
+def _cell_text_plain(cell) -> str:
+    """Cell text for the XML path: collapse whitespace, keep newlines, no pipes.
+
+    Like ``_clean_cell`` but without Markdown's pipe-escaping or <br> joining —
+    XML escapes its own special characters and keeps real newlines.
+    """
+    text = _cell_text(cell).replace("\r\n", "\n").replace("\r", "\n")
+    lines = [" ".join(line.split()) for line in text.split("\n")]
+    while lines and not lines[0]:
+        lines.pop(0)
+    while lines and not lines[-1]:
+        lines.pop()
+    return "\n".join(lines)
+
+
 def _table_to_grid(table) -> list[list[str]]:
     """Expand rowspan/colspan into a rectangular grid.
 
