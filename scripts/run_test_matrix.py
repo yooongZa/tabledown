@@ -35,6 +35,12 @@ from tablemark.clipboard import (
 )
 from tablemark.converter.html_to_md import html_table_to_markdown
 from tablemark.converter.md_to_tsv import markdown_table_to_html, markdown_table_to_rows
+from tablemark.converter.table_xml import (
+    is_table_xml,
+    rows_to_xml,
+    table_xml_to_markdown,
+    table_xml_to_rows,
+)
 from tablemark import login_item
 from tablemark.i18n import SUPPORTED_LANGUAGES, detect_system_language, t
 from tablemark.app import TabledownApp
@@ -55,6 +61,17 @@ HTML_NOISE = """
 <p>After</p>
 </body></html>
 """
+
+XML_TABLE = (
+    "<table>\n"
+    "  <row>\n    <Name>Alice</Name>\n    <Score>95</Score>\n  </row>\n"
+    "  <row>\n    <Name>Bob</Name>\n    <Score>82</Score>\n  </row>\n"
+    "</table>"
+)
+# A config-shaped XML that merely looks nested — must NOT be mistaken for a table.
+XML_NOT_TABLE = (
+    "<config>\n  <server>\n    <host>localhost</host>\n    <port>8080</port>\n  </server>\n</config>"
+)
 
 
 @dataclass
@@ -200,6 +217,79 @@ def run_converter_tests() -> list[TestResult]:
                 & HTML_TYPES
             ),
             False,
+        ),
+    )
+    check(
+        "xml_table_to_markdown",
+        lambda: _assert_equal(
+            table_xml_to_markdown(XML_TABLE),
+            "| Name | Score |\n| --- | --- |\n| Alice | 95 |\n| Bob | 82 |",
+        ),
+    )
+    check(
+        "rows_to_xml_roundtrip",
+        lambda: _assert_equal(
+            table_xml_to_rows(rows_to_xml(markdown_table_to_rows(MARKDOWN_BASIC))),
+            markdown_table_to_rows(MARKDOWN_BASIC),
+        ),
+    )
+    check(
+        "rows_to_xml_sanitizes_header",
+        lambda: _assert_contains(
+            # spaces collapse to a valid XML name; the original header is kept in
+            # an attribute so the reverse direction is lossless.
+            rows_to_xml([["Q1 2024"], ["12"]]),
+            '<Q1_2024 header="Q1 2024">12</Q1_2024>',
+        ),
+    )
+    check(
+        "is_table_xml_accepts_table",
+        lambda: _assert_equal(is_table_xml(XML_TABLE), True),
+    )
+    check(
+        "is_table_xml_rejects_config",
+        lambda: _assert_equal(is_table_xml(XML_NOT_TABLE), False),
+    )
+    check(
+        "is_table_xml_rejects_plain_text",
+        lambda: _assert_equal(is_table_xml(PLAIN_TEXT), False),
+    )
+    check(
+        "xml_text_converts_to_markdown_and_html",
+        lambda: _assert_contains(
+            # table XML on the clipboard becomes a Markdown table in text...
+            TabledownApp._converted_clipboard(None, {"text": XML_TABLE})["text"],
+            "| Name | Score |",
+        ),
+    )
+    check(
+        "xml_text_adds_html_table",
+        lambda: _assert_contains(
+            # ...and an HTML <table> in the html slot, so Excel pastes a table.
+            TabledownApp._converted_clipboard(None, {"text": XML_TABLE})["html"],
+            "<table>",
+        ),
+    )
+    check(
+        "config_xml_left_untouched",
+        lambda: _assert_equal(
+            # non-table XML must not be converted (false-positive guard).
+            TabledownApp._converted_clipboard(None, {"text": XML_NOT_TABLE}),
+            None,
+        ),
+    )
+    check(
+        "clipboard_rows_from_html_table",
+        lambda: _assert_equal(
+            TabledownApp._clipboard_table_rows({"html": HTML_BASIC}),
+            [["Name", "Score"], ["Alice", "95"]],
+        ),
+    )
+    check(
+        "clipboard_rows_none_for_plain_text",
+        lambda: _assert_equal(
+            TabledownApp._clipboard_table_rows({"text": PLAIN_TEXT}),
+            None,
         ),
     )
 

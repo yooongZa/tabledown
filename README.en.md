@@ -47,6 +47,8 @@ The release DMG is built with Developer ID signing and Apple notarization. The M
 |------|--------------|--------|
 | Excel/Google Sheets table (`Cmd+C`) | Obsidian/GitHub/Markdown editor (`Cmd+V`) | Markdown source table |
 | Markdown table (`Cmd+C`) | Excel (`Cmd+V`) | Spreadsheet cells |
+| XML table (e.g. an LLM answer) (`Cmd+C`) | Excel/Markdown editor (`Cmd+V`) | Table / Markdown table |
+| Table (`Cmd+C`, then menu “Copy table as XML”) | LLM prompt (`Cmd+V`) | LLM-friendly XML |
 
 When Tabledown is enabled, spreadsheet tables paste as Markdown source.
 
@@ -63,6 +65,23 @@ The same copied spreadsheet table pastes as Markdown source when Tabledown is en
 </p>
 
 When Tabledown is disabled, rich text editors such as TextEdit can use the HTML table already present on the clipboard and paste a rendered table instead. In other words, Tabledown is not a pretty table renderer. It is a table converter for Markdown documents.
+
+## XML conversion (LLM-friendly)
+
+Tabledown supports a **record-style XML** (the column header becomes the tag) — the shape an LLM recognizes best when a table is pasted into a prompt.
+
+```xml
+<table>
+  <row>
+    <Name>Tabledown</Name>
+    <Task>Paste tables as Markdown</Task>
+  </row>
+</table>
+```
+
+- **XML → table (automatic)**: Copy a table XML (e.g. from an LLM answer) and it is augmented with a Markdown table (text) and an HTML table (html), just like any other table, so it pastes straight into Excel or a Markdown editor. Ordinary config/document XML is not mistaken for a table.
+- **Table → XML (menu)**: Copy a table, then click **“Copy table as XML”** in the menu bar to turn the clipboard table (Excel table, Markdown table, or XML) into LLM-friendly XML. This is a deliberate action, so the HTML table is dropped and XML pastes everywhere.
+- Headers with spaces or symbols are normalized into valid XML names, with the original kept in a `header` attribute so the reverse direction is lossless. Non-ASCII (e.g. Korean) headers are used as tags as-is.
 
 ## How It Works
 
@@ -149,6 +168,7 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 
 ## Changelog
 
+- 2026-06-06: Added bidirectional XML table conversion (0.3.0). Uses an LLM-friendly record-style XML (header = tag). Copying a table XML converts it to a Markdown/HTML table automatically, and the “Copy table as XML” menu turns the clipboard table into XML. Config/document XML is not mistaken for a table
 - 2026-05-29: Submitted Tabledown 0.2.4 to the Mac App Store (TestFlight) as build 0.2.4, and attached the notarized DMG/zip to the GitHub Release (v0.2.4, Latest)
 - 2026-05-29: Unified HTML-slot handling — a bare Excel/Sheets table now keeps its HTML `<table>` slot too (0.2.4). Every table case (web table, document, Excel table) now keeps HTML and augments the text slot with Markdown, so one copy gives Excel/Word a real table and Markdown editors Markdown
 - 2026-05-29: Submitted Tabledown 0.2.3 to the Mac App Store (TestFlight) as build 0.2.3

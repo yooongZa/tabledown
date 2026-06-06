@@ -64,11 +64,29 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
 - html 슬롯: **원본 유지** (PNG/PDF/RTF 등 RENDERED 이미지 형식만 drop, html 은 절대 drop 금지).
 - 결과: 마크다운 에디터는 마크다운 표를, Word·Excel 은 원본 표 형식을 받는다. **양쪽 동시 만족.**
 
+### 5. XML 표 변환 — 자동(XML→표)과 메뉴(표→XML)는 의도가 다르다 (0.3.0)
+- **형식**: LLM 친화 레코드형 XML. 헤더를 태그로 쓴다(`<table><row><Name>Alice</Name>…`).
+  헤더가 XML 이름 규칙에 안 맞으면(공백·기호) 정규화하고 원본을 `header` 속성에 보존해
+  역방향 무손실. 한국어/CJK 헤더는 그대로 태그. 로직은 `converter/table_xml.py`.
+- **XML → 표 (자동, `_converted_clipboard` 의 XML 분기)**: text 가 표 XML 이면 마크다운 표(text)
+  + HTML `<table>`(html) 로 보강. 다른 표 케이스와 동일하게 **html 유지**(불변식 3). 단,
+  `is_table_xml` 은 **보수적**이어야 한다 — config/문서/임의 XML 을 표로 오인해 클립보드를
+  오염시키면 안 됨(불변식 2 의 false positive 차단과 같은 취지). 가드: 모든 row 태그 동일 +
+  cell 은 leaf(중첩 금지) + (row 2개 이상 또는 알려진 root/row 태그). **이 가드를 느슨하게
+  풀지 말 것.**
+- **표 → XML (메뉴 `copy_as_xml`)**: 이건 **사용자의 명시적 동작**이라 불변식 3(html 유지)과
+  **일부러 다르게** 동작한다 — text 슬롯에 XML 을 넣고 **HTML 을 drop** 한다
+  (`drop_types=RENDERED_TABLE_TYPES | HTML_TYPES`). 그래야 어디에 붙여도 "표가 아니라 XML"이
+  나온다. 불변식 3 은 **자동 변환(`_converted_clipboard`)** 에만 적용되는 규칙이므로, 이
+  메뉴 동작의 html drop 을 "회귀"로 보고 되돌리지 말 것.
+
 ### 회귀 방지 테스트 (변환 로직 수정 후 반드시 통과)
 `scripts/run_test_matrix.py` 의 converter 테스트군:
 - `html_table_with_markdown_text_preserved` → 불변식 1
 - `html_clipboard_keeps_html` → 불변식 3 (순수 Excel 표도 html 유지)
 - `html_table_in_document_augments_text`, `html_table_in_document_keeps_html` → 불변식 4
+- `is_table_xml_rejects_config`, `config_xml_left_untouched` → 불변식 5 (XML false positive 차단)
+- `xml_text_converts_to_markdown_and_html`, `rows_to_xml_roundtrip` → 불변식 5 (XML 양방향)
 
 실행 (시스템 클립보드 안 건드리는 순수 변환 테스트만):
 ```bash

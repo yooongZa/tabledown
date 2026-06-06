@@ -6,6 +6,7 @@ import time
 import rumps
 
 from .clipboard import (
+    HTML_TYPES,
     RENDERED_TABLE_TYPES,
     clipboard_change_count,
     read_clipboard,
@@ -19,6 +20,13 @@ from .converter.html_to_md import (
 from .converter.md_to_tsv import (
     is_markdown_table,
     markdown_table_to_html,
+    markdown_table_to_rows,
+)
+from .converter.table_xml import (
+    is_table_xml,
+    rows_to_xml,
+    table_xml_to_markdown,
+    table_xml_to_rows,
 )
 from .i18n import (
     SUPPORTED_LANGUAGES,
@@ -57,6 +65,10 @@ class TabledownApp(rumps.App):
             callback=self.toggle,
         )
         self.toggle_item.state = 1 if self.enabled else 0
+        self.copy_xml_item = rumps.MenuItem(
+            t("menu.copy_xml", self.lang),
+            callback=self.copy_as_xml,
+        )
         self.language_item = rumps.MenuItem(t("menu.language", self.lang))
         self.language_options = {}
         for code in SUPPORTED_LANGUAGES:
@@ -87,6 +99,7 @@ class TabledownApp(rumps.App):
 
         self.menu = [
             self.toggle_item,
+            self.copy_xml_item,
             None,  # separator
             *settings_items,
             None,  # separator
@@ -165,6 +178,7 @@ class TabledownApp(rumps.App):
     def _apply_language(self):
         """Refresh every menu title for the current language."""
         self.toggle_item.title = t("menu.toggle", self.lang)
+        self.copy_xml_item.title = t("menu.copy_xml", self.lang)
         self.language_item.title = t("menu.language", self.lang)
         for code, item in self.language_options.items():
             item.title = self._language_option_title(code)
@@ -200,6 +214,62 @@ class TabledownApp(rumps.App):
         log(f"login item toggle requested -> {new_state}, actual={actual}")
         if self.login_item_menu is not None:
             self.login_item_menu.state = 1 if actual else 0
+
+    def copy_as_xml(self, _sender):
+        """Convert the table currently on the clipboard to LLM-friendly XML.
+
+        Unlike the automatic watcher (which keeps the clipboard multi-format so
+        each destination picks its own slot), this is a deliberate user action:
+        it puts XML in the text slot and drops the HTML <table> so that a paste
+        anywhere yields the XML the user asked for. Reading an LLM answer back
+        is still automatic — see the XML branch in ``_converted_clipboard``.
+        """
+        try:
+            rows = self._clipboard_table_rows(read_clipboard())
+            if rows is None:
+                rumps.alert(
+                    title=t("xml.no_table_title", self.lang),
+                    message=t("xml.no_table_message", self.lang),
+                )
+                return
+            write_clipboard(
+                text=rows_to_xml(rows),
+                mark_generated=True,
+                drop_types=RENDERED_TABLE_TYPES | HTML_TYPES,
+            )
+            log("copied clipboard table as XML")
+        except Exception as exc:  # noqa: BLE001 - surface failure to the user
+            log(f"copy as xml failed: {exc}")
+            rumps.alert(
+                title=t("xml.no_table_title", self.lang),
+                message=t("xml.no_table_message", self.lang),
+            )
+
+    @staticmethod
+    def _clipboard_table_rows(content):
+        """Extract table rows (first row = header) from clipboard, or None.
+
+        Accepts an HTML <table> (Excel/Sheets), table XML, or a Markdown table,
+        in that priority order.
+        """
+        html = content.get("html", "")
+        text = content.get("text", "")
+        if html and "<table" in html.lower():
+            try:
+                return markdown_table_to_rows(html_table_to_markdown(html))
+            except ValueError:
+                pass
+        if text and is_table_xml(text):
+            try:
+                return table_xml_to_rows(text)
+            except ValueError:
+                pass
+        if text and is_markdown_table(text, strict=False):
+            try:
+                return markdown_table_to_rows(text)
+            except ValueError:
+                pass
+        return None
 
     def show_help(self, _):
         rumps.alert(
@@ -266,6 +336,24 @@ class TabledownApp(rumps.App):
                 "text": text,
                 "html": markdown_table_to_html(text),
             }
+
+        # Table XML (e.g. copied from an LLM answer) with no accompanying HTML
+        # table: convert it to a Markdown table in the text slot and an HTML
+        # <table> in the html slot, so it pastes into both Markdown editors and
+        # Excel/Sheets — the same multi-format result as the Markdown branch.
+        # is_table_xml is conservative, so stray config/document XML is left
+        # untouched (same false-positive caution as the Markdown heuristic).
+        if text and not has_html_table and is_table_xml(text):
+            try:
+                markdown = table_xml_to_markdown(text)
+            except ValueError:
+                markdown = ""
+            if markdown.strip():
+                log("detected table xml")
+                return {
+                    "text": _markdown_paste_block(markdown),
+                    "html": markdown_table_to_html(markdown),
+                }
 
         if has_html_table:
             # A table embedded in a document (headings, paragraphs, lists):

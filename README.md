@@ -47,6 +47,8 @@ Mac App Store에서 받는 것을 권장합니다 (자동 업데이트).
 |------|------------|------|
 | Excel/Google Sheets 표 (`Cmd+C`) | Obsidian/GitHub/마크다운 에디터 (`Cmd+V`) | Markdown 원문 표 |
 | 마크다운 표 (`Cmd+C`) | Excel (`Cmd+V`) | 셀에 분리된 표 |
+| XML 표 (LLM 답변 등) (`Cmd+C`) | Excel/마크다운 에디터 (`Cmd+V`) | 표 / Markdown 표 |
+| 표 (`Cmd+C` 후 메뉴 ‘표를 XML로 복사’) | LLM 프롬프트 (`Cmd+V`) | LLM 친화 XML |
 
 Tabledown을 활성화하면 spreadsheet(스프레드시트) 표가 Markdown source(마크다운 원문)로 붙습니다.
 
@@ -63,6 +65,23 @@ Tabledown을 활성화하면 spreadsheet(스프레드시트) 표가 Markdown sou
 </p>
 
 비활성화하면 TextEdit 같은 rich text editor(서식 있는 텍스트 편집기)는 clipboard(클립보드)에 들어 있는 HTML table(HTML 표)을 그대로 사용해 렌더링된 표로 붙일 수 있습니다. 즉 Tabledown은 "예쁜 표 렌더러"가 아니라 "Markdown 문서용 표 변환기"입니다.
+
+## XML 변환 (LLM 친화)
+
+LLM 프롬프트에 표를 넣을 때 가장 잘 인식되는 **레코드형 XML**(헤더를 태그로 쓰는 형식)을 지원합니다.
+
+```xml
+<table>
+  <row>
+    <이름>Tabledown</이름>
+    <할_일 header="할 일">표를 Markdown으로 붙이기</할_일>
+  </row>
+</table>
+```
+
+- **XML → 표 (자동)**: LLM 답변 등에서 표 XML을 복사하면, 다른 표와 똑같이 마크다운 표(text)와 HTML 표(html)로 보강됩니다. 그대로 Excel·마크다운 에디터에 붙일 수 있습니다. config/문서 같은 일반 XML은 표로 오인하지 않습니다.
+- **표 → XML (메뉴)**: 표를 복사한 뒤 메뉴바의 **‘표를 XML로 복사’** 를 누르면 clipboard의 표(Excel 표·마크다운 표·XML)가 LLM 친화 XML로 바뀝니다. 이건 명시적 동작이라 어디에 붙여도 XML이 나오도록 HTML 표는 함께 제거합니다.
+- 헤더에 공백·기호가 있으면 유효한 XML 태그로 정규화하고 원본은 `header` 속성에 보존해 되돌릴 때 손실이 없습니다. 한국어 헤더는 그대로 태그로 씁니다.
 
 ## 동작 방식
 
@@ -149,6 +168,7 @@ Tabledown은 계정 생성, analytics(분석), 광고 추적, 위치 정보, 연
 
 ## 변경 이력
 
+- 2026-06-06: XML 표 변환(양방향) 추가 (0.3.0). LLM 프롬프트 친화 레코드형 XML(헤더=태그) 사용. 표 XML 을 복사하면 자동으로 마크다운 표·HTML 표로 변환되고, 메뉴 ‘표를 XML로 복사’ 로 clipboard 의 표를 XML 로 바꿈. config/문서 XML 은 표로 오인하지 않음
 - 2026-05-29: Tabledown 0.2.4 를 Mac App Store(TestFlight) 에 build 0.2.4 로 제출하고, notarization(공증)을 거친 DMG·zip 을 GitHub Release(v0.2.4, Latest) 에 첨부
 - 2026-05-29: 순수 Excel/Sheets 표를 마크다운으로 변환할 때도 HTML `<table>` 슬롯을 유지하도록 통일 (0.2.4). 이제 모든 표 케이스에서 HTML 유지 + text 마크다운 보강 — 한 번 복사로 Excel·Word 는 표 형식, 마크다운 에디터는 마크다운을 받음
 - 2026-05-29: Tabledown 0.2.3 을 Mac App Store(TestFlight) 에 build 0.2.3 으로 제출

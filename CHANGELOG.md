@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-06
+
+### Added
+- XML 표 변환(양방향) 추가 — LLM 프롬프트에 넣기 좋은 **레코드형 XML**(헤더를 태그로 쓰는 `<table><row><Name>Alice</Name>…</row></table>`) 을 사용. 각 값이 컬럼명을 인라인으로 달고 있어 모델이 가장 잘 인식하는 형태.
+  - **XML → 표 (자동)**: clipboard text 가 표 XML 이면 자동으로 마크다운 표(text 슬롯) + HTML `<table>`(html 슬롯) 로 변환해, LLM 답변의 XML 표를 그대로 Excel·마크다운 에디터에 붙일 수 있음. 판정(`is_table_xml`)은 보수적이라 config/문서 XML 은 건드리지 않음(마크다운 false positive 차단과 동일한 원칙).
+  - **표 → XML (메뉴)**: 메뉴의 ‘표를 XML로 복사’ 로 현재 clipboard 의 표(HTML 표·마크다운 표·XML)를 XML 로 변환. 이는 사용자의 명시적 동작이므로 text 슬롯에 XML 을 넣고 HTML 은 제거(불변식 3 의 자동 변환과 구분 — 어디에 붙여도 의도한 XML 이 나오도록).
+  - 헤더가 XML 이름으로 부적합하면(공백·기호) 유효한 태그로 정규화하고 원본은 `header` 속성에 보존해 역방향 무손실. 한국어/CJK 헤더는 그대로 태그로 사용.
+
 ## [0.2.4] - 2026-05-29
 
 ### Changed
