@@ -64,14 +64,17 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
 - html 슬롯: **원본 유지** (PNG/PDF/RTF 등 RENDERED 이미지 형식만 drop, html 은 절대 drop 금지).
 - 결과: 마크다운 에디터는 마크다운 표를, Word·Excel 은 원본 표 형식을 받는다. **양쪽 동시 만족.**
 
-### 5. XML 표 변환 — 자동(XML→표)과 메뉴(표→XML)는 의도가 다르다 (0.3.0)
+### 5. XML 표 변환 — 표→XML은 명시적 메뉴 클릭 전용, 자동 역변환은 없음 (0.3.0)
 - **형식**: LLM 친화 레코드형 XML. 헤더를 태그로 쓴다(`<table><row><Name>Alice</Name>…`).
   헤더가 XML 이름 규칙에 안 맞으면(공백·기호) 정규화하고 원본을 `header` 속성에 보존해
   역방향 무손실. 한국어/CJK 헤더는 그대로 태그. 로직은 `converter/table_xml.py`.
-- **XML → 표 (자동, `_converted_clipboard` 의 XML 분기)**: text 가 표 XML 이면 마크다운 표(text)
-  + HTML `<table>`(html) 로 보강. 다른 표 케이스와 동일하게 **html 유지**(불변식 3). 단,
-  `is_table_xml` 은 **보수적**이어야 한다 — config/문서/임의 XML 을 표로 오인해 클립보드를
-  오염시키면 안 됨(불변식 2 의 false positive 차단과 같은 취지). 가드: 모든 row 태그 동일 +
+- **자동 XML→표 역변환은 없다 (의도적)**: 워처(`_converted_clipboard`)는 클립보드의 XML 을
+  표로 되돌리지 **않는다**. XML 은 오직 메뉴의 `copy_as_xml` 클릭으로만 생성된다. (초기 0.3.0
+  엔 자동 역변환 분기가 있었으나 사용자 요청으로 제거 — 일반·설정 XML 을 자동으로 건드릴 위험
+  회피 + 메뉴 단순화["XML 변환 사용" 토글도 함께 삭제]. 되살리려면 `_converted_clipboard` 에
+  `is_table_xml`/`table_xml_to_markdown` 분기를 다시 넣으면 된다.) 단, `copy_as_xml` 의 소스
+  추출(`_clipboard_table_rows`)은 클립보드의 XML 도 표로 인정하므로, 거기 쓰는 `is_table_xml`
+  은 여전히 **보수적**이어야 한다 — config/문서/임의 XML 오인 금지. 가드: 모든 row 태그 동일 +
   cell 은 leaf(중첩 금지) + (row 2개 이상 또는 알려진 root/row 태그). **이 가드를 느슨하게
   풀지 말 것.**
 - **표 → XML (메뉴 `copy_as_xml`)**: 이건 **사용자의 명시적 동작**이라 불변식 3(html 유지)과
@@ -85,6 +88,14 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   그룹 헤더는 `<th>`/`<thead>` 가 있으면 그걸로, 없으면(=실제 Excel 은 전부 `<td>`) **colspan 으로
   추론**해(상단의 가로병합 있는 행들 + 그 아래 leaf 한 줄) 복합 컬럼명으로 합친다. 실제 Excel 은
   `th` 를 안 쓰므로 **colspan 기반 헤더 추론을 제거하면 다단 헤더가 다시 깨진다.**
+- **‘XML: 빈칸을 자동 채우기’ 옵션(`forward_fill_key_columns`, 기본 꺼짐, `settings.py`/NSUserDefaults
+  영속)**: 병합을 안 하고 빈칸으로 그룹을 표현한 표(직급을 그룹 첫 행에만 쓰고 아래는 비움 —
+  현실에서 흔함)를 위해, 클릭 변환(`copy_as_xml`→`_clipboard_table_rows`) 시 **왼쪽 키 열의 빈칸만**
+  채운다 — ① 먼저 **위(세로)** 값으로, ② 그래도 빈 칸은 **좌측(가로)** 값으로(병합의 rowspan→위·
+  colspan→좌측 origin 과 같은 원리). 가드: 열을 왼쪽→오른쪽으로 보다 **빈칸 없는(꽉 찬) 열을 만나면 멈춤** — 그
+  오른쪽 값 열의 빈칸은 "진짜 없음"일 수 있어 건드리지 않는다(pandas·Power Query 관례: 그룹 열만
+  채우고 값 열은 보존). **이 가드를 빼고 전체를 채우면 값 열 빈값이 왜곡된다.** 기본 꺼짐도 같은
+  이유(안전 — 데이터를 임의 생성하지 않음). 마크다운 경로엔 적용 안 함(병합/빈칸 표현 불가).
 
 ### 회귀 방지 테스트 (변환 로직 수정 후 반드시 통과)
 `scripts/run_test_matrix.py` 의 converter 테스트군:
@@ -92,7 +103,11 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
 - `html_clipboard_keeps_html` → 불변식 3 (순수 Excel 표도 html 유지)
 - `html_table_in_document_augments_text`, `html_table_in_document_keeps_html` → 불변식 4
 - `is_table_xml_rejects_config`, `config_xml_left_untouched` → 불변식 5 (XML false positive 차단)
-- `xml_text_converts_to_markdown_and_html`, `rows_to_xml_roundtrip` → 불변식 5 (XML 양방향)
+- `table_xml_not_auto_converted` → 불변식 5 (워처가 XML 을 표로 자동 변환하지 않음)
+- `rows_to_xml_roundtrip` → 불변식 5 (표→XML 무손실 변환)
+- `forward_fill_fills_left_key_column`, `forward_fill_stops_at_data_column` → 불변식 5
+  (빈 칸 채우기: 키 열만 채우고 값 열은 보존)
+- `forward_fill_horizontal_left` → 불변식 5 (위가 비면 좌측 값으로 가로 채움)
 
 실행 (시스템 클립보드 안 건드리는 순수 변환 테스트만):
 ```bash

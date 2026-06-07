@@ -14,6 +14,7 @@ from .clipboard import (
 )
 from .converter.html_to_md import (
     convert_document_tables,
+    forward_fill_key_columns,
     html_has_content_outside_table,
     html_table_to_markdown,
     html_table_to_rows,
@@ -26,7 +27,6 @@ from .converter.md_to_tsv import (
 from .converter.table_xml import (
     is_table_xml,
     rows_to_xml,
-    table_xml_to_markdown,
     table_xml_to_rows,
 )
 from .i18n import (
@@ -37,6 +37,7 @@ from .i18n import (
 )
 from . import login_item
 from .logger import log
+from .settings import load_fill_blanks, save_fill_blanks
 
 
 def _markdown_paste_block(markdown: str) -> str:
@@ -52,6 +53,7 @@ class TabledownApp(rumps.App):
         log("app starting")
         self._clear_stale_status_item_visibility()
         self.enabled = True
+        self.fill_blanks = load_fill_blanks()
         super().__init__(
             "Tabledown",
             icon=self._current_icon_path(),
@@ -70,6 +72,12 @@ class TabledownApp(rumps.App):
             t("menu.copy_xml", self.lang),
             callback=self.copy_as_xml,
         )
+        self.fill_blanks_item = rumps.MenuItem(
+            t("menu.fill_blanks", self.lang),
+            callback=self.toggle_fill_blanks,
+        )
+        self.fill_blanks_item.state = 1 if self.fill_blanks else 0
+        self.fill_blanks_item._menuitem.setToolTip_(t("menu.fill_blanks_tooltip", self.lang))
         self.language_item = rumps.MenuItem(t("menu.language", self.lang))
         self.language_options = {}
         for code in SUPPORTED_LANGUAGES:
@@ -94,15 +102,17 @@ class TabledownApp(rumps.App):
         self.help_item = rumps.MenuItem(t("menu.help", self.lang), callback=self.show_help)
         self.quit_item = rumps.MenuItem(t("menu.quit", self.lang), callback=self.quit_app)
 
-        settings_items = [self.language_item]
+        self.settings_item = rumps.MenuItem(t("menu.settings", self.lang))
+        settings_children = [self.fill_blanks_item, self.language_item]
         if self.login_item_menu is not None:
-            settings_items.append(self.login_item_menu)
+            settings_children.append(self.login_item_menu)
+        self.settings_item.update(settings_children)
 
         self.menu = [
             self.toggle_item,
             self.copy_xml_item,
             None,  # separator
-            *settings_items,
+            self.settings_item,
             None,  # separator
             self.help_item,
             self.quit_item,
@@ -180,6 +190,9 @@ class TabledownApp(rumps.App):
         """Refresh every menu title for the current language."""
         self.toggle_item.title = t("menu.toggle", self.lang)
         self.copy_xml_item.title = t("menu.copy_xml", self.lang)
+        self.fill_blanks_item.title = t("menu.fill_blanks", self.lang)
+        self.fill_blanks_item._menuitem.setToolTip_(t("menu.fill_blanks_tooltip", self.lang))
+        self.settings_item.title = t("menu.settings", self.lang)
         self.language_item.title = t("menu.language", self.lang)
         for code, item in self.language_options.items():
             item.title = self._language_option_title(code)
@@ -216,17 +229,22 @@ class TabledownApp(rumps.App):
         if self.login_item_menu is not None:
             self.login_item_menu.state = 1 if actual else 0
 
+    def toggle_fill_blanks(self, _sender):
+        self.fill_blanks = not self.fill_blanks
+        self.fill_blanks_item.state = 1 if self.fill_blanks else 0
+        save_fill_blanks(self.fill_blanks)
+        log(f"fill blanks {'enabled' if self.fill_blanks else 'disabled'}")
+
     def copy_as_xml(self, _sender):
         """Convert the table currently on the clipboard to LLM-friendly XML.
 
-        Unlike the automatic watcher (which keeps the clipboard multi-format so
-        each destination picks its own slot), this is a deliberate user action:
-        it puts XML in the text slot and drops the HTML <table> so that a paste
-        anywhere yields the XML the user asked for. Reading an LLM answer back
-        is still automatic — see the XML branch in ``_converted_clipboard``.
+        This is a deliberate user action: it puts XML in the text slot and drops
+        the HTML <table> so a paste anywhere yields the XML the user asked for.
+        There is no automatic XML→table direction — XML is produced only by this
+        menu click, never inferred from clipboard contents by the watcher.
         """
         try:
-            rows = self._clipboard_table_rows(read_clipboard())
+            rows = self._clipboard_table_rows(read_clipboard(), self.fill_blanks)
             if rows is None:
                 rumps.alert(
                     title=t("xml.no_table_title", self.lang),
@@ -247,32 +265,37 @@ class TabledownApp(rumps.App):
             )
 
     @staticmethod
-    def _clipboard_table_rows(content):
+    def _clipboard_table_rows(content, fill_blanks=False):
         """Extract table rows (first row = header) from clipboard, or None.
 
         Accepts an HTML <table> (Excel/Sheets), table XML, or a Markdown table,
-        in that priority order.
+        in that priority order. When ``fill_blanks`` is set, blank cells in the
+        left grouping columns are forward-filled (see forward_fill_key_columns) —
+        the user-controlled "XML: 빈칸을 자동 채우기" option, off by default.
         """
         html = content.get("html", "")
         text = content.get("text", "")
+        rows = None
         if html and "<table" in html.lower():
             try:
                 # Merge-aware: forward-fills rowspan, skips a full-width title
                 # row, and combines multi-row headers — see html_table_to_rows.
-                return html_table_to_rows(html)
+                rows = html_table_to_rows(html)
             except ValueError:
-                pass
-        if text and is_table_xml(text):
+                rows = None
+        if rows is None and text and is_table_xml(text):
             try:
-                return table_xml_to_rows(text)
+                rows = table_xml_to_rows(text)
             except ValueError:
-                pass
-        if text and is_markdown_table(text, strict=False):
+                rows = None
+        if rows is None and text and is_markdown_table(text, strict=False):
             try:
-                return markdown_table_to_rows(text)
+                rows = markdown_table_to_rows(text)
             except ValueError:
-                pass
-        return None
+                rows = None
+        if rows and fill_blanks:
+            rows = forward_fill_key_columns(rows)
+        return rows
 
     def show_help(self, _):
         rumps.alert(
@@ -339,24 +362,6 @@ class TabledownApp(rumps.App):
                 "text": text,
                 "html": markdown_table_to_html(text),
             }
-
-        # Table XML (e.g. copied from an LLM answer) with no accompanying HTML
-        # table: convert it to a Markdown table in the text slot and an HTML
-        # <table> in the html slot, so it pastes into both Markdown editors and
-        # Excel/Sheets — the same multi-format result as the Markdown branch.
-        # is_table_xml is conservative, so stray config/document XML is left
-        # untouched (same false-positive caution as the Markdown heuristic).
-        if text and not has_html_table and is_table_xml(text):
-            try:
-                markdown = table_xml_to_markdown(text)
-            except ValueError:
-                markdown = ""
-            if markdown.strip():
-                log("detected table xml")
-                return {
-                    "text": _markdown_paste_block(markdown),
-                    "html": markdown_table_to_html(markdown),
-                }
 
         if has_html_table:
             # A table embedded in a document (headings, paragraphs, lists):

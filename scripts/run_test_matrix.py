@@ -33,7 +33,11 @@ from tablemark.clipboard import (
     read_clipboard,
     write_clipboard,
 )
-from tablemark.converter.html_to_md import html_table_to_markdown, html_table_to_rows
+from tablemark.converter.html_to_md import (
+    forward_fill_key_columns,
+    html_table_to_markdown,
+    html_table_to_rows,
+)
 from tablemark.converter.md_to_tsv import markdown_table_to_html, markdown_table_to_rows
 from tablemark.converter.table_xml import (
     is_table_xml,
@@ -82,6 +86,28 @@ HTML_MERGED_EXCEL = (
     "<tr><td>직급</td><td>직책</td><td>1분기</td><td>2분기</td></tr>"
     "<tr><td rowspan='2'>부장</td><td>팀장</td><td>12</td><td>34</td></tr>"
     "<tr><td>파트장</td><td>56</td><td>78</td></tr>"
+    "</table>"
+)
+
+# Grouping expressed by BLANK cells (no merge): 직급 is filled only on the first
+# row of each group, the rest left empty meaning "same as above". The 점수 column
+# carries a genuine blank that must NOT be filled.
+HTML_BLANK_GROUP = (
+    "<table>"
+    "<tr><td>직급</td><td>직책</td><td>점수</td></tr>"
+    "<tr><td>부장</td><td>대족장</td><td>10</td></tr>"
+    "<tr><td></td><td>족장</td><td></td></tr>"
+    "<tr><td></td><td>추장</td><td>30</td></tr>"
+    "</table>"
+)
+
+# A left key cell whose column ABOVE is also blank must inherit from the LEFT
+# (horizontal fill) — the colspan-origin analogue. Row 1's blank c2/c3 take "A".
+HTML_HFILL = (
+    "<table>"
+    "<tr><td>c1</td><td>c2</td><td>c3</td><td>값</td></tr>"
+    "<tr><td>A</td><td></td><td></td><td>1</td></tr>"
+    "<tr><td></td><td>x</td><td>y</td><td>2</td></tr>"
     "</table>"
 )
 
@@ -267,25 +293,18 @@ def run_converter_tests() -> list[TestResult]:
         lambda: _assert_equal(is_table_xml(PLAIN_TEXT), False),
     )
     check(
-        "xml_text_converts_to_markdown_and_html",
-        lambda: _assert_contains(
-            # table XML on the clipboard becomes a Markdown table in text...
-            TabledownApp._converted_clipboard(None, {"text": XML_TABLE})["text"],
-            "| Name | Score |",
-        ),
-    )
-    check(
-        "xml_text_adds_html_table",
-        lambda: _assert_contains(
-            # ...and an HTML <table> in the html slot, so Excel pastes a table.
-            TabledownApp._converted_clipboard(None, {"text": XML_TABLE})["html"],
-            "<table>",
+        "table_xml_not_auto_converted",
+        lambda: _assert_equal(
+            # XML is produced only by the explicit "Copy as XML" action; the
+            # watcher never turns clipboard XML back into a table.
+            TabledownApp._converted_clipboard(None, {"text": XML_TABLE}),
+            None,
         ),
     )
     check(
         "config_xml_left_untouched",
         lambda: _assert_equal(
-            # non-table XML must not be converted (false-positive guard).
+            # non-table XML is likewise never touched (false-positive guard).
             TabledownApp._converted_clipboard(None, {"text": XML_NOT_TABLE}),
             None,
         ),
@@ -328,6 +347,47 @@ def run_converter_tests() -> list[TestResult]:
             '<매출_2분기 header="매출 2분기">34</매출_2분기>',
         ),
     )
+    check(
+        "forward_fill_fills_left_key_column",
+        lambda: _assert_equal(
+            # blank 직급 cells inherit "부장" from the row above.
+            [r[0] for r in forward_fill_key_columns(html_table_to_rows(HTML_BLANK_GROUP))[1:]],
+            ["부장", "부장", "부장"],
+        ),
+    )
+    check(
+        "forward_fill_stops_at_data_column",
+        lambda: _assert_equal(
+            # 점수(data) keeps its genuine blank — fill stops at 직책 (a full column).
+            [r[2] for r in forward_fill_key_columns(html_table_to_rows(HTML_BLANK_GROUP))[1:]],
+            ["10", "", "30"],
+        ),
+    )
+    check(
+        "forward_fill_horizontal_left",
+        lambda: _assert_equal(
+            # c2/c3 blank with a blank column above → inherit "A" from the left;
+            # the 값 (data) column is never touched.
+            forward_fill_key_columns(html_table_to_rows(HTML_HFILL))[1],
+            ["A", "A", "A", "1"],
+        ),
+    )
+    check(
+        "clipboard_rows_fill_blanks_on",
+        lambda: _assert_equal(
+            # with the option ON, the 족장 row's blank 직급 becomes 부장.
+            TabledownApp._clipboard_table_rows({"html": HTML_BLANK_GROUP}, fill_blanks=True)[2][0],
+            "부장",
+        ),
+    )
+    check(
+        "clipboard_rows_no_fill_by_default",
+        lambda: _assert_equal(
+            # default (option OFF): the blank stays blank — no invented data.
+            TabledownApp._clipboard_table_rows({"html": HTML_BLANK_GROUP})[2][0],
+            "",
+        ),
+    )
 
     return tests
 
@@ -345,8 +405,8 @@ def run_i18n_tests() -> list[TestResult]:
 
     check("translate_korean_menu_help", lambda: _assert_equal(t("menu.help", "ko"), "도움말"))
     check("translate_english_menu_help", lambda: _assert_equal(t("menu.help", "en"), "Help"))
-    check("translate_korean_toggle_on", lambda: _assert_equal(t("menu.toggle_on", "ko"), "활성화 ✓"))
-    check("translate_english_toggle_off", lambda: _assert_equal(t("menu.toggle_off", "en"), "Disabled"))
+    check("translate_korean_toggle", lambda: _assert_equal(t("menu.toggle", "ko"), "Tabledown 사용"))
+    check("translate_english_toggle", lambda: _assert_equal(t("menu.toggle", "en"), "Use Tabledown"))
     check(
         "unknown_key_returns_key",
         lambda: _assert_equal(t("does.not.exist", "ko"), "does.not.exist"),
@@ -366,20 +426,16 @@ def run_i18n_tests() -> list[TestResult]:
     check(
         "login_item_keys_localized",
         lambda: _assert_not_equal(
-            t("menu.login_item_on", "ko"),
-            t("menu.login_item_on", "en"),
+            t("menu.login_item", "ko"),
+            t("menu.login_item", "en"),
         ),
     )
     check(
-        "hide_icon_keys_present",
+        "copy_xml_keys_localized",
         lambda: _assert_not_equal(
-            t("menu.hide_icon", "ko"),
-            t("menu.hide_icon", "en"),
+            t("menu.copy_xml", "ko"),
+            t("menu.copy_xml", "en"),
         ),
-    )
-    check(
-        "hide_alert_message_present",
-        lambda: _assert_not_equal(t("hide.alert_message", "ko"), "hide.alert_message"),
     )
 
     return tests

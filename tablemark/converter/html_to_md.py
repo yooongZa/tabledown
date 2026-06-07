@@ -106,6 +106,60 @@ def html_table_to_rows(html: str) -> list[list[str]]:
     return _trim_trailing_empty_columns(rows)
 
 
+def forward_fill_key_columns(rows: list[list[str]]) -> list[list[str]]:
+    """Forward-fill blanks in the left *key* columns, vertically then horizontally.
+
+    Many real tables express grouping without merging cells: a grouping column
+    (직급, 부서, …) is filled only on the first row of each group, the rest left
+    blank meaning "same as above"; a multi-level group may also leave a left
+    cell blank where the column above is blank too, meaning "same as the left".
+    ``_table_to_filled_grid`` already repeats genuine ``rowspan``/``colspan``
+    merges, but a plain blank ``<td>`` stays empty — this fills those from the
+    cell directly above, then (for cells still blank) from the cell to the left,
+    like a merged cell inheriting its rowspan/colspan origin.
+
+    Scope guard (the convention every data tool follows — fill grouping columns,
+    not value columns): only the leading key columns are touched. Walk columns
+    left→right and treat everything before the first column with no blanks (the
+    data region) as key columns; data/value blanks are left untouched, since an
+    empty value there is usually "genuinely none", not a repeat. ``rows[0]`` is
+    the header and is never filled. Mutates and returns ``rows``.
+    """
+    body = rows[1:]
+    if not body:
+        return rows
+    ncols = max((len(row) for row in rows), default=0)
+    # Key-column range: left columns up to the first fully-populated (data) one.
+    key_cols = 0
+    for col in range(ncols):
+        cells = [row[col] if col < len(row) else "" for row in body]
+        if all(cell.strip() for cell in cells):
+            break
+        key_cols = col + 1
+    # 1) Vertical fill (value above) — the common case, a group down a column.
+    for col in range(key_cols):
+        last = ""
+        for row in body:
+            if col >= len(row):
+                continue
+            if row[col].strip():
+                last = row[col]
+            elif last:
+                row[col] = last
+    # 2) Horizontal fill (value to the left) for any key cell still blank — a
+    #    left group cell whose column above was also empty inherits leftward.
+    for row in body:
+        last = ""
+        for col in range(key_cols):
+            if col >= len(row):
+                continue
+            if row[col].strip():
+                last = row[col]
+            elif last:
+                row[col] = last
+    return rows
+
+
 def _detect_header_rows(kept: list[int], row_meta: list[list[tuple[int, bool]]]) -> list[int]:
     """Pick which (kept) rows make up the header.
 
