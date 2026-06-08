@@ -45,12 +45,11 @@ def html_table_to_markdown(html: str) -> str:
     return "\n".join(lines)
 
 
-def html_table_to_rows(html: str) -> list[list[str]]:
-    """Parse an HTML <table> into rows (first row = header), merge-aware.
+def html_table_to_model(html: str) -> tuple[list[list[str]], list[list[str]]]:
+    """Parse an HTML <table> into a ``(header_levels, data_rows)`` model, merge-aware.
 
-    Unlike ``html_table_to_markdown`` (which targets Markdown's single-header,
-    no-merge model), this feeds the XML path, so it handles merged cells the way
-    a record-style export wants:
+    This feeds the XML path, so it handles merged cells the way a record-style
+    export wants and *keeps the header hierarchy* instead of flattening it:
 
     - Vertically merged cells (``rowspan``) are *forward-filled* — the value is
       repeated down its span instead of leaving blanks, so every row is a
@@ -58,12 +57,13 @@ def html_table_to_rows(html: str) -> list[list[str]]:
     - A full-width merged *title* row at the top (a single cell spanning every
       column) is dropped, so the real header row below becomes the header
       (otherwise the title would become the column names).
-    - Multiple header rows (``<thead>`` or rows made entirely of ``<th>``) are
-      combined into composite column names ("매출" over "1분기" -> "매출 1분기"),
-      preserving sub-headers that a single Markdown header row would collapse.
+    - Multiple header rows (``<thead>``, all-``<th>`` rows, or colspan group
+      headers) are returned as separate aligned levels — the XML builder nests
+      them as ``<group>`` ("매출" over "1분기"), preserving sub-headers a single
+      flat header would collapse.
 
     When there is no explicit header markup (the common all-``<td>`` Excel
-    paste), the first row is treated as the header, exactly like Markdown.
+    paste), the first row is treated as the single header level.
 
     Raises:
         ValueError: if no table is found or it's empty.
@@ -90,20 +90,24 @@ def html_table_to_rows(html: str) -> list[list[str]]:
     if not kept:
         raise ValueError("표가 비어있습니다")
 
-    header_rows = _detect_header_rows(kept, row_meta)
-    data_rows = [index for index in kept if index not in header_rows]
+    header_indices = _detect_header_rows(kept, row_meta)
+    data_indices = [index for index in kept if index not in header_indices]
 
-    headers = []
-    for col in range(ncols):
-        labels = []
-        for index in header_rows:
-            value = grid[index][col].strip()
-            if value and (not labels or labels[-1] != value):
-                labels.append(value)
-        headers.append(" ".join(labels))
+    header_levels = [grid[index] for index in header_indices]
+    data_rows = [grid[index] for index in data_indices]
+    return _trim_model_columns(header_levels, data_rows)
 
-    rows = [headers] + [grid[index] for index in data_rows]
-    return _trim_trailing_empty_columns(rows)
+
+def html_table_to_rows(html: str) -> list[list[str]]:
+    """Flat rows (first row = combined header) derived from ``html_table_to_model``.
+
+    Multi-level headers are joined into composite names ("매출" over "1분기" ->
+    "매출 1분기") — the single-header shape the Markdown path and forward-fill
+    operate on. The XML path uses ``html_table_to_model`` directly to keep the
+    levels nestable.
+    """
+    header_levels, data_rows = html_table_to_model(html)
+    return [_combine_header_levels(header_levels)] + data_rows
 
 
 def forward_fill_key_columns(rows: list[list[str]]) -> list[list[str]]:
@@ -330,6 +334,42 @@ def _trim_trailing_empty_columns(rows: list[list[str]]) -> list[list[str]]:
 
 def _has_content(cell: str) -> bool:
     return bool(cell.strip())
+
+
+def _trim_model_columns(
+    header_levels: list[list[str]], data_rows: list[list[str]]
+) -> tuple[list[list[str]], list[list[str]]]:
+    """Drop right-edge columns empty across every header level and data row."""
+    all_rows = header_levels + data_rows
+    if not all_rows:
+        return header_levels, data_rows
+    max_cols = max(len(row) for row in all_rows)
+    keep_cols = max_cols
+    while keep_cols > 1:
+        col_index = keep_cols - 1
+        if any(_has_content(row[col_index]) for row in all_rows if col_index < len(row)):
+            break
+        keep_cols -= 1
+    return (
+        [row[:keep_cols] for row in header_levels],
+        [row[:keep_cols] for row in data_rows],
+    )
+
+
+def _combine_header_levels(header_levels: list[list[str]]) -> list[str]:
+    """Join multi-level header labels per column ("매출" / "1분기" -> "매출 1분기")."""
+    if not header_levels:
+        return []
+    ncols = max(len(level) for level in header_levels)
+    combined = []
+    for col in range(ncols):
+        labels: list[str] = []
+        for level in header_levels:
+            value = (level[col] if col < len(level) else "").strip()
+            if value and (not labels or labels[-1] != value):
+                labels.append(value)
+        combined.append(" ".join(labels))
+    return combined
 
 
 def _span_value(value) -> int:

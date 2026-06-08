@@ -67,19 +67,22 @@ When Tabledown is disabled, rich text editors such as TextEdit can use the HTML 
 
 ## XML conversion (LLM-friendly)
 
-Tabledown supports a **record-style XML** (the column header becomes the tag) — the shape an LLM recognizes best when a table is pasted into a prompt.
+Tabledown supports a **record-style XML with structural tags** — the shape an LLM recognizes best when a table is pasted into a prompt. The root is `<dataset>`, each value is a `<cell name="header">`, and multi-level (group) headers nest as `<group>`, keeping the table's hierarchy.
 
 ```xml
-<table>
+<dataset>
   <row>
-    <Name>Tabledown</Name>
-    <Task>Paste tables as Markdown</Task>
+    <cell name="Rank">Manager</cell>
+    <group name="Q1">
+      <cell name="Jan">10</cell>
+      <cell name="Feb">12</cell>
+    </group>
   </row>
-</table>
+</dataset>
 ```
 
 - **Table → XML (menu)**: Copy a table, then click **“Copy table as XML”** in the menu bar to turn the clipboard table (Excel table, Markdown table, or XML) into LLM-friendly XML. This is a deliberate click, so the HTML table is dropped and XML pastes everywhere. There is no automatic XML→table direction (to avoid the watcher touching ordinary config/document XML).
-- Headers with spaces or symbols are normalized into valid XML names, with the original kept in a `header` attribute so the reverse direction is lossless. Non-ASCII (e.g. Korean) headers are used as tags as-is.
+- **Names live in `name=` attributes, values in `<cell>` text**: a header with spaces, symbols, or leading digits never mangles a tag and stays safe in any standard XML parser (the same approach real tabular-XML standards use). Horizontal multi-level headers nest as `<group>`; vertical merges are filled into each row. The `<dataset>` root (not `<table>`) means the content survives even where the text is rendered as HTML (a browser, an Obsidian preview).
 - **“XML: Auto-fill blank cells” (Settings ▸, off by default)**: When converting a table to XML, blank cells in the left grouping columns are filled from the value above (vertical), then to the left (horizontal). Data (value) columns are left as-is.
 
 ## How It Works
@@ -167,7 +170,7 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 
 ## Changelog
 
-- 2026-06-07: Added XML table conversion (0.3.0). Uses an LLM-friendly record-style XML (header = tag). The “Copy table as XML” menu turns the clipboard table (Excel/Markdown/XML) into XML — **click-only**, with no automatic XML→table direction (so the watcher never touches ordinary config/document XML). Recognizes Excel merged cells (rowspan/colspan). A “XML: Auto-fill blank cells” setting (off by default) fills blanks in unmerged group columns from the value above/left (value columns preserved). Blank-fill / language / login-item are grouped under a “Settings” submenu
+- 2026-06-08: Added XML table conversion (0.3.0). An LLM-friendly record-style XML with structural tags — root `<dataset>`, each value a `<cell name="…">`, multi-level group headers nested as `<group>`. Headers live in attributes (not tag names), so spaces/symbols/digits never mangle a tag and any standard XML parser reads it; the `<dataset>` root (not `<table>`) keeps the content intact even where it is rendered as HTML. The “Copy table as XML” menu turns the clipboard table (Excel/Markdown/XML) into XML — **click-only**, with no automatic XML→table direction (so the watcher never touches ordinary config/document XML). Recognizes Excel merged cells (vertical rowspan filled per row; horizontal colspan group headers nested as `<group>`). A “XML: Auto-fill blank cells” setting (off by default) fills blanks in unmerged group columns from the value above/left (value columns preserved). Blank-fill / language / login-item are grouped under a “Settings” submenu
 - 2026-05-29: Submitted Tabledown 0.2.4 to the Mac App Store (TestFlight) as build 0.2.4, and attached the notarized DMG/zip to the GitHub Release (v0.2.4, Latest)
 - 2026-05-29: Unified HTML-slot handling — a bare Excel/Sheets table now keeps its HTML `<table>` slot too (0.2.4). Every table case (web table, document, Excel table) now keeps HTML and augments the text slot with Markdown, so one copy gives Excel/Word a real table and Markdown editors Markdown
 - 2026-05-29: Submitted Tabledown 0.2.3 to the Mac App Store (TestFlight) as build 0.2.3

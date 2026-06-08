@@ -17,7 +17,7 @@ from .converter.html_to_md import (
     forward_fill_key_columns,
     html_has_content_outside_table,
     html_table_to_markdown,
-    html_table_to_rows,
+    html_table_to_model,
 )
 from .converter.md_to_tsv import (
     is_markdown_table,
@@ -26,8 +26,8 @@ from .converter.md_to_tsv import (
 )
 from .converter.table_xml import (
     is_table_xml,
-    rows_to_xml,
-    table_xml_to_rows,
+    model_to_xml,
+    table_xml_to_model,
 )
 from .i18n import (
     SUPPORTED_LANGUAGES,
@@ -244,15 +244,16 @@ class TabledownApp(rumps.App):
         menu click, never inferred from clipboard contents by the watcher.
         """
         try:
-            rows = self._clipboard_table_rows(read_clipboard(), self.fill_blanks)
-            if rows is None:
+            model = self._clipboard_table_model(read_clipboard(), self.fill_blanks)
+            if model is None:
                 rumps.alert(
                     title=t("xml.no_table_title", self.lang),
                     message=t("xml.no_table_message", self.lang),
                 )
                 return
+            header_levels, data_rows = model
             write_clipboard(
-                text=rows_to_xml(rows),
+                text=model_to_xml(header_levels, data_rows),
                 mark_generated=True,
                 drop_types=RENDERED_TABLE_TYPES | HTML_TYPES,
             )
@@ -265,37 +266,47 @@ class TabledownApp(rumps.App):
             )
 
     @staticmethod
-    def _clipboard_table_rows(content, fill_blanks=False):
-        """Extract table rows (first row = header) from clipboard, or None.
+    def _clipboard_table_model(content, fill_blanks=False):
+        """Extract a ``(header_levels, data_rows)`` table model from clipboard, or None.
 
         Accepts an HTML <table> (Excel/Sheets), table XML, or a Markdown table,
-        in that priority order. When ``fill_blanks`` is set, blank cells in the
-        left grouping columns are forward-filled (see forward_fill_key_columns) —
-        the user-controlled "XML: 빈칸을 자동 채우기" option, off by default.
+        in that priority order. ``header_levels`` is one list per header level so
+        multi-level group headers survive (a Markdown/plain table has a single
+        level). When ``fill_blanks`` is set, blank cells in the left grouping
+        columns are forward-filled (see forward_fill_key_columns) — the
+        user-controlled "XML: 빈칸을 자동 채우기" option, off by default.
         """
         html = content.get("html", "")
         text = content.get("text", "")
-        rows = None
+        model = None
         if html and "<table" in html.lower():
             try:
                 # Merge-aware: forward-fills rowspan, skips a full-width title
-                # row, and combines multi-row headers — see html_table_to_rows.
-                rows = html_table_to_rows(html)
+                # row, and keeps multi-level headers — see html_table_to_model.
+                model = html_table_to_model(html)
             except ValueError:
-                rows = None
-        if rows is None and text and is_table_xml(text):
+                model = None
+        if model is None and text and is_table_xml(text):
             try:
-                rows = table_xml_to_rows(text)
+                model = table_xml_to_model(text)
             except ValueError:
-                rows = None
-        if rows is None and text and is_markdown_table(text, strict=False):
+                model = None
+        if model is None and text and is_markdown_table(text, strict=False):
             try:
                 rows = markdown_table_to_rows(text)
-            except ValueError:
-                rows = None
-        if rows and fill_blanks:
-            rows = forward_fill_key_columns(rows)
-        return rows
+                model = ([rows[0]], rows[1:])
+            except (ValueError, IndexError):
+                model = None
+        if model is None:
+            return None
+        header_levels, data_rows = model
+        if not data_rows:
+            return None
+        if fill_blanks:
+            # forward_fill operates on flat rows (header at [0], never filled);
+            # pass the deepest header level as the placeholder, take data back.
+            data_rows = forward_fill_key_columns([header_levels[-1]] + data_rows)[1:]
+        return header_levels, data_rows
 
     def show_help(self, _):
         rumps.alert(

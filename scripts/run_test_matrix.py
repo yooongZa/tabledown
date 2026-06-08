@@ -36,14 +36,15 @@ from tablemark.clipboard import (
 from tablemark.converter.html_to_md import (
     forward_fill_key_columns,
     html_table_to_markdown,
+    html_table_to_model,
     html_table_to_rows,
 )
 from tablemark.converter.md_to_tsv import markdown_table_to_html, markdown_table_to_rows
 from tablemark.converter.table_xml import (
     is_table_xml,
-    rows_to_xml,
+    model_to_xml,
     table_xml_to_markdown,
-    table_xml_to_rows,
+    table_xml_to_model,
 )
 from tablemark import login_item
 from tablemark.i18n import SUPPORTED_LANGUAGES, detect_system_language, t
@@ -67,10 +68,10 @@ HTML_NOISE = """
 """
 
 XML_TABLE = (
-    "<table>\n"
-    "  <row>\n    <Name>Alice</Name>\n    <Score>95</Score>\n  </row>\n"
-    "  <row>\n    <Name>Bob</Name>\n    <Score>82</Score>\n  </row>\n"
-    "</table>"
+    "<dataset>\n"
+    '  <row>\n    <cell name="Name">Alice</cell>\n    <cell name="Score">95</cell>\n  </row>\n'
+    '  <row>\n    <cell name="Name">Bob</cell>\n    <cell name="Score">82</cell>\n  </row>\n'
+    "</dataset>"
 )
 # A config-shaped XML that merely looks nested — must NOT be mistaken for a table.
 XML_NOT_TABLE = (
@@ -265,19 +266,28 @@ def run_converter_tests() -> list[TestResult]:
         ),
     )
     check(
-        "rows_to_xml_roundtrip",
+        "model_to_xml_roundtrip",
         lambda: _assert_equal(
-            table_xml_to_rows(rows_to_xml(markdown_table_to_rows(MARKDOWN_BASIC))),
-            markdown_table_to_rows(MARKDOWN_BASIC),
+            # model -> XML -> model is lossless for a single-level header.
+            table_xml_to_model(
+                model_to_xml(
+                    [markdown_table_to_rows(MARKDOWN_BASIC)[0]],
+                    markdown_table_to_rows(MARKDOWN_BASIC)[1:],
+                )
+            ),
+            (
+                [markdown_table_to_rows(MARKDOWN_BASIC)[0]],
+                markdown_table_to_rows(MARKDOWN_BASIC)[1:],
+            ),
         ),
     )
     check(
-        "rows_to_xml_sanitizes_header",
+        "model_to_xml_header_in_attribute",
         lambda: _assert_contains(
-            # spaces collapse to a valid XML name; the original header is kept in
-            # an attribute so the reverse direction is lossless.
-            rows_to_xml([["Q1 2024"], ["12"]]),
-            '<Q1_2024 header="Q1 2024">12</Q1_2024>',
+            # a header illegal as an XML tag name (space, leading digit) goes
+            # verbatim into name= — no mangling, no header-as-tag.
+            model_to_xml([["Q1 2024"]], [["12"]]),
+            '<cell name="Q1 2024">12</cell>',
         ),
     )
     check(
@@ -310,16 +320,16 @@ def run_converter_tests() -> list[TestResult]:
         ),
     )
     check(
-        "clipboard_rows_from_html_table",
+        "clipboard_model_from_html_table",
         lambda: _assert_equal(
-            TabledownApp._clipboard_table_rows({"html": HTML_BASIC}),
-            [["Name", "Score"], ["Alice", "95"]],
+            TabledownApp._clipboard_table_model({"html": HTML_BASIC}),
+            ([["Name", "Score"]], [["Alice", "95"]]),
         ),
     )
     check(
-        "clipboard_rows_none_for_plain_text",
+        "clipboard_model_none_for_plain_text",
         lambda: _assert_equal(
-            TabledownApp._clipboard_table_rows({"text": PLAIN_TEXT}),
+            TabledownApp._clipboard_table_model({"text": PLAIN_TEXT}),
             None,
         ),
     )
@@ -340,11 +350,19 @@ def run_converter_tests() -> list[TestResult]:
         ),
     )
     check(
-        "merged_excel_to_xml_preserves_subheaders",
+        "merged_excel_to_xml_nests_group_header",
         lambda: _assert_contains(
-            # the XML keeps the 1분기/2분기 distinction a single header would lose.
-            rows_to_xml(html_table_to_rows(HTML_MERGED_EXCEL)),
-            '<매출_2분기 header="매출 2분기">34</매출_2분기>',
+            # the colspan group header becomes a <group>, sub-columns nested
+            # cells — the 매출 / 1분기,2분기 hierarchy a flat header would collapse.
+            model_to_xml(*html_table_to_model(HTML_MERGED_EXCEL)),
+            '<group name="매출">',
+        ),
+    )
+    check(
+        "merged_excel_to_xml_keeps_subheader_cell",
+        lambda: _assert_contains(
+            model_to_xml(*html_table_to_model(HTML_MERGED_EXCEL)),
+            '<cell name="2분기">34</cell>',
         ),
     )
     check(
@@ -373,18 +391,19 @@ def run_converter_tests() -> list[TestResult]:
         ),
     )
     check(
-        "clipboard_rows_fill_blanks_on",
+        "clipboard_model_fill_blanks_on",
         lambda: _assert_equal(
             # with the option ON, the 족장 row's blank 직급 becomes 부장.
-            TabledownApp._clipboard_table_rows({"html": HTML_BLANK_GROUP}, fill_blanks=True)[2][0],
+            # model is (header_levels, data_rows); data_rows[1] is the 족장 row.
+            TabledownApp._clipboard_table_model({"html": HTML_BLANK_GROUP}, fill_blanks=True)[1][1][0],
             "부장",
         ),
     )
     check(
-        "clipboard_rows_no_fill_by_default",
+        "clipboard_model_no_fill_by_default",
         lambda: _assert_equal(
             # default (option OFF): the blank stays blank — no invented data.
-            TabledownApp._clipboard_table_rows({"html": HTML_BLANK_GROUP})[2][0],
+            TabledownApp._clipboard_table_model({"html": HTML_BLANK_GROUP})[1][1][0],
             "",
         ),
     )
