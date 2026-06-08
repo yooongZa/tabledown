@@ -73,6 +73,23 @@ XML_TABLE = (
     '  <row>\n    <cell name="Name">Bob</cell>\n    <cell name="Score">82</cell>\n  </row>\n'
     "</dataset>"
 )
+# v2 nested format (current output): root <표>, rows <행>, horizontal leaves <열>.
+XML_TABLE_V2 = (
+    "<표>\n"
+    '  <행>\n    <열 n="Name">Alice</열>\n    <열 n="Score">95</열>\n  </행>\n'
+    '  <행>\n    <열 n="Name">Bob</열>\n    <열 n="Score">82</열>\n  </행>\n'
+    "</표>"
+)
+# A v2 cross-table: vertical group <{header}그룹> + <행 {h}=> + horizontal <열그룹>/<열>.
+XML_TABLE_V2_NESTED = (
+    "<표>\n"
+    '  <직급그룹 이름="부장">\n'
+    '    <행 직책="대족장">\n'
+    '      <열그룹 이름="1분기"><열 n="1">동</열><열 n="2">해</열></열그룹>\n'
+    '    </행>\n'
+    '  </직급그룹>\n'
+    "</표>"
+)
 # A config-shaped XML that merely looks nested — must NOT be mistaken for a table.
 XML_NOT_TABLE = (
     "<config>\n  <server>\n    <host>localhost</host>\n    <port>8080</port>\n  </server>\n</config>"
@@ -282,17 +299,73 @@ def run_converter_tests() -> list[TestResult]:
         ),
     )
     check(
+        "model_to_xml_nested_roundtrip",
+        lambda: _assert_equal(
+            # a 2D (vertical + horizontal) header round-trips through the v2
+            # nested XML: vertical keys are forward-filled back into each row so
+            # re-conversion is stable (spec §5). Header level fill: keys repeat
+            # on every level on the way back.
+            table_xml_to_model(
+                model_to_xml(
+                    [["직급", "직책", "분기", "분기"], ["직급", "직책", "Q1", "Q2"]],
+                    [["부장", "팀장", "1", "2"], ["부장", "파트장", "3", "4"]],
+                )
+            ),
+            (
+                [["직급", "직책", "분기", "분기"], ["직급", "직책", "Q1", "Q2"]],
+                [["부장", "팀장", "1", "2"], ["부장", "파트장", "3", "4"]],
+            ),
+        ),
+    )
+    check(
+        "model_to_xml_emits_v2_vertical_group",
+        lambda: _assert_contains(
+            # the cross-table emits a vertical <{header}그룹> wrapper, the v2 shape.
+            model_to_xml(
+                [["직급", "직책", "분기", "분기"], ["직급", "직책", "Q1", "Q2"]],
+                [["부장", "팀장", "1", "2"], ["부장", "파트장", "3", "4"]],
+            ),
+            '<직급그룹 이름="부장">',
+        ),
+    )
+    check(
+        "model_to_xml_simple_table_bare_row",
+        lambda: _assert_equal(
+            # no horizontal group → simple table: zero vertical keys, bare <행>,
+            # leaves directly under it (spec §4-2).
+            model_to_xml([["name", "val"]], [["A", "1"]]),
+            '<표>\n  <행>\n    <열 n="name">A</열>\n    <열 n="val">1</열>\n  </행>\n</표>',
+        ),
+    )
+    check(
         "model_to_xml_header_in_attribute",
         lambda: _assert_contains(
             # a header illegal as an XML tag name (space, leading digit) goes
-            # verbatim into name= — no mangling, no header-as-tag.
+            # verbatim into the 열 leaf's n= attribute — no mangling (v2).
             model_to_xml([["Q1 2024"]], [["12"]]),
-            '<cell name="Q1 2024">12</cell>',
+            '<열 n="Q1 2024">12</열>',
         ),
     )
     check(
         "is_table_xml_accepts_table",
         lambda: _assert_equal(is_table_xml(XML_TABLE), True),
+    )
+    check(
+        "is_table_xml_accepts_v2_table",
+        lambda: _assert_equal(is_table_xml(XML_TABLE_V2), True),
+    )
+    check(
+        "is_table_xml_accepts_v2_nested",
+        lambda: _assert_equal(is_table_xml(XML_TABLE_V2_NESTED), True),
+    )
+    check(
+        "v2_xml_to_markdown_flattens_groups",
+        lambda: _assert_equal(
+            # the Markdown path flattens v2 nesting to a combined-header table:
+            # 직급/직책 keys + composite "1분기 1"/"1분기 2" columns (spec §7).
+            table_xml_to_markdown(XML_TABLE_V2_NESTED),
+            "| 직급 | 직책 | 1분기 1 | 1분기 2 |\n| --- | --- | --- | --- |\n| 부장 | 대족장 | 동 | 해 |",
+        ),
     )
     check(
         "is_table_xml_rejects_config",
@@ -352,17 +425,26 @@ def run_converter_tests() -> list[TestResult]:
     check(
         "merged_excel_to_xml_nests_group_header",
         lambda: _assert_contains(
-            # the colspan group header becomes a <group>, sub-columns nested
-            # cells — the 매출 / 1분기,2분기 hierarchy a flat header would collapse.
+            # the colspan group header becomes a <열그룹>, sub-columns nested 열
+            # leaves — the 매출 / 1분기,2분기 hierarchy a flat header would collapse.
             model_to_xml(*html_table_to_model(HTML_MERGED_EXCEL)),
-            '<group name="매출">',
+            '<열그룹 이름="매출">',
         ),
     )
     check(
         "merged_excel_to_xml_keeps_subheader_cell",
         lambda: _assert_contains(
             model_to_xml(*html_table_to_model(HTML_MERGED_EXCEL)),
-            '<cell name="2분기">34</cell>',
+            '<열 n="2분기">34</열>',
+        ),
+    )
+    check(
+        "merged_excel_to_xml_nests_vertical_key",
+        lambda: _assert_contains(
+            # the left key column (직급) nests vertically: 부장 spans both rows as
+            # a <직급그룹> wrapper — the v2 vertical grouping (spec §3, §7).
+            model_to_xml(*html_table_to_model(HTML_MERGED_EXCEL)),
+            '<직급그룹 이름="부장">',
         ),
     )
     check(

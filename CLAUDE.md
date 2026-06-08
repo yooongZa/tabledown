@@ -65,40 +65,57 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
 - 결과: 마크다운 에디터는 마크다운 표를, Word·Excel 은 원본 표 형식을 받는다. **양쪽 동시 만족.**
 
 ### 5. XML 표 변환 — 표→XML은 명시적 메뉴 클릭 전용, 자동 역변환은 없음 (0.3.0)
-- **형식**: LLM 친화 *레코드형 + 구조 태그* XML. 루트 `<dataset>`, 데이터 행마다 `<row>`,
-  값마다 **고정 태그** `<cell name="…">값</cell>`. 다단(그룹) 헤더는 `<group name="…">` 로
-  **중첩**해 보존한다. 로직은 `converter/table_xml.py`(`model_to_xml`/`table_xml_to_model`),
-  입력 모델은 `converter/html_to_md.py` 의 `html_table_to_model`(헤더 레벨들 + 데이터 행).
+- **형식 (v2 — 다단 헤더 중첩, 방안1: 일반 태그)**: LLM 친화 XML. 다단 헤더(가로·세로 양방향)를
+  XML **중첩 계층**으로 보존한다(flatten 금지). 루트 `<표>`, 세로 상위그룹 `<{헤더}그룹 이름="값">`,
+  행 `<행 {헤더}="값">`, 가로 상위그룹 `<열그룹 이름="값">`, 가로 리프(셀) `<열 n="헤더값">셀값</열>`.
+  로직은 `converter/table_xml.py`(`model_to_xml`/`table_xml_to_model`), 입력 모델은
+  `converter/html_to_md.py` 의 `html_table_to_model`(헤더 레벨들 + 데이터 행).
   ```xml
-  <dataset><row>
-    <cell name="직급">부장</cell>
-    <group name="1분기"><cell name="1">동</cell><cell name="2">해</cell></group>
-  </row></dataset>
+  <표>
+    <직급그룹 이름="부장">
+      <행 직책="대족장">
+        <열그룹 이름="1분기"><열 n="1">동</열><열 n="2">해</열><열 n="3">물</열></열그룹>
+        <열그룹 이름="2분기"><열 n="4">과</열><열 n="5">백</열><열 n="6">두</열></열그룹>
+      </행>
+    </직급그룹>
+  </표>
   ```
-- **이름은 태그가 아니라 속성에 (header→tag 금지)**: 헤더는 *데이터*라 공백·앞자리 숫자·기호
-  (`( ) % /`)·중복·예약어 `xml` 등 XML 이름 규칙에 안 맞는 게 흔하다. 현실의 표 표준(OOXML
-  SpreadsheetML, HTML `<td>`, ODF) 은 전부 **고정 구조 태그 + 헤더는 내용/속성**이다. 헤더를
-  `name=` 속성에 넣어 정규화·이름충돌·`header` 백업속성 같은 군더더기를 전부 없앤다. **다시
-  header→tag 로 돌리지 말 것.** (이력: 초기 0.3.0 은 `<Q1_2024 header="Q1 2024">` 식으로 헤더를
-  태그로 써서 지저분한 헤더에선 태그가 뭉개지고 이름이 두 번 적혔다 — 분석 후 폐기.)
-- **루트는 `<dataset>`, 절대 `<table>`/`<tr>` 금지**: 그것들은 진짜 HTML 태그라, 이 XML 텍스트가
-  HTML 로 렌더링되는 곳(브라우저·Obsidian 미리보기·리치텍스트)에 가면 HTML 표 파싱이 걸려
-  비-table 자식(`<row>`/`<cell>`/`<group>`)을 **표 밖으로 쫓아내(foster-parenting)** 표가 텅 빈다.
-  `dataset`/`row`/`cell`/`group` 은 HTML 에 없는 이름이라 트리가 보존된다. (이력: 초기 0.3.0 은
-  루트가 `<table>` 이라 대화창·Obsidian 등에서 셀이 사라지는 듯 보였다 — html5lib 로 재현·확인.)
-- **가로는 중첩, 세로는 forward-fill (대칭 금지)**: 가로 그룹 헤더(병합으로 그린 1분기>1,2,3)는
-  작성자가 **선언한 진짜 계층**이라 `<group>` 으로 중첩한다. 세로 병합(직급 부장/차장)은 계층이
-  아니라 "같은 값 반복"이라 **각 행에 forward-fill** 해 행을 완결한다(중첩 안 함 — 정답 계층도
-  없고 정렬에 취약, 이미 fill 로 보존됨). **세로를 부모-자식으로 중첩하지 말 것.**
+- **루트는 한글 `<표>`, 절대 `<table>`/`<tr>` 금지**: `<table>`(영문) 은 진짜 HTML 태그라, 이 XML
+  텍스트가 HTML 로 렌더링되는 곳(브라우저·Obsidian 미리보기·리치텍스트)에 가면 HTML 표 파싱이
+  걸려 비-table 자식을 **표 밖으로 쫓아내(foster-parenting)** 표가 텅 빈다. 한글 `표`/`행`/`열`/
+  `열그룹`/`{X}그룹` 은 HTML 에 없는 이름이라 트리가 보존된다(v1 이 `<dataset>` 을 쓴 것과 같은
+  이유). (이력: 초기 0.3.0 은 루트가 `<table>` 이라 대화창·Obsidian 등에서 셀이 사라지는 듯
+  보였다 — html5lib 로 재현·확인.)
+- **가로축 태그(`열그룹`/`열`)는 고정 일반 태그, 헤더는 속성값(`이름`/`n`)**: 헤더는 *데이터*라
+  공백·앞자리 숫자·기호(`( ) % /`)·중복·예약어 `xml` 등 XML 이름 규칙에 안 맞는 게 흔하다. 가로는
+  헤더를 속성값(escape 만 하면 무엇이든 OK)에 넣어 정규화·이름충돌·백업속성 같은 군더더기를
+  없앤다. 가로 차원 이름(`분기`,`월`) 은 표에 없으므로 만들지 않는다(방안1). **가로 헤더를 태그로
+  돌리지 말 것.** (이력: 초기 0.3.0 은 `<Q1_2024 header="Q1 2024">` 식으로 헤더를 태그로 써서
+  지저분한 헤더에선 태그가 뭉개지고 이름이 두 번 적혔다 — 분석 후 폐기.)
+- **세로 키 헤더만 태그에 노출 → 항상 유효 XML 이름 보장**: 세로 상위그룹은 `<{헤더}그룹>`(접미사
+  `그룹`), 행 최하위 키는 `<행 {헤더}="값">` 의 속성 key 로 헤더를 쓴다. 그래서 세로 키 열은
+  **헤더가 유효 XML 이름인 동안만** 키로 인정한다 — 왼쪽부터 첫 가로 group 앞까지의 leaf 중,
+  XML 이름 규칙 위반(공백·기호·숫자시작·`xml` 접두) 열을 만나면 거기서 키 종료(그 열부터 데이터).
+  → **정규화 불필요, 무손실 roundtrip 유지.** 가로 group 이 하나도 없으면(단순 표) 세로 키 0개 →
+  모든 열이 데이터, 행은 `<행>`(키 속성 없음). 키 1개면 `<행 {헤더}="값">`(세로 그룹 없음).
+- **가로도 세로도 중첩 (v2 의 핵심 변경: 세로 forward-fill → 세로 중첩)**: 가로 그룹 헤더(병합으로
+  그린 1분기>1,2,3)는 `<열그룹>` 으로 중첩한다(종전과 동일). v1 은 세로 병합(직급 부장/차장)을
+  계층이 아니라 "같은 값 반복"으로 보고 **각 행에 forward-fill 해 자기완결 레코드**로 만들었으나,
+  v2 는 세로 그룹도 부모 노드 `<{헤더}그룹 이름="값">` 로 **중첩**한다(인접 행의 동일 그룹값을
+  연속 런으로 묶고, 다단계면 다단 중첩). **트레이드오프(의도된 변경)**: 세로 중첩이라 **행이
+  자기완결이 아니다** — 직급 값이 부모(`<직급그룹>`)에만 있어 행 하나만 떼면 직급을 모른다. v1 의
+  자기완결성을 포기하고 계층 보존을 택한 **사용자 확정 형식**이다(spec §7). **세로를 다시 매 행
+  forward-fill 로 평면화하지 말 것.**
 - **자동 XML→표 역변환은 없다 (의도적)**: 워처(`_converted_clipboard`)는 클립보드의 XML 을
   표로 되돌리지 **않는다**. XML 은 오직 메뉴의 `copy_as_xml` 클릭으로만 생성된다. (초기 0.3.0
   엔 자동 역변환 분기가 있었으나 사용자 요청으로 제거 — 일반·설정 XML 을 자동으로 건드릴 위험
   회피 + 메뉴 단순화["XML 변환 사용" 토글도 함께 삭제]. 되살리려면 `_converted_clipboard` 에
   `is_table_xml`/`table_xml_to_markdown` 분기를 다시 넣으면 된다.) 단, `copy_as_xml` 의 소스
   추출(`_clipboard_table_model`)은 클립보드의 (새 형식) XML 도 표로 인정하므로, 거기 쓰는
-  `is_table_xml` 은 여전히 **보수적**이어야 한다 — config/문서/임의 XML 오인 금지. 가드: 모든 row
-  태그 동일 + 각 row 의 자식은 **`<cell>`(leaf) 또는 `<group>`(재귀)만** + (row 2개 이상 또는
-  알려진 root/row 태그). **이 가드를 느슨하게 풀지 말 것.**
+  `is_table_xml` 은 여전히 **보수적**이어야 한다 — config/문서/임의 XML 오인 금지. 가드(spec §6):
+  루트의 직접 자식이 모두 `행` 또는 `{X}그룹`(재귀적으로 `행` 포함) + `행` 의 자식은 `열`
+  또는 `열그룹`(재귀)만이고 `열` 은 leaf(자식 없음) + (`행` 2개 이상 **또는** 루트가 알려진
+  표 루트(`표`,`dataset`,`table`…)·행 태그가 알려진 것). **이 가드를 느슨하게 풀지 말 것.**
 - **표 → XML (메뉴 `copy_as_xml`)**: 이건 **사용자의 명시적 동작**이라 불변식 3(html 유지)과
   **일부러 다르게** 동작한다 — text 슬롯에 XML 을 넣고 **HTML 을 drop** 한다
   (`drop_types=RENDERED_TABLE_TYPES | HTML_TYPES`). 그래야 어디에 붙여도 "표가 아니라 XML"이
@@ -109,9 +126,9 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   채우고(forward-fill), ② 전체 열 병합 제목 행(단일 cell colspan=전체)은 건너뛰고, ③ 다단
   그룹 헤더는 `<th>`/`<thead>` 가 있으면 그걸로, 없으면(=실제 Excel 은 전부 `<td>`) **colspan 으로
   추론**해(상단의 가로병합 있는 행들 + 그 아래 leaf 한 줄) **헤더 레벨들을 분리 보존**한다 →
-  `model_to_xml` 이 `<group>` 으로 중첩(평면 결합 금지). 실제 Excel 은 `th` 를 안 쓰므로 **colspan
+  `model_to_xml` 이 `<열그룹>` 으로 중첩(평면 결합 금지). 실제 Excel 은 `th` 를 안 쓰므로 **colspan
   기반 헤더 추론을 제거하면 다단 헤더가 다시 깨진다.** (`html_table_to_rows` 는 이 모델을 한 줄
-  헤더로 평면 결합한 뷰 — 마크다운·forward-fill 용.)
+  헤더로 평면 결합한 뷰 — 마크다운·빈칸 채우기용.)
 - **‘XML: 빈칸을 자동 채우기’ 옵션(`forward_fill_key_columns`, 기본 꺼짐, `settings.py`/NSUserDefaults
   영속)**: 병합을 안 하고 빈칸으로 그룹을 표현한 표(직급을 그룹 첫 행에만 쓰고 아래는 비움 —
   현실에서 흔함)를 위해, 클릭 변환(`copy_as_xml`→`_clipboard_table_model`) 시 **왼쪽 키 열의 빈칸만**
@@ -128,10 +145,10 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
 - `html_table_in_document_augments_text`, `html_table_in_document_keeps_html` → 불변식 4
 - `is_table_xml_rejects_config`, `config_xml_left_untouched` → 불변식 5 (XML false positive 차단)
 - `table_xml_not_auto_converted` → 불변식 5 (워처가 XML 을 표로 자동 변환하지 않음)
-- `model_to_xml_roundtrip` → 불변식 5 (모델↔XML 무손실)
-- `model_to_xml_header_in_attribute` → 불변식 5 (헤더는 name 속성, header→tag 금지)
+- `model_to_xml_roundtrip` → 불변식 5 (모델↔XML 무손실 — 세로 중첩 포함)
+- `model_to_xml_header_in_attribute` → 불변식 5 (가로 헤더는 `n=`/`이름=` 속성, 가로 header→tag 금지)
 - `merged_excel_to_xml_nests_group_header`, `merged_excel_to_xml_keeps_subheader_cell` → 불변식 5
-  (가로 다단 헤더를 `<group>` 으로 중첩 보존)
+  (가로 다단 헤더를 `<열그룹>` 으로 중첩 보존)
 - `forward_fill_fills_left_key_column`, `forward_fill_stops_at_data_column` → 불변식 5
   (빈 칸 채우기: 키 열만 채우고 값 열은 보존)
 - `forward_fill_horizontal_left` → 불변식 5 (위가 비면 좌측 값으로 가로 채움)

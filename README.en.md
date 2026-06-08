@@ -67,22 +67,27 @@ When Tabledown is disabled, rich text editors such as TextEdit can use the HTML 
 
 ## XML conversion (LLM-friendly)
 
-Tabledown supports a **record-style XML with structural tags** — the shape an LLM recognizes best when a table is pasted into a prompt. The root is `<dataset>`, each value is a `<cell name="header">`, and multi-level (group) headers nest as `<group>`, keeping the table's hierarchy.
+Tabledown supports a **nested multi-level-header XML** — the shape an LLM recognizes best when a table is pasted into a prompt. Multi-level (group) headers are kept as an XML nesting hierarchy: the root is `<표>` (table), vertical groups are `<{header}그룹 이름="value">`, a row is `<행 {header}="value">`, horizontal groups are `<열그룹 이름="value">`, and a cell is `<열 n="headerValue">cellValue</열>`. (The structural tags are Korean words — `표` table, `행` row, `열` column, `열그룹` column-group — so the XML never collides with real HTML elements.)
+
+Example: a cross-table of two vertical levels (Rank ▸ Manager/Deputy, Title) × two horizontal levels (Q1 ▸ 1,2,3 / Q2 ▸ 4,5,6).
 
 ```xml
-<dataset>
-  <row>
-    <cell name="Rank">Manager</cell>
-    <group name="Q1">
-      <cell name="Jan">10</cell>
-      <cell name="Feb">12</cell>
-    </group>
-  </row>
-</dataset>
+<표>
+  <직급그룹 이름="부장">
+    <행 직책="대족장">
+      <열그룹 이름="1분기"><열 n="1">동</열><열 n="2">해</열><열 n="3">물</열></열그룹>
+      <열그룹 이름="2분기"><열 n="4">과</열><열 n="5">백</열><열 n="6">두</열></열그룹>
+    </행>
+    <행 직책="족장"> … </행>
+    <행 직책="추장"> … </행>
+  </직급그룹>
+  <직급그룹 이름="차장"> … </직급그룹>
+</표>
 ```
 
 - **Table → XML (menu)**: Copy a table, then click **“Copy table as XML”** in the menu bar to turn the clipboard table (Excel table, Markdown table, or XML) into LLM-friendly XML. This is a deliberate click, so the HTML table is dropped and XML pastes everywhere. There is no automatic XML→table direction (to avoid the watcher touching ordinary config/document XML).
-- **Names live in `name=` attributes, values in `<cell>` text**: a header with spaces, symbols, or leading digits never mangles a tag and stays safe in any standard XML parser (the same approach real tabular-XML standards use). Horizontal multi-level headers nest as `<group>`; vertical merges are filled into each row. The `<dataset>` root (not `<table>`) means the content survives even where the text is rendered as HTML (a browser, an Obsidian preview).
+- **Both horizontal and vertical groups nest**: horizontal multi-level headers nest as `<열그룹>`, and vertical groups (Rank: Manager/Deputy) nest as `<{header}그룹>`, keeping the table's hierarchy. Horizontal headers live in `n=`/`이름=` attributes (not tag names), so spaces, symbols, or leading digits never mangle a tag and stay safe in any standard XML parser. The Korean `<표>` root (not `<table>`) means the content survives even where the text is rendered as HTML (a browser, an Obsidian preview).
+- **Vertical groups nest as parent nodes (changed from the previous version)**: the previous version repeated each vertical key column (Rank) on every row, so each row was a self-contained record. Now vertical groups nest as parent nodes (`<직급그룹>`) — the hierarchy is preserved, but the group value lives only on the parent, so **a single row on its own no longer carries its Rank** (a deliberate trade: hierarchy preservation over self-contained rows).
 - **“XML: Auto-fill blank cells” (Settings ▸, off by default)**: When converting a table to XML, blank cells in the left grouping columns are filled from the value above (vertical), then to the left (horizontal). Data (value) columns are left as-is.
 
 ## How It Works
@@ -170,6 +175,7 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 
 ## Changelog
 
+- 2026-06-08: Redesigned XML conversion to a **nested hierarchy** preserving multi-level headers on both axes (`<표>` ▸ `<직급그룹 이름>` ▸ `<행 직책>` ▸ `<열그룹 이름>` ▸ `<열 n>`). Vertical groups now nest as parent nodes (previously repeated per row; tradeoff: rows are no longer self-contained). 38/38 converter tests. (Separately: partial-monetization scaffolding — donation IAPs, XML Pro yearly subscription, ⌘⌃C global hotkey; incomplete, pending App Store Connect setup)
 - 2026-06-08: Added XML table conversion (0.3.0). An LLM-friendly record-style XML with structural tags — root `<dataset>`, each value a `<cell name="…">`, multi-level group headers nested as `<group>`. Headers live in attributes (not tag names), so spaces/symbols/digits never mangle a tag and any standard XML parser reads it; the `<dataset>` root (not `<table>`) keeps the content intact even where it is rendered as HTML. The “Copy table as XML” menu turns the clipboard table (Excel/Markdown/XML) into XML — **click-only**, with no automatic XML→table direction (so the watcher never touches ordinary config/document XML). Recognizes Excel merged cells (vertical rowspan filled per row; horizontal colspan group headers nested as `<group>`). A “XML: Auto-fill blank cells” setting (off by default) fills blanks in unmerged group columns from the value above/left (value columns preserved). Blank-fill / language / login-item are grouped under a “Settings” submenu
 - 2026-05-29: Submitted Tabledown 0.2.4 to the Mac App Store (TestFlight) as build 0.2.4, and attached the notarized DMG/zip to the GitHub Release (v0.2.4, Latest)
 - 2026-05-29: Unified HTML-slot handling — a bare Excel/Sheets table now keeps its HTML `<table>` slot too (0.2.4). Every table case (web table, document, Excel table) now keeps HTML and augments the text slot with Markdown, so one copy gives Excel/Word a real table and Markdown editors Markdown

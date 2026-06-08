@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### Changed
+- **XML 표 변환 형식을 중첩 계층(v2)으로 재설계.** 0.3.0 의 평면형(`<dataset><row><cell name="…">`, 가로 그룹만 `<group>` 중첩)을 대체. 이제 **가로·세로 양방향 다단 헤더를 모두 중첩**으로 보존한다: 루트 `<표>`, 세로 상위 그룹 `<직급그룹 이름="부장">`, 행 `<행 직책="대족장">`, 가로 상위 그룹 `<열그룹 이름="1분기">`, 리프 `<열 n="1">동</열>`. 세로 키는 v1 처럼 매 행에 반복(forward-fill)하지 않고 **부모 노드로 묶는다**(트레이드오프: 행이 자기완결 레코드가 아님 — 그룹 값이 부모에만 있음). 가로 차원 이름이 표에 없으면 지어내지 않고 일반 태그(`열그룹`/`열`)로 보존. 헤더가 XML 이름 규칙에 안 맞는 열은 세로 키로 승격하지 않아 정규화 없이 무손실 roundtrip 유지. `model_to_xml`·`table_xml_to_model`·`is_table_xml` 재작성, 변환 테스트 38/38.
+
+### Added
+- **부분 유료화 스캐폴딩 (미완성 — App Store Connect 설정 전):** StoreKit 1 래퍼(`store.py`) — 기부 Consumable 3종 + XML Pro 연간 구독. Carbon `RegisterEventHotKey` 전역 단축키 **⌘⌃C**(`hotkey.py`) → 클립보드 표를 XML 로 변환(Accessibility 등 권한 불필요). `copy_as_xml` 에 구독 게이팅, 구독 상태는 `NSUserDefaults` 캐시(`pro_active`/`pro_expires`). dev/비-App Store 빌드는 자동 unlock. (실제 결제는 유료 앱 계약·IAP 등록·Sandbox 테스트 후 동작.)
+
 ## [0.3.0] - 2026-06-08
 
 ### Added

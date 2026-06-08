@@ -3,3 +3,8 @@ beautifulsoup4>=4.12.0
 pyobjc-core>=10.0
 pyobjc-framework-Cocoa>=10.0
 pyobjc-framework-ServiceManagement>=10.0
+# In-App Purchase (StoreKit 1) for donations + the XML Pro subscription (store.py).
+pyobjc-framework-StoreKit>=10.0
+# NOTE: the global hotkey (hotkey.py) needs no extra package — it binds the
+# always-present system Carbon.framework directly via ctypes (RegisterEventHotKey
+# + InstallEventHandler), which keeps the "zero permissions" property.

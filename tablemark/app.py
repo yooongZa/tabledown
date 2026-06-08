@@ -36,8 +36,10 @@ from .i18n import (
     t,
 )
 from . import login_item
+from .hotkey import GlobalHotkey
 from .logger import log
 from .settings import load_fill_blanks, save_fill_blanks
+from .store import Store
 
 
 def _markdown_paste_block(markdown: str) -> str:
@@ -71,7 +73,22 @@ class TabledownApp(rumps.App):
         self.copy_xml_item = rumps.MenuItem(
             t("menu.copy_xml", self.lang),
             callback=self.copy_as_xml,
+            key="c",
         )
+        # Show "⌘⌃C" next to the item. rumps' `key` gives a Command-only
+        # equivalent; OR in Control so the displayed/registered accelerator
+        # matches the global Carbon hotkey (⌘⌃C). Best-effort — purely cosmetic
+        # discoverability, so never let it crash startup.
+        try:
+            from AppKit import (
+                NSCommandKeyMask,
+                NSControlKeyMask,
+            )
+            self.copy_xml_item._menuitem.setKeyEquivalentModifierMask_(
+                NSCommandKeyMask | NSControlKeyMask
+            )
+        except Exception as exc:  # noqa: BLE001
+            log(f"failed to set XML shortcut modifier mask: {exc}")
         self.fill_blanks_item = rumps.MenuItem(
             t("menu.fill_blanks", self.lang),
             callback=self.toggle_fill_blanks,
@@ -88,6 +105,29 @@ class TabledownApp(rumps.App):
             item.state = 1 if code == self.lang else 0
             self.language_options[code] = item
         self.language_item.update(list(self.language_options.values()))
+
+        # --- In-App Purchases (donations + XML Pro subscription) ---
+        # Strong-ref the store on self: it owns the StoreKit transaction observer
+        # whose lifetime must match the app's. Fetch product metadata now so the
+        # menu prices/titles can populate before the user opens a purchase sheet.
+        self.store = Store()
+        self.store.on_tip_purchased = self._on_tip_purchased
+        self.store.fetch_products()
+
+        self.donate_item = rumps.MenuItem(t("menu.donate", self.lang))
+        self.donate_options = {}
+        for tier in ("small", "medium", "large"):
+            item = rumps.MenuItem(
+                t(f"menu.donate.{tier}", self.lang),
+                callback=self._make_tip_handler(tier),
+            )
+            self.donate_options[tier] = item
+        self.donate_item.update(list(self.donate_options.values()))
+
+        self.restore_item = rumps.MenuItem(
+            t("menu.restore", self.lang),
+            callback=self.restore_purchases,
+        )
 
         self.login_item_supported = login_item.is_supported()
         if self.login_item_supported:
@@ -106,17 +146,25 @@ class TabledownApp(rumps.App):
         settings_children = [self.fill_blanks_item, self.language_item]
         if self.login_item_menu is not None:
             settings_children.append(self.login_item_menu)
+        settings_children.append(self.restore_item)  # Apple-required Restore
         self.settings_item.update(settings_children)
 
         self.menu = [
             self.toggle_item,
             self.copy_xml_item,
             None,  # separator
+            self.donate_item,
             self.settings_item,
             None,  # separator
             self.help_item,
             self.quit_item,
         ]
+
+        # --- Global hotkey ⌘⌃C -> copy_as_xml (gated inside copy_as_xml) ---
+        # Strong-ref on self so the Carbon callback trampoline survives GC.
+        # Graceful: if registration fails the menu item still works.
+        self.hotkey = GlobalHotkey(self.copy_as_xml)
+        self.hotkey.register()
 
         self._stop_watcher = threading.Event()
         self._last_change_count = clipboard_change_count()
@@ -190,6 +238,10 @@ class TabledownApp(rumps.App):
         """Refresh every menu title for the current language."""
         self.toggle_item.title = t("menu.toggle", self.lang)
         self.copy_xml_item.title = t("menu.copy_xml", self.lang)
+        self.donate_item.title = t("menu.donate", self.lang)
+        for tier, item in self.donate_options.items():
+            item.title = t(f"menu.donate.{tier}", self.lang)
+        self.restore_item.title = t("menu.restore", self.lang)
         self.fill_blanks_item.title = t("menu.fill_blanks", self.lang)
         self.fill_blanks_item._menuitem.setToolTip_(t("menu.fill_blanks_tooltip", self.lang))
         self.settings_item.title = t("menu.settings", self.lang)
@@ -243,6 +295,14 @@ class TabledownApp(rumps.App):
         There is no automatic XML→table direction — XML is produced only by this
         menu click, never inferred from clipboard contents by the watcher.
         """
+        # XML is a Pro feature: gate the user-action path (menu click + ⌘⌃C
+        # hotkey both land here) before any conversion. This is the ONLY gating
+        # point — the watcher (_converted_clipboard) and converter functions are
+        # untouched, per the clipboard invariants in CLAUDE.md. Everything below
+        # this guard is unchanged.
+        if not self.store.pro_active:
+            self._present_subscription_sheet()
+            return
         try:
             model = self._clipboard_table_model(read_clipboard(), self.fill_blanks)
             if model is None:
@@ -264,6 +324,49 @@ class TabledownApp(rumps.App):
                 title=t("xml.no_table_title", self.lang),
                 message=t("xml.no_table_message", self.lang),
             )
+
+    # --- In-App Purchase actions ---
+
+    def _present_subscription_sheet(self):
+        """Show the Pro subscription prompt and start checkout if accepted.
+
+        Uses rumps.alert with an OK (subscribe) / Cancel choice. rumps.alert
+        returns 1 for the default (OK) button. Triggered only from the gated
+        copy_as_xml path when the user lacks the Pro entitlement.
+        """
+        try:
+            response = rumps.alert(
+                title=t("xml.locked_title", self.lang),
+                message=t("xml.locked_message", self.lang),
+                ok=t("xml.subscribe_button", self.lang),
+                cancel=True,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log(f"subscription sheet failed: {exc}")
+            return
+        if response == 1:
+            log("user chose to subscribe to Pro")
+            self.store.subscribe_pro()
+
+    def _make_tip_handler(self, tier: str):
+        def _handler(_sender):
+            log(f"donation requested: {tier}")
+            self.store.purchase_tip(tier)
+        return _handler
+
+    def restore_purchases(self, _sender):
+        log("restore purchases requested")
+        self.store.restore()
+
+    def _on_tip_purchased(self, _product_id):
+        """Store callback: thank the user after a donation completes."""
+        try:
+            rumps.alert(
+                title=t("help.title", self.lang),
+                message=t("tip.thanks", self.lang),
+            )
+        except Exception as exc:  # noqa: BLE001
+            log(f"thanks alert failed: {exc}")
 
     @staticmethod
     def _clipboard_table_model(content, fill_blanks=False):
@@ -316,6 +419,8 @@ class TabledownApp(rumps.App):
 
     def quit_app(self, _):
         self._stop_watcher.set()
+        if getattr(self, "hotkey", None) is not None:
+            self.hotkey.unregister()
         rumps.quit_application()
 
     # --- Clipboard watcher ---
