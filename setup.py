@@ -58,6 +58,7 @@ OPTIONS = {
     "resources": [
         "assets/generated/tablemark_menu_40.png",
         "assets/generated/tablemark_menu_40_off.png",
+        "assets/generated/tablemark_menu_40_check.png",
     ],
     "iconfile": "assets/Tabledown.icns",
 }

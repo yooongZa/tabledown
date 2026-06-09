@@ -21,8 +21,19 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "menu.donate.large": "든든한 후원 ❤️",
         "menu.restore": "구매 복원",
         "xml.locked_title": "XML 변환은 Pro 기능입니다",
-        "xml.locked_message": "연 $4.99 구독으로 XML 변환과 단축키를 사용하세요.",
-        "xml.subscribe_button": "Pro 구독 ($4.99/년)",
+        "xml.locked_message": "연 {price} 구독으로 XML 변환과 단축키(⌘⌃C)를 사용하세요.",
+        "xml.subscribe_button": "Pro 구독 ({price}/년)",
+        "pro.activated_title": "Pro 활성화 완료",
+        "pro.activated_message": (
+            "구독해 주셔서 감사합니다!\n"
+            "이제 ‘표를 XML로 복사’ 메뉴와 단축키 ⌘⌃C 를 사용할 수 있습니다."
+        ),
+        "purchase.failed_title": "구매 실패",
+        "purchase.failed_message": "구매를 완료하지 못했습니다.\n잠시 후 다시 시도해 주세요.",
+        "restore.done": "구매가 복원되었습니다.",
+        "restore.none": "복원할 구매 내역이 없습니다.",
+        "restore.failed": "복원하지 못했습니다.\n잠시 후 다시 시도해 주세요.",
+        "tip.thanks_title": "후원 감사합니다",
         "tip.thanks": "후원해 주셔서 감사합니다!",
         "menu.fill_blanks": "XML: 빈칸을 자동 채우기",
         "menu.fill_blanks_tooltip": "표를 XML로 복사할 때, 비어있는 칸을 바로 위/좌측의 칸 값으로 자동 채웁니다. 데이터(값) 영역의 빈 칸은 그대로 둡니다.",
@@ -60,8 +71,19 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "menu.donate.large": "A generous tip ❤️",
         "menu.restore": "Restore Purchases",
         "xml.locked_title": "XML conversion is a Pro feature",
-        "xml.locked_message": "Subscribe for $4.99/year to use XML conversion and the shortcut.",
-        "xml.subscribe_button": "Subscribe to Pro ($4.99/yr)",
+        "xml.locked_message": "Subscribe for {price}/year to use XML conversion and the ⌘⌃C shortcut.",
+        "xml.subscribe_button": "Subscribe to Pro ({price}/yr)",
+        "pro.activated_title": "Pro is now active",
+        "pro.activated_message": (
+            "Thanks for subscribing!\n"
+            "You can now use 'Copy table as XML' and the ⌘⌃C shortcut."
+        ),
+        "purchase.failed_title": "Purchase failed",
+        "purchase.failed_message": "The purchase could not be completed.\nPlease try again later.",
+        "restore.done": "Your purchases have been restored.",
+        "restore.none": "No purchases to restore.",
+        "restore.failed": "Restore failed.\nPlease try again later.",
+        "tip.thanks_title": "Thank you!",
         "tip.thanks": "Thanks for your support!",
         "menu.fill_blanks": "XML: Auto-fill blank cells",
         "menu.fill_blanks_tooltip": "When copying a table as XML, blank cells are auto-filled from the cell directly above or to the left. Data (value) cells are left as-is.",

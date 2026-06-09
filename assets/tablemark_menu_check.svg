@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+  <rect x="7" y="9" width="26" height="3" rx="1" fill="#000"/>
+  <rect x="7" y="28" width="26" height="3" rx="1" fill="#000"/>
+  <rect x="7" y="9" width="3" height="22" rx="1" fill="#000"/>
+  <rect x="30" y="9" width="3" height="22" rx="1" fill="#000"/>
+  <rect x="15" y="9" width="3" height="22" fill="#000"/>
+  <rect x="23" y="9" width="3" height="22" fill="#000"/>
+  <rect x="7" y="19" width="26" height="3" fill="#000"/>
+  <!-- Success badge: white stroke punches a gap through the grid, then a black
+       stroke draws the checkmark on top. Same convention as the off slash.
+       NOTE: in the generated template PNG the white punch must be TRANSPARENT
+       (alpha 0), not white pixels — see scripts/make_menu_icons.py. -->
+  <polyline points="18,25 25,32 36,15" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="18,25 25,32 36,15" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

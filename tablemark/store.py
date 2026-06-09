@@ -19,9 +19,10 @@ raises on the import path, so ``tablemark.app`` imports cleanly headless.
 """
 from __future__ import annotations
 
+import threading
 import time
 
-from Foundation import NSObject
+from Foundation import NSNumberFormatter, NSObject
 
 from .logger import log
 from . import settings
@@ -39,6 +40,11 @@ TIP_PRODUCT_IDS = {
 }
 ALL_PRODUCT_IDS = (TIP_SMALL, TIP_MEDIUM, TIP_LARGE, PRO_YEARLY)
 
+# Shown in the subscription sheet before product metadata loads (or when the
+# fetch failed). Must match the base price configured in App Store Connect;
+# once metadata arrives the localized store price replaces it.
+PRO_PRICE_FALLBACK = "$4.99"
+
 # A subscription year, plus a small grace window so a brief offline spell or a
 # slightly-late auto-renew transaction doesn't lock a paying user out mid-use
 # (the util is intentionally lenient — see spec §3.5 / §9).
@@ -51,6 +57,31 @@ _STATE_PURCHASED = 1
 _STATE_FAILED = 2
 _STATE_RESTORED = 3
 _STATE_DEFERRED = 4
+
+# SKError: the one failure that must stay silent in the UI (user backed out).
+_SK_ERROR_DOMAIN = "SKErrorDomain"
+_SK_ERROR_PAYMENT_CANCELLED = 2
+
+# Product metadata fetch retry — the app fetches once at startup, which can
+# race a not-yet-connected network. A couple of spaced retries keeps menu
+# prices from staying blank for the whole session.
+_MAX_FETCH_RETRIES = 2
+_FETCH_RETRY_SECONDS = 20
+
+# NSNumberFormatterCurrencyStyle — format SKProduct.price with its priceLocale.
+_NS_NUMBER_FORMATTER_CURRENCY = 2
+
+
+def error_is_cancelled(error) -> bool:
+    """True when a StoreKit NSError means the user cancelled the purchase."""
+    try:
+        return (
+            error is not None
+            and str(error.domain()) == _SK_ERROR_DOMAIN
+            and int(error.code()) == _SK_ERROR_PAYMENT_CANCELLED
+        )
+    except Exception:  # noqa: BLE001 - foreign error object; never raise on UI path
+        return False
 
 # Defensive import: a source run may not have StoreKit bundled. When it's
 # missing we keep the whole API surface working (no-ops + dev-unlocked Pro) so
@@ -123,7 +154,9 @@ class _PaymentObserver(NSObject):
             if state == _STATE_PURCHASING:
                 continue  # in flight — wait for a terminal state
             if state in (_STATE_PURCHASED, _STATE_RESTORED):
-                self._store._on_transaction_success(txn)
+                self._store._on_transaction_success(
+                    txn, restored=(state == _STATE_RESTORED)
+                )
                 queue.finishTransaction_(txn)
             elif state == _STATE_FAILED:
                 self._store._on_transaction_failed(txn)
@@ -157,19 +190,26 @@ class Store:
         restore()                 -> restore prior purchases (Apple-required button)
         pro_active (property)     -> bool: is the XML Pro entitlement currently valid
 
-    Callbacks (optional, set by the app to refresh UI / show thanks):
+    Callbacks (optional, set by the app to refresh UI / show feedback). All may
+    fire on a background thread — UI work must hop to the main thread:
         on_pro_changed(active: bool)
         on_tip_purchased(product_id: str)
         on_purchase_failed(product_id: str | None, error)
+        on_restore_finished(restored_count: int, error)
+        on_products_loaded()
     """
 
     def __init__(self):
         self.products = {}
         self._products_loaded = False
         self._fetch_failed = False
+        self._fetch_retries = 0
+        self._restored_count = 0
         self.on_pro_changed = None
         self.on_tip_purchased = None
         self.on_purchase_failed = None
+        self.on_restore_finished = None
+        self.on_products_loaded = None
 
         # Strong refs: PyObjC delegates/observers are plain Obj-C objects with no
         # owner on the Python side. Without these attributes they'd be GC'd and
@@ -240,6 +280,7 @@ class Store:
             return
         try:
             ids = set(ALL_PRODUCT_IDS)
+            self._fetch_failed = False
             self._delegate = _ProductsDelegate.alloc().initWithStore_(self)
             request = _SKProductsRequest.alloc().initWithProductIdentifiers_(ids)
             request.setDelegate_(self._delegate)
@@ -250,15 +291,49 @@ class Store:
             log(f"fetch_products failed: {exc}")
             self._fetch_failed = True
 
+    def localized_price(self, product_id: str) -> str | None:
+        """Localized price string (e.g. '₩6,600', '$4.99') for a fetched product.
+
+        None until product metadata has arrived — callers keep their fallback
+        text in that case. Formatting uses the SKProduct's own priceLocale so
+        the currency always matches the user's storefront.
+        """
+        product = self.products.get(product_id)
+        if product is None:
+            return None
+        try:
+            formatter = NSNumberFormatter.alloc().init()
+            formatter.setNumberStyle_(_NS_NUMBER_FORMATTER_CURRENCY)
+            locale = product.priceLocale()
+            if locale is not None:
+                formatter.setLocale_(locale)
+            text = formatter.stringFromNumber_(product.price())
+            return str(text) if text else None
+        except Exception as exc:  # noqa: BLE001
+            log(f"formatting price failed for {product_id}: {exc}")
+            return None
+
     def _on_products(self, products: dict) -> None:
         self.products = products
         self._products_loaded = True
         self._request = None
         log(f"loaded {len(products)} products")
+        if callable(self.on_products_loaded):
+            try:
+                self.on_products_loaded()
+            except Exception as exc:  # noqa: BLE001
+                log(f"on_products_loaded callback raised: {exc}")
 
     def _on_products_failed(self, error) -> None:
         self._fetch_failed = True
         self._request = None
+        if self._fetch_retries < _MAX_FETCH_RETRIES:
+            self._fetch_retries += 1
+            delay = _FETCH_RETRY_SECONDS * self._fetch_retries
+            log(f"retrying product fetch in {delay}s ({self._fetch_retries}/{_MAX_FETCH_RETRIES})")
+            timer = threading.Timer(delay, self.fetch_products)
+            timer.daemon = True
+            timer.start()
 
     # --- Purchasing ---
 
@@ -299,7 +374,13 @@ class Store:
         """Restore previous purchases (the Apple-required 'Restore' action)."""
         if not self._available or _SKPaymentQueue is None:
             log("cannot restore: StoreKit unavailable")
+            if callable(self.on_restore_finished):
+                try:
+                    self.on_restore_finished(0, None)
+                except Exception as exc:  # noqa: BLE001
+                    log(f"on_restore_finished callback raised: {exc}")
             return
+        self._restored_count = 0
         try:
             _SKPaymentQueue.defaultQueue().restoreCompletedTransactions()
             log("restore requested")
@@ -308,9 +389,11 @@ class Store:
 
     # --- Transaction outcome handlers (called by the observer) ---
 
-    def _on_transaction_success(self, txn) -> None:
+    def _on_transaction_success(self, txn, restored: bool = False) -> None:
         product_id = self._transaction_product_id(txn)
-        log(f"transaction success: {product_id}")
+        log(f"transaction success: {product_id}{' (restored)' if restored else ''}")
+        if restored:
+            self._restored_count += 1
         if product_id == PRO_YEARLY:
             self._set_pro(True, self._compute_expiry(txn))
         elif product_id in TIP_PRODUCT_IDS.values():
@@ -331,8 +414,16 @@ class Store:
 
     def _on_restore_finished(self, error) -> None:
         # Restored transactions already flowed through _on_transaction_success
-        # (state == restored), so Pro is updated by the time we get here.
-        pass
+        # (state == restored), so Pro is updated by the time we get here. Report
+        # the outcome so the app can confirm the Apple-required Restore action
+        # (success / nothing to restore / failure) instead of staying silent.
+        count = self._restored_count
+        self._restored_count = 0
+        if callable(self.on_restore_finished):
+            try:
+                self.on_restore_finished(count, error)
+            except Exception as exc:  # noqa: BLE001
+                log(f"on_restore_finished callback raised: {exc}")
 
     def _fail(self, product_id, error) -> None:
         if callable(self.on_purchase_failed):

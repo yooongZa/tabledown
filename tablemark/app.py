@@ -4,6 +4,7 @@ import threading
 import time
 
 import rumps
+from PyObjCTools import AppHelper
 
 from .clipboard import (
     HTML_TYPES,
@@ -39,7 +40,13 @@ from . import login_item
 from .hotkey import GlobalHotkey
 from .logger import log
 from .settings import load_fill_blanks, save_fill_blanks
-from .store import Store
+from .store import (
+    PRO_PRICE_FALLBACK,
+    PRO_YEARLY,
+    TIP_PRODUCT_IDS,
+    Store,
+    error_is_cancelled,
+)
 
 
 def _markdown_paste_block(markdown: str) -> str:
@@ -47,9 +54,20 @@ def _markdown_paste_block(markdown: str) -> str:
     return "\n" + markdown.strip() + "\n"
 
 
+def _error_description(error) -> str:
+    """Human-readable description from an NSError, or ''."""
+    try:
+        if error is not None:
+            return str(error.localizedDescription() or "")
+    except Exception:  # noqa: BLE001 - foreign error object; never raise on UI path
+        pass
+    return ""
+
+
 class TabledownApp(rumps.App):
     ICON_NAME = "tablemark_menu_40.png"
     ICON_NAME_OFF = "tablemark_menu_40_off.png"
+    ICON_NAME_CHECK = "tablemark_menu_40_check.png"
 
     def __init__(self):
         log("app starting")
@@ -64,6 +82,33 @@ class TabledownApp(rumps.App):
         )
         self.lang = resolve_language()
         log(f"language resolved to {self.lang}")
+        self._flash_timer = None  # icon flash in progress (success feedback)
+
+        # --- In-App Purchases (donations + XML Pro subscription) ---
+        # Strong-ref the store on self: it owns the StoreKit transaction observer
+        # whose lifetime must match the app's. Created before the menu items so
+        # their titles can read the entitlement state (Pro lock marker) and,
+        # once fetched, the localized prices. Store callbacks may fire on a
+        # background thread — hop to the main thread via AppHelper.callAfter
+        # before touching any UI.
+        self.store = Store()
+        self._pending_subscribe = False  # a subscribe the user just started here
+        self.store.on_pro_changed = lambda active: AppHelper.callAfter(
+            self._handle_pro_changed, active
+        )
+        self.store.on_tip_purchased = lambda product_id: AppHelper.callAfter(
+            self._handle_tip_purchased, product_id
+        )
+        self.store.on_purchase_failed = lambda product_id, error: AppHelper.callAfter(
+            self._handle_purchase_failed, product_id, error
+        )
+        self.store.on_restore_finished = lambda count, error: AppHelper.callAfter(
+            self._handle_restore_finished, count, error
+        )
+        self.store.on_products_loaded = lambda: AppHelper.callAfter(
+            self._refresh_store_prices
+        )
+        self.store.fetch_products()
 
         self.toggle_item = rumps.MenuItem(
             t("menu.toggle", self.lang),
@@ -71,7 +116,7 @@ class TabledownApp(rumps.App):
         )
         self.toggle_item.state = 1 if self.enabled else 0
         self.copy_xml_item = rumps.MenuItem(
-            t("menu.copy_xml", self.lang),
+            self._copy_xml_title(),
             callback=self.copy_as_xml,
             key="c",
         )
@@ -106,19 +151,11 @@ class TabledownApp(rumps.App):
             self.language_options[code] = item
         self.language_item.update(list(self.language_options.values()))
 
-        # --- In-App Purchases (donations + XML Pro subscription) ---
-        # Strong-ref the store on self: it owns the StoreKit transaction observer
-        # whose lifetime must match the app's. Fetch product metadata now so the
-        # menu prices/titles can populate before the user opens a purchase sheet.
-        self.store = Store()
-        self.store.on_tip_purchased = self._on_tip_purchased
-        self.store.fetch_products()
-
         self.donate_item = rumps.MenuItem(t("menu.donate", self.lang))
         self.donate_options = {}
         for tier in ("small", "medium", "large"):
             item = rumps.MenuItem(
-                t(f"menu.donate.{tier}", self.lang),
+                self._donate_title(tier),
                 callback=self._make_tip_handler(tier),
             )
             self.donate_options[tier] = item
@@ -237,10 +274,10 @@ class TabledownApp(rumps.App):
     def _apply_language(self):
         """Refresh every menu title for the current language."""
         self.toggle_item.title = t("menu.toggle", self.lang)
-        self.copy_xml_item.title = t("menu.copy_xml", self.lang)
+        self.copy_xml_item.title = self._copy_xml_title()
         self.donate_item.title = t("menu.donate", self.lang)
         for tier, item in self.donate_options.items():
-            item.title = t(f"menu.donate.{tier}", self.lang)
+            item.title = self._donate_title(tier)
         self.restore_item.title = t("menu.restore", self.lang)
         self.fill_blanks_item.title = t("menu.fill_blanks", self.lang)
         self.fill_blanks_item._menuitem.setToolTip_(t("menu.fill_blanks_tooltip", self.lang))
@@ -318,6 +355,12 @@ class TabledownApp(rumps.App):
                 drop_types=RENDERED_TABLE_TYPES | HTML_TYPES,
             )
             log("copied clipboard table as XML")
+            # Only permission-free feedback channel we have: a system
+            # notification would prompt for permission (breaking the
+            # zero-permissions design), so the menu bar icon itself confirms
+            # the conversion — essential for the global hotkey, which otherwise
+            # gives no visible sign of success.
+            self._flash_icon_success()
         except Exception as exc:  # noqa: BLE001 - surface failure to the user
             log(f"copy as xml failed: {exc}")
             rumps.alert(
@@ -332,13 +375,16 @@ class TabledownApp(rumps.App):
 
         Uses rumps.alert with an OK (subscribe) / Cancel choice. rumps.alert
         returns 1 for the default (OK) button. Triggered only from the gated
-        copy_as_xml path when the user lacks the Pro entitlement.
+        copy_as_xml path when the user lacks the Pro entitlement. The price is
+        the localized store price once metadata has loaded; the hardcoded
+        fallback only bridges the gap before/without a fetch.
         """
+        price = self.store.localized_price(PRO_YEARLY) or PRO_PRICE_FALLBACK
         try:
             response = rumps.alert(
                 title=t("xml.locked_title", self.lang),
-                message=t("xml.locked_message", self.lang),
-                ok=t("xml.subscribe_button", self.lang),
+                message=t("xml.locked_message", self.lang).format(price=price),
+                ok=t("xml.subscribe_button", self.lang).format(price=price),
                 cancel=True,
             )
         except Exception as exc:  # noqa: BLE001
@@ -346,6 +392,9 @@ class TabledownApp(rumps.App):
             return
         if response == 1:
             log("user chose to subscribe to Pro")
+            # Remember that THIS user action started the purchase, so the
+            # success alert fires only here — silent for auto-renews/restores.
+            self._pending_subscribe = True
             self.store.subscribe_pro()
 
     def _make_tip_handler(self, tier: str):
@@ -358,15 +407,108 @@ class TabledownApp(rumps.App):
         log("restore purchases requested")
         self.store.restore()
 
-    def _on_tip_purchased(self, _product_id):
-        """Store callback: thank the user after a donation completes."""
+    # --- Store callbacks (already hopped to the main thread via callAfter) ---
+
+    def _safe_alert(self, title: str, message: str):
+        """rumps.alert that never lets a UI failure propagate into the run loop."""
         try:
-            rumps.alert(
-                title=t("help.title", self.lang),
-                message=t("tip.thanks", self.lang),
-            )
+            rumps.alert(title=title, message=message)
         except Exception as exc:  # noqa: BLE001
-            log(f"thanks alert failed: {exc}")
+            log(f"alert failed: {exc}")
+
+    def _handle_pro_changed(self, active: bool):
+        """Refresh the lock marker; confirm when an explicit subscribe finishes.
+
+        Fires for every Pro transaction (purchase, auto-renew at launch,
+        restore), so the "Pro is active" alert is gated on _pending_subscribe —
+        renewals stay silent and Restore shows its own confirmation.
+        """
+        self._refresh_xml_lock()
+        if active and self._pending_subscribe:
+            self._pending_subscribe = False
+            self._safe_alert(
+                t("pro.activated_title", self.lang),
+                t("pro.activated_message", self.lang),
+            )
+
+    def _handle_tip_purchased(self, _product_id):
+        """Thank the user after a donation completes."""
+        self._safe_alert(
+            t("tip.thanks_title", self.lang),
+            t("tip.thanks", self.lang),
+        )
+
+    def _handle_purchase_failed(self, product_id, error):
+        """Surface purchase failures. A user cancellation stays silent."""
+        if product_id == PRO_YEARLY:
+            self._pending_subscribe = False
+        if error_is_cancelled(error):
+            log("purchase cancelled by user")
+            return
+        message = t("purchase.failed_message", self.lang)
+        detail = _error_description(error)
+        if detail:
+            message += f"\n({detail})"
+        self._safe_alert(t("purchase.failed_title", self.lang), message)
+
+    def _handle_restore_finished(self, restored_count: int, error):
+        """Confirm the outcome of the Apple-required Restore action."""
+        self._refresh_xml_lock()
+        if error is not None:
+            message = t("restore.failed", self.lang)
+            detail = _error_description(error)
+            if detail:
+                message += f"\n({detail})"
+        elif restored_count > 0:
+            message = t("restore.done", self.lang)
+        else:
+            message = t("restore.none", self.lang)
+        self._safe_alert(t("menu.restore", self.lang), message)
+
+    def _refresh_store_prices(self):
+        """Re-title donation items once product metadata (prices) arrives."""
+        for tier, item in self.donate_options.items():
+            item.title = self._donate_title(tier)
+
+    # --- Dynamic menu titles ---
+
+    def _copy_xml_title(self) -> str:
+        """Title for 'Copy table as XML', marked locked while Pro is inactive."""
+        title = t("menu.copy_xml", self.lang)
+        if not self.store.pro_active:
+            title += " 🔒"
+        return title
+
+    def _refresh_xml_lock(self):
+        self.copy_xml_item.title = self._copy_xml_title()
+
+    def _donate_title(self, tier: str) -> str:
+        """Donation menu title with the localized store price once loaded."""
+        title = t(f"menu.donate.{tier}", self.lang)
+        price = self.store.localized_price(TIP_PRODUCT_IDS[tier])
+        if price:
+            title += f" ({price})"
+        return title
+
+    # --- Success flash ---
+
+    def _flash_icon_success(self):
+        """Swap the menu bar icon to a checkmark for a second."""
+        path = self._icon_path(self.ICON_NAME_CHECK)
+        if path is None:
+            return
+        if self._flash_timer is not None:
+            self._flash_timer.stop()
+            self._flash_timer = None
+        self.icon = path
+        # rumps.Timer runs on the main run loop — safe to touch the icon.
+        self._flash_timer = rumps.Timer(self._end_icon_flash, 1.0)
+        self._flash_timer.start()
+
+    def _end_icon_flash(self, timer):
+        timer.stop()
+        self._flash_timer = None
+        self.icon = self._current_icon_path()
 
     @staticmethod
     def _clipboard_table_model(content, fill_blanks=False):
