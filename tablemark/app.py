@@ -39,7 +39,13 @@ from .i18n import (
 from . import login_item
 from .hotkey import GlobalHotkey
 from .logger import log
-from .settings import load_fill_blanks, save_fill_blanks
+from . import __version__
+from .settings import (
+    load_fill_blanks,
+    load_welcome_shown,
+    save_fill_blanks,
+    save_welcome_shown,
+)
 from .store import (
     PRO_PRICE_FALLBACK,
     PRO_YEARLY,
@@ -47,6 +53,9 @@ from .store import (
     Store,
     error_is_cancelled,
 )
+
+
+GITHUB_URL = "https://github.com/yooongZa/tabledown"
 
 
 def _markdown_paste_block(markdown: str) -> str:
@@ -212,6 +221,14 @@ class TabledownApp(rumps.App):
         )
         self._watcher_thread.start()
         log("clipboard watcher started")
+
+        # First-run welcome: scheduled on the run loop (fires after run()
+        # starts) so the alert never blocks startup; one-shot via the
+        # welcome_shown flag.
+        self._welcome_timer = None
+        if not load_welcome_shown():
+            self._welcome_timer = rumps.Timer(self._show_welcome_once, 1.5)
+            self._welcome_timer.start()
 
     @classmethod
     def _icon_path(cls, name: str):
@@ -554,9 +571,45 @@ class TabledownApp(rumps.App):
         return header_levels, data_rows
 
     def show_help(self, _):
-        rumps.alert(
-            title=t("help.title", self.lang),
-            message=t("help.message", self.lang),
+        """Help alert: usage text, the running version, and a GitHub button.
+
+        The version in the title is the only place a user can read it (there is
+        no About window) — needed for bug reports. The legacy NSAlert API rumps
+        wraps returns -1 (NSAlertOtherReturn) for the third button.
+        """
+        try:
+            response = rumps.alert(
+                title=f"Tabledown v{__version__}",
+                message=t("help.message", self.lang),
+                other=t("help.open_github", self.lang),
+            )
+        except Exception as exc:  # noqa: BLE001
+            log(f"help alert failed: {exc}")
+            return
+        if response == -1:
+            self._open_github()
+
+    @staticmethod
+    def _open_github():
+        """Open the project page (sandbox-safe via NSWorkspace, no subprocess)."""
+        try:
+            from AppKit import NSWorkspace
+            from Foundation import NSURL
+            NSWorkspace.sharedWorkspace().openURL_(
+                NSURL.URLWithString_(GITHUB_URL)
+            )
+        except Exception as exc:  # noqa: BLE001
+            log(f"opening GitHub failed: {exc}")
+
+    def _show_welcome_once(self, timer):
+        """First-run pointer: the app is menu-bar-only, so a fresh install
+        otherwise looks like nothing happened. Marked shown before presenting
+        so a failing alert can never loop the welcome on every launch."""
+        timer.stop()
+        save_welcome_shown(True)
+        self._safe_alert(
+            t("welcome.title", self.lang),
+            t("welcome.intro", self.lang) + "\n\n" + t("help.message", self.lang),
         )
 
     def quit_app(self, _):

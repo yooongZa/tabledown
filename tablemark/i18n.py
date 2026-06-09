@@ -46,7 +46,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "menu.login_item": "로그인 시 자동 실행",
         "menu.help": "도움말",
         "menu.quit": "종료",
-        "help.title": "Tabledown",
+        "help.open_github": "GitHub 열기",
+        "welcome.title": "Tabledown 에 오신 것을 환영합니다!",
+        "welcome.intro": "Tabledown 이 메뉴바에서 실행 중입니다 — 화면 오른쪽 위의 표 모양 아이콘을 찾아보세요.",
         "help.message": (
             "Excel ↔ Markdown 표 변환기\n\n"
             "사용법:\n"
@@ -56,6 +58,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Markdown 표를 복사하면 Excel에서 셀에 분리되어 붙습니다.\n\n"
             "XML:\n"
             "• 메뉴의 ‘표를 XML로 복사’ 를 누르면 현재 클립보드의 표가 LLM 친화적 XML로 변환됩니다.\n"
+            "• 단축키 ⌘⌃C 로도 바로 변환할 수 있습니다. 성공하면 메뉴바 아이콘이 잠시 체크 표시로 바뀝니다.\n"
             "• ‘XML: 빈칸을 자동 채우기’ 를 켜면 병합 없이 비워둔 그룹 열(직급 등)의 빈칸을 바로 위 값으로 채웁니다.\n\n"
             "메뉴의 ‘Tabledown 사용’ 항목 왼쪽 체크 표시가 현재 상태입니다.\n"
             "체크가 켜져 있으면 변환이 동작하고, 꺼져 있으면 변환이 멈춥니다.\n"
@@ -96,7 +99,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "menu.login_item": "Open at Login",
         "menu.help": "Help",
         "menu.quit": "Quit",
-        "help.title": "Tabledown",
+        "help.open_github": "Open GitHub",
+        "welcome.title": "Welcome to Tabledown!",
+        "welcome.intro": "Tabledown is running in your menu bar — look for the table icon near the top-right of your screen.",
         "help.message": (
             "Excel ↔ Markdown table converter\n\n"
             "How to use:\n"
@@ -106,6 +111,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "and Markdown tables paste into separate cells in Excel.\n\n"
             "XML:\n"
             "• Click ‘Copy table as XML’ to turn the clipboard table into LLM-friendly XML.\n"
+            "• The global shortcut ⌘⌃C does the same — on success the menu bar icon briefly shows a checkmark.\n"
             "• ‘XML: Auto-fill blank cells’ fills blanks in left grouping columns (e.g. rank) from the value above.\n\n"
             "The checkmark next to ‘Use Tabledown’ shows the current state.\n"
             "When checked, conversion is on. When unchecked, conversion pauses.\n"

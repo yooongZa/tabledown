@@ -26,6 +26,10 @@ PRO_EXPIRES_KEY = "com.tabledown.app.pro_expires"
 PRO_ACTIVE_DEFAULT = False
 PRO_EXPIRES_DEFAULT = 0.0
 
+# First-run welcome: the app is menu-bar-only (LSUIElement, no Dock icon), so
+# without a one-time pointer a fresh install looks like "nothing happened".
+WELCOME_SHOWN_KEY = "com.tabledown.app.welcome_shown"
+
 
 def load_fill_blanks() -> bool:
     """Read the blank-fill toggle; fall back to the default when unset."""
@@ -85,3 +89,20 @@ def save_pro_expires(expires: float) -> None:
         NSUserDefaults.standardUserDefaults().setDouble_forKey_(float(expires), PRO_EXPIRES_KEY)
     except Exception as exc:  # noqa: BLE001
         log(f"failed to save pro_expires: {exc}")
+
+
+def load_welcome_shown() -> bool:
+    """Read whether the first-run welcome has been shown (False when unset)."""
+    try:
+        return bool(NSUserDefaults.standardUserDefaults().boolForKey_(WELCOME_SHOWN_KEY))
+    except Exception as exc:  # noqa: BLE001 - never let a settings read crash startup
+        log(f"failed to read welcome_shown: {exc}")
+        return True  # fail closed: better to skip the welcome than loop it
+
+
+def save_welcome_shown(shown: bool = True) -> None:
+    """Persist that the first-run welcome has been shown."""
+    try:
+        NSUserDefaults.standardUserDefaults().setBool_forKey_(bool(shown), WELCOME_SHOWN_KEY)
+    except Exception as exc:  # noqa: BLE001
+        log(f"failed to save welcome_shown: {exc}")
