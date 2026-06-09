@@ -163,6 +163,28 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
 
 ---
 
+## 설정 영속성 정책 (UX 결정 — 2026-06-10 확정)
+
+| 상태 | 영속 | 근거 |
+|------|------|------|
+| 변환 토글(`enabled`) | **비영속** (매 실행 켜짐) | 토글은 "일시정지" 용도. 영속화하면 "몇 주 전에 꺼둔 걸 잊고 고장으로 오인"하는 사고가 더 흔함. macOS·Windows 동일. |
+| `fill_blanks`, 언어, Pro 캐시 | 영속 (NSUserDefaults / `%APPDATA%` JSON) | 명시적 환경설정. |
+| `welcome_shown` (첫 실행 안내 1회) | 영속 | 알럿 표시 **전에** 마킹 — 실패해도 매 실행 반복 금지. |
+
+- `enabled` 를 영속화하자는 제안이 다시 나오면 위 근거와 함께 재논의할 것 (실수로 "정리"하지 말 것).
+- Windows 설정 저장은 `tabledown_windows/settings.py` 의 **read-modify-write** 만 사용 — 통째로 덮어쓰면 다른 키가 소실된다(과거 i18n 저장기가 그랬음).
+
+## UI 관례 (메뉴·피드백)
+
+- 메뉴 순서: 동작(토글·XML) → 설정 → 후원 → 도움말·종료. 후원을 설정 위로 올리지 말 것(첫인상).
+- '구매 복원'은 후원 서브메뉴 하단(결제 관련 항목 한곳에). Apple 요구는 "존재"이지 위치가 아님.
+- 시스템 알림(UNUserNotification)은 쓰지 않는다 — 권한 프롬프트가 떠서 "권한 0개" 셀링포인트가 깨짐.
+  성공 피드백은 **메뉴바 아이콘 1초 체크 플래시**(`_flash_icon_success`, 에셋은 `scripts/make_menu_icons.py` 생성).
+- 가격은 하드코딩 금지: SKProduct 의 localized price 를 메뉴/시트에 동적 표기, `PRO_PRICE_FALLBACK` 은
+  메타데이터 로딩 전 임시 표기 전용(ASC 가격과 일치 유지).
+- 구매 흐름 피드백 규칙: 구독 성공 알럿은 **사용자가 방금 시작한 구독에만**(자동 갱신·복원은 침묵),
+  사용자 취소(SKError code 2)는 침묵, 그 외 실패·복원 결과는 알럿.
+
 ## 빌드 / 실행
 
 - **로컬 테스트**: 소스 직접 실행 `.venv/bin/python run.py`

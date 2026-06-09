@@ -81,6 +81,9 @@ class TabledownApp(rumps.App):
     def __init__(self):
         log("app starting")
         self._clear_stale_status_item_visibility()
+        # Deliberately NOT persisted: the toggle is a session pause. Starting
+        # enabled every launch avoids "turned it off weeks ago, now 'broken'".
+        # (Policy: CLAUDE.md § 설정 영속성 정책 — fill_blanks/language persist.)
         self.enabled = True
         self.fill_blanks = load_fill_blanks()
         super().__init__(
@@ -160,6 +163,11 @@ class TabledownApp(rumps.App):
             self.language_options[code] = item
         self.language_item.update(list(self.language_options.values()))
 
+        self.restore_item = rumps.MenuItem(
+            t("menu.restore", self.lang),
+            callback=self.restore_purchases,
+        )
+
         self.donate_item = rumps.MenuItem(t("menu.donate", self.lang))
         self.donate_options = {}
         for tier in ("small", "medium", "large"):
@@ -168,11 +176,10 @@ class TabledownApp(rumps.App):
                 callback=self._make_tip_handler(tier),
             )
             self.donate_options[tier] = item
-        self.donate_item.update(list(self.donate_options.values()))
-
-        self.restore_item = rumps.MenuItem(
-            t("menu.restore", self.lang),
-            callback=self.restore_purchases,
+        # The Apple-required Restore lives with the other purchase actions —
+        # Settings holds app preferences only.
+        self.donate_item.update(
+            list(self.donate_options.values()) + [None, self.restore_item]
         )
 
         self.login_item_supported = login_item.is_supported()
@@ -192,15 +199,16 @@ class TabledownApp(rumps.App):
         settings_children = [self.fill_blanks_item, self.language_item]
         if self.login_item_menu is not None:
             settings_children.append(self.login_item_menu)
-        settings_children.append(self.restore_item)  # Apple-required Restore
         self.settings_item.update(settings_children)
 
+        # Order: actions, then preferences, then support — donations sit below
+        # Settings so the first impression is utility, not a tip jar.
         self.menu = [
             self.toggle_item,
             self.copy_xml_item,
             None,  # separator
-            self.donate_item,
             self.settings_item,
+            self.donate_item,
             None,  # separator
             self.help_item,
             self.quit_item,
