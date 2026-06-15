@@ -49,7 +49,7 @@ The release DMG is built with Developer ID signing and Apple notarization. The M
 | Markdown table (`Cmd+C`) | Excel (`Cmd+V`) | Spreadsheet cells |
 | Table (`Cmd+C`, then menu “Copy table as XML”) | LLM prompt (`Cmd+V`) | LLM-friendly XML |
 
-When Tabledown is enabled, spreadsheet tables paste as Markdown source.
+When Tabledown is on, spreadsheet tables paste as Markdown source in Markdown editors such as Obsidian.
 
 ```markdown
 | Name | Task |
@@ -57,13 +57,13 @@ When Tabledown is enabled, spreadsheet tables paste as Markdown source.
 | Tabledown | Paste tables as Markdown |
 ```
 
-The same copied spreadsheet table pastes as Markdown source when Tabledown is enabled, and as a rendered HTML table in rich text editors such as TextEdit when Tabledown is disabled.
+Tabledown augments the clipboard's plain-text slot with Markdown while keeping the HTML table slot intact (since 0.2.4). The destination app picks the format it prefers, so a single copy pastes as Markdown source in Markdown editors and as a rendered table in rich text editors such as TextEdit, Word, or Excel.
 
 <p align="center">
-  <img src="assets/tabledown-paste-comparison.png" width="760" alt="Tabledown enabled pastes Markdown source, disabled pastes a rendered table">
+  <img src="assets/tabledown-paste-comparison.png" width="760" alt="The same copied table pasted as Markdown source and as a rendered table">
 </p>
 
-When Tabledown is disabled, rich text editors such as TextEdit can use the HTML table already present on the clipboard and paste a rendered table instead. In other words, Tabledown is not a pretty table renderer. It is a table converter for Markdown documents.
+The screenshot above shows the two paste results — Markdown source (top) and a rendered table (bottom). (It was captured on a version before 0.2.4, when the on/off toggle made this difference; today both formats coexist on the clipboard and the destination app chooses.) In other words, Tabledown is not a pretty table renderer. It is a table converter for Markdown documents.
 
 ## XML conversion (LLM-friendly)
 
@@ -149,7 +149,9 @@ If the paste result is not what you expected, check whether Tabledown is running
 
 If you paste immediately after copying, the original clipboard item may be pasted before the app has augmented it. Processing usually takes around 0.1 seconds.
 
-If an Excel table pastes into Obsidian as pipe text instead of a table, make sure the latest app is running. In the Excel to Markdown path, Tabledown should remove HTML table clipboard formats and leave Markdown plain text.
+If an Excel table pastes into Obsidian as pipe text instead of a table, make sure the latest app is running. In the Excel to Markdown path, Tabledown keeps the HTML table clipboard format and augments the plain-text slot with Markdown (since 0.2.4 — only rendered formats such as PNG, PDF, and RTF are removed).
+
+Conversely, if a Markdown editor pastes a rich table instead of Markdown source, an editor with HTML auto-conversion enabled (such as Obsidian) took the kept HTML slot first. That is destination-app policy outside Tabledown's control, and the trade-off for never losing the table format when the same copy is pasted back into Excel or Word. In that case, use the editor's "Paste as plain text" command to get the Markdown from the text slot.
 
 Chat input fields such as Codex or Claude, and some plain text editors, may show Markdown tables as raw `| ... |` text instead of a rendered table. In that case, test with baseline apps such as Obsidian, GitHub Markdown preview, Excel, or Google Sheets.
 

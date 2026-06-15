@@ -49,7 +49,7 @@ Mac App Store에서 받는 것을 권장합니다 (자동 업데이트).
 | 마크다운 표 (`Cmd+C`) | Excel (`Cmd+V`) | 셀에 분리된 표 |
 | 표 (`Cmd+C` 후 메뉴 ‘표를 XML로 복사’) | LLM 프롬프트 (`Cmd+V`) | LLM 친화 XML |
 
-Tabledown을 활성화하면 spreadsheet(스프레드시트) 표가 Markdown source(마크다운 원문)로 붙습니다.
+Tabledown을 켜 두면 Obsidian 같은 Markdown editor(마크다운 에디터)에서 spreadsheet(스프레드시트) 표가 Markdown source(마크다운 원문)로 붙습니다.
 
 ```markdown
 | 이름 | 할 일 |
@@ -57,13 +57,13 @@ Tabledown을 활성화하면 spreadsheet(스프레드시트) 표가 Markdown sou
 | Tabledown | 표를 Markdown으로 붙이기 |
 ```
 
-같은 spreadsheet 표를 복사해도 Tabledown이 켜져 있으면 Markdown source로, 꺼져 있으면 TextEdit 같은 rich text editor에서는 렌더링된 HTML table(HTML 표)로 붙습니다.
+Tabledown은 clipboard(클립보드)의 text(일반 텍스트) 슬롯에 Markdown을 보강하고 HTML table(HTML 표) 슬롯은 그대로 유지합니다 (0.2.4부터). 붙여넣는 앱이 자기에게 맞는 형식을 고르기 때문에, 한 번 복사한 표가 Markdown editor에서는 Markdown source로, TextEdit·Word·Excel 같은 rich text editor(서식 있는 텍스트 편집기)에서는 렌더링된 표로 붙습니다.
 
 <p align="center">
-  <img src="assets/tabledown-paste-comparison.png" width="760" alt="Tabledown enabled pastes Markdown source, disabled pastes a rendered table">
+  <img src="assets/tabledown-paste-comparison.png" width="760" alt="The same copied table pasted as Markdown source and as a rendered table">
 </p>
 
-비활성화하면 TextEdit 같은 rich text editor(서식 있는 텍스트 편집기)는 clipboard(클립보드)에 들어 있는 HTML table(HTML 표)을 그대로 사용해 렌더링된 표로 붙일 수 있습니다. 즉 Tabledown은 "예쁜 표 렌더러"가 아니라 "Markdown 문서용 표 변환기"입니다.
+위 스크린샷은 같은 표가 붙는 두 가지 결과 — Markdown source(위)와 렌더링된 표(아래) — 를 보여줍니다. (0.2.4 이전 버전 캡처라 켬/끔으로 나뉘어 있지만, 지금은 두 형식이 clipboard에 공존하며 도착지 앱이 선택합니다.) 즉 Tabledown은 "예쁜 표 렌더러"가 아니라 "Markdown 문서용 표 변환기"입니다.
 
 ## XML 변환 (LLM 친화)
 
@@ -149,7 +149,9 @@ python run.py
 
 복사 직후 너무 빠르게 붙여넣으면 앱이 clipboard를 보강하기 전에 원본이 붙을 수 있습니다. 보통 0.1초 안팎에 처리됩니다.
 
-Obsidian에서 Excel 표가 표가 아닌 pipe text(파이프 텍스트)로 붙으면 최신 앱이 실행 중인지 확인하세요. Excel → Markdown 경로에서는 HTML table(HTML 표) clipboard format(클립보드 형식)을 제거하고 Markdown plain text(일반 텍스트)만 남겨야 합니다.
+Obsidian에서 Excel 표가 표가 아닌 pipe text(파이프 텍스트)로 붙으면 최신 앱이 실행 중인지 확인하세요. Excel → Markdown 경로에서도 HTML table(HTML 표) clipboard format(클립보드 형식)은 유지되고, text(일반 텍스트) 슬롯에 Markdown이 보강됩니다 (0.2.4부터 — 제거되는 것은 PNG/PDF/RTF 같은 rendered format(렌더링 형식)뿐입니다).
+
+반대로 Markdown editor(마크다운 에디터)에서 Markdown source(마크다운 원문)가 아니라 리치 표로 붙는다면, HTML 자동 변환 기능이 켜진 에디터(Obsidian 등)가 유지된 HTML 슬롯을 우선 받은 것입니다. 이는 도착지 앱의 정책이라 Tabledown이 제어할 수 없으며, 같은 표를 Excel·Word에 다시 붙여넣을 때 표 형식을 잃지 않기 위한 trade-off(트레이드오프)입니다. 이 경우 에디터의 'Paste as plain text(일반 텍스트로 붙여넣기)' 명령을 쓰면 text 슬롯의 Markdown을 받습니다.
 
 Codex/Claude 같은 채팅 입력창이나 일부 plain text editor(일반 텍스트 편집기)는 Markdown table(마크다운 표)을 렌더링된 표로 보여주지 않고 `| ... |` 원문으로 표시할 수 있습니다. 이 경우 Obsidian, GitHub Markdown preview(마크다운 미리보기), Excel/Google Sheets 같은 기준 앱에서 다시 확인하세요.
 
