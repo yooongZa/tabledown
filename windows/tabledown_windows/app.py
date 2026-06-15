@@ -60,7 +60,7 @@ class TabledownWindowsApp:
         language_items = [
             pystray.MenuItem(
                 self._language_option_title(code),
-                lambda _icon, _item, language=code: self._set_language(language),
+                self._language_action(code),
             )
             for code in SUPPORTED_LANGUAGES
         ]
@@ -85,6 +85,18 @@ class TabledownWindowsApp:
             self.icon.update_menu()
         except NotImplementedError:
             pass
+
+    def _language_action(self, code: str):
+        # pystray._assert_action rejects callables whose positional arg count
+        # isn't 0/1/2. The old `lambda _icon, _item, language=code` had THREE
+        # positional params (the default-arg capture counts toward co_argcount),
+        # so building this submenu raised ValueError and crashed the tray at
+        # startup. A factory closure captures `code` while staying a 2-arg
+        # callable that pystray accepts.
+        def handler(_icon, _item):
+            self._set_language(code)
+
+        return handler
 
     def _language_option_title(self, code: str) -> str:
         mark = " ✓" if code == self.lang else ""
