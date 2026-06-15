@@ -25,6 +25,10 @@
   - **Windows 끔 상태 아이콘**: 변환 꺼짐을 트레이 아이콘 자체에 표시(빨간 사선 + 펀치 — macOS off 관례 이식).
   - **Windows 트레이 아이콘 선명도**: 고정 64px 소스를 Windows 가 재축소해 흐릿하던 것 → `SM_CXSMICON`(DPI 반영) 정확한 크기로 직접 렌더.
   - Windows 설정 저장을 read-modify-write JSON(`tabledown_windows/settings.py`)으로 분리 — 기존 언어 저장기는 파일 전체를 덮어써 다른 키를 소실시킬 구조였음.
+- **Windows Store(MSIX) 출시 문서**: `windows/PRIVACY.md`(개인정보 처리방침 — 호스팅용 EN/KO)와 `windows/STORE_LISTING.md`(Partner Center 제출 문구 — 짧은/긴 설명·검색 키워드·`runFullTrust` 사유·심사 노트·스크린샷 가이드) 추가. 패키징 절차 자체는 기존 `windows/PACKAGING.md`. (실제 Windows 에서 full-trust MSIX 빌드 — PyInstaller → makeappx → 자체서명 — 와 frozen 앱 트레이·클립보드 변환을 검증.)
+
+### Fixed
+- **Windows 트레이 앱 시작 크래시 수정**: 언어 서브메뉴를 `lambda _icon, _item, language=code` 로 만들던 코드가 기본 인자(`language=code`)까지 포함해 인자 3개가 되어, 0/1/2 인자만 허용하는 pystray `_assert_action` 에 걸려 **매 실행 시작 즉시 `ValueError` 로 크래시**하던 문제(`windows/tabledown_windows/app.py`). 인자 2개 클로저를 돌려주는 `_language_action(code)` 팩토리로 교체. 실제 Windows 에서 트레이 앱을 처음 구동하며 발견 — 기존 테스트는 크로스플랫폼 변환 계층만 검증해 잡지 못했음.
 
 ## [0.3.0] - 2026-06-08
 
