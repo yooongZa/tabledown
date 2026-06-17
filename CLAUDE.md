@@ -19,6 +19,22 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
 "한 슬롯만 맞추는" 변환은 틀린 접근이고, 가능하면 **두 슬롯을 공존**시켜 도착지가 각자
 고르게 한다.
 
+### 0-W. Windows CF_HTML — Excel fragment 는 `<table>` 래퍼를 뺀다 (회귀 금지)
+- Windows 의 html 슬롯은 **CF_HTML**("HTML Format") 포맷이다. 헤더에 `StartFragment`/`EndFragment`
+  바이트 오프셋이 있고, `extract_cf_html`(`tabledown_windows/html_clipboard.py`)이 그 구간을 잘라 쓴다.
+- **함정**: Excel·Google Sheets 는 `StartFragment`/`EndFragment` 마커를 **`<table>` 엘리먼트 *안쪽*** 에
+  둔다. 그래서 잘라낸 fragment 는 표 내부(`<col>`/`<tr>`/`<td>`)뿐이고 **`<table>` 여닫는 태그가 빠진다.**
+  표 감지(`has_html_table` = `"<table" in html`)가 실패 → 진짜 Excel 표가 "표 아님"으로 판정 →
+  변환 없이 **원본 TSV 가 그대로 남는다**(`converted_clipboard` 가 None). 이게 0.2.4~0.2.5 초기에
+  "Excel 표가 마크다운으로 변환 안 됨"의 원인이었다. (웹·채팅 표는 fragment 에 `<table>` 이 들어있어
+  영향 없음 — 그래서 일부만 동작해 보임.)
+- **수정/불변식**: `extract_cf_html` 은 행(`<tr>`)이 있는데 `<table>` 래퍼가 없으면 `<table>…</table>` 로
+  **감싼다**(`_ensure_table_wrapper`). 비-표 HTML 은 절대 건드리지 말 것(`<tr>` 없으면 그대로). **이 래핑을
+  지우면 Excel→마크다운이 전부 깨진다.** 회귀 테스트: `real_excel_table_converts_to_markdown`,
+  `excel_cf_html_fragment_without_table_tag_is_wrapped`(Excel 형식 CF_HTML — 마커가 `<table>` 뒤를 가리킴 — 을 재현).
+- **테스트는 실제 클립보드 형식으로**: `<table>` 을 포함한 *이상적* HTML 로만 테스트하면 이 버그를 못 잡는다.
+  실제 Excel CF_HTML(또는 그 형식을 흉내낸 fixture)로 검증할 것.
+
 ### 1. text 에 마크다운 표 + html 에 `<table>` → 원본 유지 (셀개수 검사 금지)
 - 웹·채팅(Claude 등)에서 복사한 표는 clipboard 에 **마크다운 text 와 html `<table>` 을 함께** 싣는다.
 - 이때는 **칸수(셀 개수)를 따지지 말고 원본 clipboard 를 그대로 둔다.**
@@ -170,9 +186,30 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
 | 변환 토글(`enabled`) | **비영속** (매 실행 켜짐) | 토글은 "일시정지" 용도. 영속화하면 "몇 주 전에 꺼둔 걸 잊고 고장으로 오인"하는 사고가 더 흔함. macOS·Windows 동일. |
 | `fill_blanks`, 언어, Pro 캐시 | 영속 (NSUserDefaults / `%APPDATA%` JSON) | 명시적 환경설정. |
 | `welcome_shown` (첫 실행 안내 1회) | 영속 | 알럿 표시 **전에** 마킹 — 실패해도 매 실행 반복 금지. |
+| 로그인 시 자동 실행 | 영속 — **OS 가 보관**, 우리 설정 파일엔 안 씀 | macOS: SMAppService(시스템 로그인 항목). Windows: MSIX StartupTask(설정 ▸ 앱 ▸ 시작 프로그램). 둘 다 OS 가 진실의 원천이라 JSON/NSUserDefaults 그림자를 두지 말 것(드리프트 발생). |
 
 - `enabled` 를 영속화하자는 제안이 다시 나오면 위 근거와 함께 재논의할 것 (실수로 "정리"하지 말 것).
 - Windows 설정 저장은 `tabledown_windows/settings.py` 의 **read-modify-write** 만 사용 — 통째로 덮어쓰면 다른 키가 소실된다(과거 i18n 저장기가 그랬음).
+
+### 로그인 시 자동 실행 (macOS `login_item` ↔ Windows `startup_task`)
+- **macOS**: `tablemark/login_item.py`(SMAppService). **Windows**: `windows/tabledown_windows/startup_task.py`
+  (WinRT `StartupTask`, `winsdk`). 둘 다 `is_supported()`/`is_enabled()`/`set_enabled()` 형태로,
+  미지원 환경에선 `is_supported()` False → 메뉴에서 항목 숨김(graceful fallback). 동형 유지할 것.
+- **Windows TaskId 는 매니페스트와 일치해야 함**: `startup_task.TASK_ID = "TabledownStartup"` 은
+  `windows/packaging/AppxManifest.xml` 의 `<uap5:StartupTask TaskId="TabledownStartup" Enabled="false">`
+  와 정확히 같아야 한다. 매니페스트는 `Enabled="false"`(기본 꺼짐) — 토글/설정으로만 켜짐.
+- **한 operation = 한 전용 스레드**(`_run` → `asyncio.run`): 각 공개 함수(`current_state`/`set_enabled`)는
+  get→토글→read-back 을 **하나의 코루틴**으로 묶어 **하나의 워커 스레드**에서 실행한다. 이유 ①: pystray 펌프
+  스레드는 Windows 메시지 루프를 돌리는데 거기서 직접 WinRT async 를 await 하면 COM apartment/메시지 펌프와
+  얽혀 교착될 수 있다(호출자는 `join()` 으로 잠깐 블록만). 이유 ②: 한 스레드(한 apartment 수명) 안에서 task
+  프록시를 만들고 쓰므로 **WinRT 객체를 스레드 간 공유하지 않는다**. **enable 은 워커, disable 은 호출자 스레드**
+  식으로 나누지 말 것 — `disable()` 도 코루틴 안에 둬 같은 스레드에서 호출한다(과거 리뷰 지적).
+- **`asyncio.run` 은 코루틴만 받는다**: winsdk `IAsyncOperation` 은 awaitable 이지만 코루틴이 아니라 바로
+  넘기면 `ValueError`. 작업을 `async def`(`_read_state_coro`/`_set_enabled_coro`) 안에 둬 워커 스레드에서 생성·await 한다.
+- **거짓 비활성(false-disable) 감지**: Windows 는 사용자가 작업 관리자에서 끈 항목(`disabled_by_user`)·
+  정책 제어(`disabled_by_policy`)는 `request_enable_async()` 로도 못 켠다. `set_enabled()` 가 read-back
+  상태명을 돌려주므로 체크마크가 거짓으로 켜지지 않고, 앱이 안내 알림을 띄운다. **enable 결과를 무조건
+  성공으로 가정하지 말 것.**
 
 ## UI 관례 (메뉴·피드백)
 
@@ -196,6 +233,11 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
 - **GitHub 배포(DMG)**: `NOTARY_PROFILE=tabledown-notary bash scripts/build_dmg.sh`
   (Developer ID 서명 + Apple 공증 + staple. 앱과 DMG **둘 다** 공증해야 함 — DMG 만
   staple 하면 "Record not found" 로 실패.)
+- **Windows 빌드는 `--collect-all winsdk` 필수**(`windows/build_windows.ps1`): `startup_task` 가 쓰는
+  `winsdk` 는 namespace 모듈을 lazy import 하고 코드가 native `_winrt.pyd` 에 있어 PyInstaller 정적 분석이
+  둘 다 놓친다. 빠지면 빌드는 통과하지만 **로그인 토글이 패키지 빌드에서 조용히 사라진다**(import 실패 →
+  `is_supported()` False). 검증: frozen exe 에서 `winsdk.windows.applicationmodel.StartupTask` import 가 되고
+  미패키지 실행 시 `OSError(ERROR_NOT_FOUND, -2147023728)` 로 깨끗이 떨어지면 OK.
 
 ## 버전 / 릴리스 관례
 - 버전: `tablemark/__init__.py` 의 `__version__`. SemVer.

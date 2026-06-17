@@ -17,9 +17,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "menu.language": "언어",
         "menu.language.ko": "한국어",
         "menu.language.en": "English",
+        "menu.login_item": "로그인 시 자동 실행",
         "menu.help": "도움말",
         "menu.quit": "종료",
         "help.title": "Tabledown",
+        "login_item.blocked_by_user": (
+            "자동 실행이 작업 관리자에서 꺼져 있어 앱에서 켤 수 없습니다.\n\n"
+            "작업 관리자 → ‘시작 프로그램 앱’ 탭에서 Tabledown 을 ‘사용’으로 바꿔 주세요."
+        ),
+        "login_item.blocked_by_policy": (
+            "시스템 정책이 자동 실행을 제어하고 있어 여기서 변경할 수 없습니다.\n\n"
+            "관리자에게 문의해 주세요."
+        ),
         "welcome.title": "Tabledown 에 오신 것을 환영합니다!",
         "welcome.intro": "Tabledown 이 작업 표시줄 알림 영역(트레이)에서 실행 중입니다 — 표 모양 아이콘을 찾아보세요.",
         "help.message": (
@@ -38,9 +47,20 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "menu.language": "Language",
         "menu.language.ko": "한국어",
         "menu.language.en": "English",
+        "menu.login_item": "Open at Login",
         "menu.help": "Help",
         "menu.quit": "Quit",
         "help.title": "Tabledown",
+        "login_item.blocked_by_user": (
+            "Launch at login was turned off in Task Manager, so the app can’t "
+            "enable it.\n\n"
+            "Open Task Manager → “Startup apps” and set Tabledown to “Enabled”."
+        ),
+        "login_item.blocked_by_policy": (
+            "A system policy controls launch at login, so it can’t be changed "
+            "here.\n\n"
+            "Please contact your administrator."
+        ),
         "welcome.title": "Welcome to Tabledown!",
         "welcome.intro": "Tabledown is running in your notification area (system tray) — look for the table icon.",
         "help.message": (

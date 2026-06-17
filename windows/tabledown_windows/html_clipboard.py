@@ -56,9 +56,25 @@ def extract_cf_html(data: bytes | str) -> str:
     end = end_fragment if _valid_offset(raw, end_fragment) else end_html
 
     if start is None or end is None or start >= end:
-        return _decode_html(raw)
+        return _ensure_table_wrapper(_decode_html(raw))
 
-    return _decode_html(raw[start:end])
+    return _ensure_table_wrapper(_decode_html(raw[start:end]))
+
+
+def _ensure_table_wrapper(html: str) -> str:
+    """Wrap a bare table-row fragment in ``<table>`` so parsers find the table.
+
+    Excel/Sheets put the CF_HTML ``StartFragment``/``EndFragment`` markers
+    *inside* the ``<table>`` element, so the extracted fragment is the table's
+    interior (``<col>``/``<tr>``/``<td>``) with the ``<table>`` open/close tag
+    left outside. Downstream table detection keys on ``<table>``, so without the
+    wrapper a real Excel table reads as plain text and never converts. Only wrap
+    when there are rows but no table tag — never touch non-table HTML.
+    """
+    lowered = html.lower()
+    if "<tr" in lowered and "<table" not in lowered:
+        return f"<table>{html}</table>"
+    return html
 
 
 def _coerce_bytes(data: bytes | str) -> bytes:

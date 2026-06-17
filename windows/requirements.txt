@@ -3,3 +3,8 @@ Pillow>=10.0
 pyinstaller>=6.0
 pystray>=0.19.5
 pywin32>=306
+# WinRT projection for the StartupTask API behind the "Open at Login" toggle
+# (windows/tabledown_windows/startup_task.py). Pre-release; needs an explicit
+# version so pip will pick it. PyInstaller must --collect-all winsdk to bundle
+# the native _winrt.pyd + namespace modules (see build_windows.ps1).
+winsdk>=1.0.0b10

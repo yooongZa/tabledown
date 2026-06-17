@@ -10,6 +10,7 @@ import time
 from PIL import Image, ImageChops, ImageDraw
 import pystray
 
+from . import startup_task
 from .conversion import converted_clipboard
 from .i18n import SUPPORTED_LANGUAGES, resolve_language, save_preferred_language, t
 from .logger import log
@@ -20,6 +21,11 @@ WELCOME_SHOWN_KEY = "welcome_shown"
 
 # MessageBoxW flags: MB_ICONINFORMATION.
 _MB_ICONINFORMATION = 0x00000040
+# Pull the dialog to the foreground and keep it on top. A tray callback runs
+# with no foreground rights, so without these the box can open *behind* the
+# active window — the user clicks Help again, stacking boxes that feel "stuck".
+_MB_SETFOREGROUND = 0x00010000
+_MB_TOPMOST = 0x00040000
 # GetSystemMetrics index for the small-icon width the tray actually uses
 # (DPI-scaled by Windows: 16 at 96dpi, larger on HiDPI).
 _SM_CXSMICON = 49
@@ -35,6 +41,15 @@ class TabledownWindowsApp:
         self._stop_watcher = threading.Event()
         self._last_change_count = clipboard_change_count()
         self._base_icon = None  # cached full-color source image
+        # Held while a help/welcome dialog is open so repeat clicks collapse
+        # onto the one window instead of stacking modal boxes.
+        self._dialog_lock = threading.Lock()
+        # Launch-at-login via the MSIX StartupTask (parity with macOS). One read
+        # seeds both flags; the state is None on source/dev runs and the bare
+        # non-MSIX exe (no package identity), where the menu omits the toggle.
+        login_state = startup_task.current_state()
+        self.login_supported = login_state is not None
+        self.login_enabled = login_state in startup_task.ENABLED_STATES
         self.icon = pystray.Icon(
             "Tabledown",
             icon=self._icon_image(),
@@ -51,7 +66,7 @@ class TabledownWindowsApp:
         watcher.start()
         log("windows clipboard watcher started")
         # setup runs on a pystray thread once the icon is ready; the first-run
-        # MessageBox may block that thread without holding up the tray itself.
+        # welcome goes through _show_message_box_async, so it never blocks.
         self.icon.run(setup=self._on_ready)
 
     # --- Menu ---
@@ -64,7 +79,7 @@ class TabledownWindowsApp:
             )
             for code in SUPPORTED_LANGUAGES
         ]
-        return pystray.Menu(
+        items = [
             # Fixed label + checkmark (matching macOS): the old swapping label
             # ("Enabled ✓"/"Disabled") read as ambiguous — current state or
             # action? A checked, stable label is unambiguous.
@@ -75,9 +90,20 @@ class TabledownWindowsApp:
             ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(t("menu.language", self.lang), pystray.Menu(*language_items)),
-            pystray.MenuItem(t("menu.help", self.lang), self.show_help),
-            pystray.MenuItem(t("menu.quit", self.lang), self.quit_app),
-        )
+        ]
+        # Preferences (language + login) sit before help/quit. The login toggle
+        # only appears where StartupTask is usable (packaged MSIX run).
+        if self.login_supported:
+            items.append(
+                pystray.MenuItem(
+                    t("menu.login_item", self.lang),
+                    self.toggle_login_item,
+                    checked=lambda _item: self.login_enabled,
+                )
+            )
+        items.append(pystray.MenuItem(t("menu.help", self.lang), self.show_help))
+        items.append(pystray.MenuItem(t("menu.quit", self.lang), self.quit_app))
+        return pystray.Menu(*items)
 
     def _refresh_menu(self) -> None:
         self.icon.menu = self._build_menu()
@@ -111,8 +137,30 @@ class TabledownWindowsApp:
         except Exception as exc:  # noqa: BLE001 - state flip must never crash the tray
             log(f"tray icon update failed: {exc}")
 
+    def toggle_login_item(self, _icon, _item) -> None:
+        # The WinRT toggle itself hops onto a private thread inside
+        # startup_task; this callback (the pystray pump thread) only blocks
+        # briefly on it, then refreshes the checkmark exactly like toggle().
+        want = not self.login_enabled
+        status = startup_task.set_enabled(want)
+        self.login_enabled = status in startup_task.ENABLED_STATES
+        log(f"login item toggle requested -> {want}, status={status}")
+        self._refresh_menu()
+        # Windows can refuse an enable the user/policy turned off elsewhere;
+        # say so instead of leaving the checkmark silently unchecked.
+        if want and status == "disabled_by_user":
+            self._show_message_box_async(
+                t("login_item.blocked_by_user", self.lang), t("help.title", self.lang)
+            )
+        elif want and status == "disabled_by_policy":
+            self._show_message_box_async(
+                t("login_item.blocked_by_policy", self.lang), t("help.title", self.lang)
+            )
+
     def show_help(self, _icon, _item) -> None:
-        self._message_box(t("help.message", self.lang), t("help.title", self.lang))
+        self._show_message_box_async(
+            t("help.message", self.lang), t("help.title", self.lang)
+        )
 
     def quit_app(self, _icon, _item) -> None:
         self._stop_watcher.set()
@@ -136,16 +184,45 @@ class TabledownWindowsApp:
             # Marked before showing so a failing MessageBox can never loop the
             # welcome on every launch.
             save_setting(WELCOME_SHOWN_KEY, True)
-            self._message_box(
+            self._show_message_box_async(
                 t("welcome.intro", self.lang) + "\n\n" + t("help.message", self.lang),
                 t("welcome.title", self.lang),
             )
         except Exception as exc:  # noqa: BLE001 - welcome must never kill the tray
             log(f"welcome failed: {exc}")
 
+    def _show_message_box_async(self, message: str, title: str) -> None:
+        """Show a modal info box without blocking the caller.
+
+        Menu callbacks run synchronously on pystray's message-pump thread, so a
+        blocking MessageBox there freezes the tray and — with no foreground
+        rights — can open behind the active window. The user then clicks Help
+        again, stacking boxes that look like they "won't close". Running it on
+        its own thread keeps the pump free; the lock collapses repeat clicks
+        onto the single open dialog.
+        """
+        if not self._dialog_lock.acquire(blocking=False):
+            return
+
+        def worker() -> None:
+            try:
+                self._message_box(message, title)
+            finally:
+                self._dialog_lock.release()
+
+        try:
+            threading.Thread(
+                target=worker, name="TabledownWindowsDialog", daemon=True
+            ).start()
+        except RuntimeError as exc:  # noqa: BLE001 - can't spawn (resource limit)
+            # Release the lock we just took so a later click can still try.
+            self._dialog_lock.release()
+            log(f"dialog thread failed to start: {exc}")
+
     @staticmethod
     def _message_box(message: str, title: str) -> None:
-        ctypes.windll.user32.MessageBoxW(None, message, title, _MB_ICONINFORMATION)
+        flags = _MB_ICONINFORMATION | _MB_SETFOREGROUND | _MB_TOPMOST
+        ctypes.windll.user32.MessageBoxW(None, message, title, flags)
 
     # --- Clipboard watcher ---
 

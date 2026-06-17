@@ -12,6 +12,11 @@ python (Join-Path $ScriptRoot "tools\make_icon.py") --source $SourceIcon --outpu
 
 Push-Location $ScriptRoot
 try {
+  # --collect-all winsdk: the StartupTask API (Open-at-Login) is reached
+  # through winsdk, whose namespace modules load lazily and whose code lives in
+  # a native _winrt.pyd — PyInstaller's static analysis misses both, so collect
+  # the whole package (submodules + binaries) or the toggle silently vanishes
+  # from the packaged build.
   python -m PyInstaller `
     --noconfirm `
     --clean `
@@ -20,6 +25,7 @@ try {
     --paths $ProjectRoot `
     --paths $ScriptRoot `
     --add-data $AssetData `
+    --collect-all winsdk `
     --icon $IconPath `
     $EntryPoint
 }

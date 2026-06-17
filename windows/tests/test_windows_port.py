@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import contextlib
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 WINDOWS_ROOT = Path(__file__).resolve().parents[1]
@@ -11,6 +13,7 @@ for path in (PROJECT_ROOT, WINDOWS_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
+from tabledown_windows import startup_task
 from tabledown_windows.conversion import WINDOWS_DROP_FORMATS, converted_clipboard
 from tabledown_windows.html_clipboard import CF_HTML_FORMAT_NAME, build_cf_html, extract_cf_html
 from tabledown_windows.i18n import SUPPORTED_LANGUAGES, detect_system_language, t
@@ -27,7 +30,63 @@ HTML_DOCUMENT = (
 )
 
 
+def _excel_style_cf_html(interior: str) -> bytes:
+    """Build CF_HTML the way Excel/Sheets do: the StartFragment/EndFragment
+    markers sit *inside* the table, so the fragment is the table interior
+    (``<col>``/``<tr>``/``<td>``) with the ``<table>`` tag left outside it.
+    """
+    pre = "<html>\r\n<body>\r\n<table border=0>"  # <table> precedes the fragment
+    post = "</table>\r\n</body>\r\n</html>"
+    html = pre + interior + post
+
+    header_tmpl = (
+        "Version:1.0\r\nStartHTML:0000000000\r\nEndHTML:0000000000\r\n"
+        "StartFragment:0000000000\r\nEndFragment:0000000000\r\n"
+    )
+    base = len(header_tmpl.encode("utf-8"))
+    start_html = base
+    start_fragment = base + len(pre.encode("utf-8"))  # points AFTER <table>
+    end_fragment = start_fragment + len(interior.encode("utf-8"))
+    end_html = base + len(html.encode("utf-8"))
+    header = (
+        f"Version:1.0\r\nStartHTML:{start_html:010d}\r\nEndHTML:{end_html:010d}\r\n"
+        f"StartFragment:{start_fragment:010d}\r\nEndFragment:{end_fragment:010d}\r\n"
+    )
+    return header.encode("utf-8") + html.encode("utf-8")
+
+
 class WindowsPortTests(unittest.TestCase):
+    def test_excel_cf_html_fragment_without_table_tag_is_wrapped(self):
+        # Excel's fragment omits the <table> tag (markers are inside it). Without
+        # wrapping, table detection fails and an Excel copy never converts.
+        payload = _excel_style_cf_html(
+            "<col width=80><tr><td>동해물과</td><td>백두산이</td></tr>"
+            "<tr><td>마르고</td><td>닳도록</td></tr>"
+        )
+
+        html = extract_cf_html(payload)
+
+        self.assertIn("<table", html.lower())
+        self.assertIn("동해물과", html)
+
+    def test_real_excel_table_converts_to_markdown(self):
+        # The end-to-end regression for the reported "Excel tables don't convert"
+        # bug: a realistic Excel CF_HTML payload + its TSV text must yield a
+        # Markdown table in the text slot (html kept, only rendered images dropped).
+        payload = _excel_style_cf_html(
+            "<col width=80 span=2>"
+            "<tr><td>동해물과</td><td>백두산이</td></tr>"
+            "<tr><td>마르고</td><td>닳도록</td></tr>"
+        )
+        result = converted_clipboard(
+            {"html": extract_cf_html(payload), "text": "동해물과\t백두산이\r\n마르고\t닳도록"}
+        )
+
+        self.assertIsNotNone(result)
+        self.assertIn("| 동해물과 | 백두산이 |", result["text"])
+        self.assertIn("| 마르고 | 닳도록 |", result["text"])
+        self.assertNotIn(CF_HTML_FORMAT_NAME, result["drop_formats"])
+
     def test_cf_html_roundtrip_preserves_utf8_fragment(self):
         payload = build_cf_html("<table><tr><td>한글</td></tr></table>")
 
@@ -84,6 +143,161 @@ class WindowsPortTests(unittest.TestCase):
         self.assertEqual(t("menu.help", "ko"), "도움말")
         self.assertEqual(t("menu.help", "fr"), "Help")
         self.assertEqual(t("missing.key", "ko"), "missing.key")
+
+    def test_login_item_translations_exist(self):
+        # The menu label and both "couldn't enable" hints must resolve in each
+        # language — not fall back to the bare key.
+        self.assertEqual(t("menu.login_item", "ko"), "로그인 시 자동 실행")
+        self.assertEqual(t("menu.login_item", "en"), "Open at Login")
+        for lang in SUPPORTED_LANGUAGES:
+            for key in ("login_item.blocked_by_user", "login_item.blocked_by_policy"):
+                self.assertNotEqual(t(key, lang), key)
+
+
+class _FakeWinrtTask:
+    """Stand-in for a WinRT StartupTask object.
+
+    ``state`` returns a real ``StartupTaskState`` member so the production
+    ``_state_name`` mapping is exercised. ``request_enable_async`` returns a
+    coroutine (awaitable, like the real ``IAsyncOperation``); ``disable`` is
+    synchronous, matching the real API.
+    """
+
+    def __init__(self, state, becomes=None):
+        self._state = state
+        self._becomes = becomes
+        self.enable_requested = False
+        self.disabled = False
+
+    @property
+    def state(self):
+        return self._state
+
+    def request_enable_async(self):
+        async def _op():
+            self.enable_requested = True
+            if self._becomes is not None:
+                self._state = self._becomes
+        return _op()
+
+    def disable(self) -> None:
+        self.disabled = True
+        if self._becomes is not None:
+            self._state = self._becomes
+
+
+class _FakeStartupTaskApi:
+    """Stand-in for the winsdk ``StartupTask`` class (its ``get_async``)."""
+
+    def __init__(self, task: _FakeWinrtTask):
+        self._task = task
+
+    def get_async(self, _task_id):
+        async def _op():
+            return self._task
+        return _op()
+
+
+@contextlib.contextmanager
+def _patched_api(task: _FakeWinrtTask):
+    # Swap winsdk's StartupTask for a fake; the real _run/asyncio/_state_name
+    # orchestration runs against it on the production code path.
+    with mock.patch.object(startup_task, "StartupTask", _FakeStartupTaskApi(task)):
+        yield
+
+
+class StartupTaskDegradeTests(unittest.TestCase):
+    def test_degrades_without_winrt(self):
+        # No winsdk / no package identity: every entry point is safe and falsey,
+        # so the menu just omits the toggle (mirrors macOS login_item).
+        with mock.patch.object(startup_task, "StartupTask", None):
+            self.assertIsNone(startup_task.current_state())
+            self.assertFalse(startup_task.is_supported())
+            self.assertFalse(startup_task.is_enabled())
+            self.assertEqual(startup_task.set_enabled(True), "unavailable")
+
+
+@unittest.skipUnless(
+    startup_task.StartupTaskState is not None, "winsdk StartupTaskState required"
+)
+class StartupTaskTests(unittest.TestCase):
+    def _state(self, name):
+        return getattr(startup_task.StartupTaskState, name)
+
+    def test_current_state_and_is_enabled(self):
+        with _patched_api(_FakeWinrtTask(self._state("ENABLED"))):
+            self.assertEqual(startup_task.current_state(), "enabled")
+            self.assertTrue(startup_task.is_supported())
+            self.assertTrue(startup_task.is_enabled())
+
+    def test_enable_requests_and_reports_enabled(self):
+        fake = _FakeWinrtTask(self._state("DISABLED"), becomes=self._state("ENABLED"))
+        with _patched_api(fake):
+            self.assertEqual(startup_task.set_enabled(True), "enabled")
+        self.assertTrue(fake.enable_requested)
+
+    def test_disable_calls_disable(self):
+        fake = _FakeWinrtTask(self._state("ENABLED"), becomes=self._state("DISABLED"))
+        with _patched_api(fake):
+            self.assertEqual(startup_task.set_enabled(False), "disabled")
+        self.assertTrue(fake.disabled)
+
+    def test_blocked_by_user_is_not_an_enabled_state(self):
+        # Windows can keep an enable request DISABLED_BY_USER; the read-back name
+        # must surface that and never count as enabled.
+        fake = _FakeWinrtTask(self._state("DISABLED_BY_USER"))  # stays put
+        with _patched_api(fake):
+            status = startup_task.set_enabled(True)
+        self.assertTrue(fake.enable_requested)
+        self.assertEqual(status, "disabled_by_user")
+        self.assertNotIn(status, startup_task.ENABLED_STATES)
+
+
+@unittest.skipUnless(sys.platform.startswith("win"), "tray app is Windows-only")
+class LoginMenuTests(unittest.TestCase):
+    def _make_app(self, *, supported: bool, enabled: bool = False):
+        # app.__init__ seeds login_supported/login_enabled from one
+        # current_state() read; None means "unsupported, hide the toggle".
+        state = ("enabled" if enabled else "disabled") if supported else None
+        with mock.patch.object(startup_task, "current_state", return_value=state):
+            from tabledown_windows.app import TabledownWindowsApp
+
+            return TabledownWindowsApp()
+
+    def _labels(self, app):
+        return [getattr(item, "text", "") for item in app.icon.menu]
+
+    def test_menu_includes_login_item_when_supported(self):
+        app = self._make_app(supported=True)
+        self.assertIn(t("menu.login_item", app.lang), self._labels(app))
+
+    def test_menu_omits_login_item_when_unsupported(self):
+        app = self._make_app(supported=False)
+        self.assertNotIn(t("menu.login_item", app.lang), self._labels(app))
+
+    def test_toggle_blocked_by_user_stays_unchecked_and_warns(self):
+        app = self._make_app(supported=True, enabled=False)
+        shown = []
+        with mock.patch.object(startup_task, "set_enabled", return_value="disabled_by_user"), \
+             mock.patch.object(app, "_refresh_menu"), \
+             mock.patch.object(
+                 app, "_show_message_box_async", side_effect=lambda msg, _title: shown.append(msg)
+             ):
+            app.toggle_login_item(None, None)
+        self.assertFalse(app.login_enabled)  # checkmark stays truthful
+        self.assertEqual(len(shown), 1)      # user is told why
+
+    def test_toggle_enable_checks_and_is_silent(self):
+        app = self._make_app(supported=True, enabled=False)
+        shown = []
+        with mock.patch.object(startup_task, "set_enabled", return_value="enabled"), \
+             mock.patch.object(app, "_refresh_menu"), \
+             mock.patch.object(
+                 app, "_show_message_box_async", side_effect=lambda msg, _title: shown.append(msg)
+             ):
+            app.toggle_login_item(None, None)
+        self.assertTrue(app.login_enabled)
+        self.assertEqual(shown, [])  # success is silent — the checkmark says it
 
 
 if __name__ == "__main__":
