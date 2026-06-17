@@ -102,7 +102,29 @@ Partner Center 에서 새 submission:
    GitHub Pages/README 링크로 제공. 핵심: "모든 변환은 로컬, 외부 전송 없음".
 4. **Store listing**: 설명·스크린샷·검색 키워드(축 5 의 SEO 키워드 재활용:
    excel to markdown, csv to markdown, clipboard, menu bar/tray, obsidian).
-5. 제출 → 인증 **최대 3 영업일**. 통과 후 약 15분 내 노출.
+5. **Age ratings(연령등급)**: IARC 설문 작성 → 등급 자동 생성(아래 5.1).
+6. 제출 → 인증 **최대 3 영업일**. 통과 후 약 15분 내 노출.
+
+### 5.1 연령등급(IARC age rating) — 발급 완료
+
+제출 과정의 **IARC(International Age Rating Coalition) 설문**을 작성하면 연령등급이
+자동 생성된다. Tabledown 은 콘텐츠 없는 생산성 유틸리티라 전 연령으로 발급됐고,
+**2026-06-16 Microsoft storefront 에 live(발효)** 됐다.
+
+| 항목 | 값 |
+|---|---|
+| Global Rating ID | `3370e471-8485-81a1-8c70-3f4acbb3cce6` |
+| 제품 / 회사 | Tabledown / LIMOD |
+| 등급일 / 스토어 | 2026-06-16 (화) / Microsoft (live) |
+
+- **Global Rating ID 는 보관할 것** ⭐ — IARC 라이선스를 받은 **다른 스토어**(Steam·
+  Google Play 등)에 올릴 때 온보딩에서 "Global Rating ID" 또는 "IARC Certificate ID"
+  를 물으면 이 값을 그대로 입력 → **설문 재작성 없이 등급 이식**.
+- **재설문 조건**: 앱을 크게 바꿔 IARC questionnaire(설문) 답이 달라질 정도면 설문을
+  다시 작성하고 새 등급을 받아야 한다. 단순 업데이트·기능 추가로 답이 안 바뀌면 기존
+  등급이 그대로 유효.
+- 등급이 틀렸다고 보이면 출시 후 제공되는 **"request a rating check"** 링크로 재검토
+  요청(시작까지 1~3 영업일, 추가 자료 요청 가능).
 
 ---
 
@@ -127,3 +149,4 @@ Store 출시만으로 `msstore` 소스 검색이 되므로 우선순위 낮음.
 - [ ] PyInstaller exe 가 Defender 에 오탐될 수 있음 → Store 재서명으로 대부분 해소.
 - [ ] 인증 노트(Notes for certification)에 클립보드 권한 사유·테스트 방법 기재.
 - [ ] GitHub Releases 직접 다운로드(.msix/.exe)를 병행하면 **Store 와 동일 최신 버전** 유지.
+- [x] 연령등급(IARC) 발급 — Global Rating ID `3370e471-8485-81a1-8c70-3f4acbb3cce6` 보관(§5.1).
