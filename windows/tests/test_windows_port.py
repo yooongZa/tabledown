@@ -95,6 +95,31 @@ class WindowsPortTests(unittest.TestCase):
         self.assertIn("<table>", html)
         self.assertIn("한글", html)
 
+    def test_decode_html_prefers_cp1252_over_utf16_mojibake(self):
+        # An even-length, invalid-UTF-8 cp1252 fragment must decode as cp1252,
+        # not be mis-read as UTF-16 (which "succeeds" and merges latin byte
+        # pairs into CJK glyphs, then fails table detection — a conversion macOS
+        # performs because it reads ready-made HTML and never mis-decodes).
+        from tabledown_windows.html_clipboard import _decode_html
+
+        raw = "café".encode("cp1252")  # b'caf\xe9' — invalid utf-8, even length
+        self.assertEqual(_decode_html(raw), "café")
+
+    def test_decode_html_honors_utf16_bom(self):
+        # A genuine UTF-16 fragment (BOM present) is still decoded correctly.
+        from tabledown_windows.html_clipboard import _decode_html
+
+        self.assertEqual(_decode_html("한글표".encode("utf-16")), "한글표")
+
+    def test_ensure_table_wrapper_ignores_non_row_tags(self):
+        # <track>/<trail>/<tr-foo> share the "<tr" prefix but are not rows; they
+        # must not be wrapped into a bogus <table>. A real <tr> still is.
+        from tabledown_windows.html_clipboard import _ensure_table_wrapper
+
+        track = "<video><track kind='subtitles'></video>"
+        self.assertEqual(_ensure_table_wrapper(track), track)
+        self.assertIn("<table>", _ensure_table_wrapper("<tr><td>x</td></tr>"))
+
     def test_bare_excel_table_augments_text_and_keeps_html(self):
         # Invariant 3 (unified in 0.2.4): a bare Excel/Sheets table gains a
         # Markdown text slot but KEEPS CF_HTML (only rendered images are

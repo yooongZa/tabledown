@@ -72,7 +72,10 @@ def _ensure_table_wrapper(html: str) -> str:
     when there are rows but no table tag — never touch non-table HTML.
     """
     lowered = html.lower()
-    if "<tr" in lowered and "<table" not in lowered:
+    # Match a real row tag (<tr>, <tr ...>, <tr/>) on a word boundary so
+    # <track>/<trail>/<tr-foo> are not mistaken for table rows and wrapped into
+    # a bogus <table> (which would then fail to parse).
+    if re.search(r"<tr[\s/>]", lowered) and "<table" not in lowered:
         return f"<table>{html}</table>"
     return html
 
@@ -98,7 +101,22 @@ def _valid_offset(raw: bytes, offset: int | None) -> bool:
 
 
 def _decode_html(data: bytes) -> str:
-    for encoding in ("utf-8", "utf-16", "cp1252"):
+    """Decode CF_HTML bytes to text, matching how macOS reads ready-made HTML.
+
+    CF_HTML is a byte-oriented format spec'd as UTF-8. cp1252 maps all 256 byte
+    values, so it is a lossless final fallback. utf-16 is deliberately NOT tried
+    by content-sniffing: a valid even-length cp1252/latin fragment can *succeed*
+    under utf-16 and silently mojibake (adjacent latin bytes merge into CJK
+    glyphs), which then fails table detection and skips a conversion macOS would
+    perform — on macOS the HTML arrives as a proper string and never mis-decodes.
+    Only honor utf-16 when a byte-order mark actually declares it.
+    """
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        try:
+            return data.decode("utf-16")
+        except UnicodeDecodeError:
+            pass
+    for encoding in ("utf-8", "cp1252"):
         try:
             return data.decode(encoding)
         except UnicodeDecodeError:
