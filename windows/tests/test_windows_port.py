@@ -13,7 +13,7 @@ for path in (PROJECT_ROOT, WINDOWS_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from tabledown_windows import startup_task
+from tabledown_windows import single_instance, startup_task
 from tabledown_windows.conversion import WINDOWS_DROP_FORMATS, converted_clipboard
 from tabledown_windows.html_clipboard import CF_HTML_FORMAT_NAME, build_cf_html, extract_cf_html
 from tabledown_windows.i18n import SUPPORTED_LANGUAGES, detect_system_language, t
@@ -323,6 +323,58 @@ class LoginMenuTests(unittest.TestCase):
             app.toggle_login_item(None, None)
         self.assertTrue(app.login_enabled)
         self.assertEqual(shown, [])  # success is silent — the checkmark says it
+
+
+class SingleInstanceTests(unittest.TestCase):
+    """The named-mutex guard that stops a second tray (and second watcher)."""
+
+    def setUp(self):
+        # acquire_single_instance stashes the live handle in a module global;
+        # clear it so one test's claim can't leak into the next.
+        single_instance._held_handle = None
+        self.addCleanup(setattr, single_instance, "_held_handle", None)
+
+    def test_first_instance_acquires_and_holds_handle(self):
+        # Fresh mutex (not pre-existing) -> this is the owner; the handle is kept
+        # alive for the process lifetime so the mutex outlives the call.
+        with mock.patch.object(single_instance, "_create_mutex", return_value=(4321, False)):
+            self.assertTrue(single_instance.acquire_single_instance())
+        self.assertEqual(single_instance._held_handle, 4321)
+
+    def test_second_instance_is_blocked(self):
+        # CreateMutexW reported ERROR_ALREADY_EXISTS -> a sibling owns it; bail
+        # out and do not retain a handle.
+        with mock.patch.object(single_instance, "_create_mutex", return_value=(4321, True)):
+            self.assertFalse(single_instance.acquire_single_instance())
+        self.assertIsNone(single_instance._held_handle)
+
+    def test_missing_kernel_degrades_to_allowed(self):
+        # Non-Windows host (no kernel32): _create_mutex yields (None, False), so
+        # the app is allowed to start rather than refusing over a missing guard.
+        with mock.patch.object(single_instance, "_create_mutex", return_value=(None, False)):
+            self.assertTrue(single_instance.acquire_single_instance())
+
+
+@unittest.skipUnless(sys.platform.startswith("win"), "tray app is Windows-only")
+class SingleInstanceMainTests(unittest.TestCase):
+    def test_main_skips_tray_when_already_running(self):
+        # The guard must short-circuit main() before the tray app is built, so a
+        # second launch adds neither an icon nor a clipboard watcher.
+        from tabledown_windows import app
+
+        with mock.patch.object(app.single_instance, "acquire_single_instance", return_value=False), \
+             mock.patch.object(app, "TabledownWindowsApp") as fake_app:
+            app.main()
+        fake_app.assert_not_called()
+
+    def test_main_builds_tray_when_first(self):
+        from tabledown_windows import app
+
+        with mock.patch.object(app.single_instance, "acquire_single_instance", return_value=True), \
+             mock.patch.object(app, "TabledownWindowsApp") as fake_app:
+            app.main()
+        fake_app.assert_called_once_with()
+        fake_app.return_value.run.assert_called_once_with()
 
 
 if __name__ == "__main__":

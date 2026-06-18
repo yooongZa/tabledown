@@ -50,6 +50,7 @@ windows/
 │   ├── html_clipboard.py      # Windows CF_HTML format(HTML 클립보드 형식)
 │   ├── i18n.py                # Windows locale(로캘) + 언어 저장
 │   ├── logger.py              # Windows 로그 경로
+│   ├── single_instance.py     # 단일 인스턴스 가드(named mutex — 트레이 중복 실행 방지)
 │   ├── startup_task.py        # 로그인 시 자동 실행(WinRT StartupTask, MSIX)
 │   └── win_clipboard.py       # pywin32 clipboard(클립보드) 래퍼
 ├── tests/

@@ -10,7 +10,7 @@ import time
 from PIL import Image, ImageChops, ImageDraw
 import pystray
 
-from . import startup_task
+from . import single_instance, startup_task
 from .conversion import converted_clipboard
 from .i18n import SUPPORTED_LANGUAGES, resolve_language, save_preferred_language, t
 from .logger import log
@@ -339,6 +339,11 @@ class TabledownWindowsApp:
 
 
 def main() -> None:
+    # Refuse a second tray instance (manual launch on top of the StartupTask, a
+    # stale copy a crash left behind, …). Two clipboard watchers racing would
+    # stomp each other's conversions. macOS gets this from LaunchServices.
+    if not single_instance.acquire_single_instance():
+        return
     TabledownWindowsApp().run()
 
 

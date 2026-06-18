@@ -211,6 +211,20 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
   상태명을 돌려주므로 체크마크가 거짓으로 켜지지 않고, 앱이 안내 알림을 띄운다. **enable 결과를 무조건
   성공으로 가정하지 말 것.**
 
+### 단일 인스턴스 (Windows 전용 — `single_instance.py`)
+- **왜 Windows 만**: macOS 는 LaunchServices 가 `.app` 두 번째 실행을 막아 공짜로 단일 인스턴스다.
+  Windows 는 아무 것도 안 막아서 **수동 실행 + StartupTask(로그인 자동실행), 더블클릭 중복, 크래시가
+  남긴 유령 프로세스**가 각각 트레이 아이콘 + 클립보드 워처를 하나씩 더 띄운다. **워처가 둘이면 클립보드를
+  서로 덮어써 변환 불변식(0~4)이 깨질 수 있다** → `main()` 은 두 번째 인스턴스를 거부한다.
+- **가드**: named mutex `CreateMutexW("Local\\TabledownSingleInstance")`. 첫 프로세스가 만들고, 이후
+  프로세스는 `ERROR_ALREADY_EXISTS` 를 보고 `main()` 에서 조용히 빠진다(`acquire_single_instance()` → False).
+  핸들은 **모듈 전역(`_held_handle`)에 잡아둬 프로세스 수명 내내 안 닫는다** — 닫으면 mutex 가 풀려 세 번째가
+  들어온다. **이 보유를 "안 쓰는 변수"로 보고 지우지 말 것.**
+- **`Local\` 네임스페이스(세션 한정)**, `Global\` 아님 — 빠른 사용자 전환 시 사용자별 1개 허용이 의도다.
+- **이식성**: kernel32 접근은 함수 안으로 미뤄(`_create_mutex`) **비-Windows(테스트 러너)에서 import 가
+  안 깨지게** 한다. 거기선 `(None, False)` → "형제 없음, 실행 허용"으로 degrade(가드 없다고 시작 거부 금지).
+  테스트는 `_create_mutex` 를 stub 해 first/second/no-kernel 3경로를 검증(`single_instance_*`).
+
 ## UI 관례 (메뉴·피드백)
 
 - 메뉴 순서: 동작(토글·XML) → 설정 → 후원 → 도움말·종료. 후원을 설정 위로 올리지 말 것(첫인상).
