@@ -55,6 +55,16 @@ $PyInstallerOut = Join-Path $DistDir "Tabledown-Windows"
 $ManifestSrc = Join-Path $ScriptRoot "packaging\AppxManifest.xml"
 $MasterIcon  = Join-Path $ProjectRoot "assets\generated\tablemark_app_1024.png"
 
+# Use the project venv's interpreter for every python step (version read, asset
+# generation, and — via build_windows.ps1 — PyInstaller). A bare `python` can
+# resolve to a system Python without Pillow/PyInstaller, which doesn't fail the
+# pack: makeappx just bundles a STALE onedir and the .msix silently ships old
+# code. Fail loud instead. (build_windows.ps1 resolves its own copy too.)
+$Python = Join-Path $ScriptRoot ".venv\Scripts\python.exe"
+if (-not (Test-Path $Python)) {
+  throw "venv python not found at $Python — create it: python -m venv .venv; .venv\Scripts\pip install -r requirements.txt"
+}
+
 # --- 0. 버전 (tabledown_windows.__version__ -> 4-part, revision=0) ---
 # Windows MSIX 는 출시된 0.2.4 기능 상태로 배포하므로 Windows 포트가 자기 버전을
 # 소유한다(windows\tabledown_windows\__init__.py). 공유 tablemark.__version__(현재
@@ -62,7 +72,7 @@ $MasterIcon  = Join-Path $ProjectRoot "assets\generated\tablemark_app_1024.png"
 # MSIX 가 0.3.0.0 으로 잘못 찍힌다.
 Push-Location $ScriptRoot
 try {
-  $rawVersion = (python -c "import tabledown_windows; print(tabledown_windows.__version__)").Trim()
+  $rawVersion = (& $Python -c "import tabledown_windows; print(tabledown_windows.__version__)").Trim()
 } finally {
   Pop-Location
 }
@@ -82,7 +92,7 @@ if (-not (Test-Path $PyInstallerOut)) {
 
 # --- 2. Assets ---
 Write-Host "==> MSIX assets" -ForegroundColor Cyan
-python (Join-Path $ScriptRoot "tools\make_msix_assets.py") --source $MasterIcon --output-dir $AssetsDir
+& $Python (Join-Path $ScriptRoot "tools\make_msix_assets.py") --source $MasterIcon --output-dir $AssetsDir
 
 # --- 3. Staging ---
 Write-Host "==> Staging" -ForegroundColor Cyan
