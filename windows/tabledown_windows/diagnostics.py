@@ -10,13 +10,14 @@ to any external server" promise intact (PRIVACY.md). See the project memory
   1. ``install_crash_hooks()`` — ``sys.excepthook`` + ``threading.excepthook``
      (the clipboard watcher is a daemon thread sys.excepthook never sees) +
      ``faulthandler`` for native access-violations, dumped to a sibling
-     ``Tabledown.crash`` file held open for the process lifetime.
+     ``Tabledown.crash`` file held open for the process lifetime. Crash records
+     hold the exception TYPE + frame locations only, never the message.
   2. ``export_diagnostics()`` + ``reveal()`` — write a SCRUBBED bundle and open
      its folder in Explorer. No clipboard access, so it can't race the watcher.
 
-Importable on a non-Windows test host: ``os.startfile`` (Windows-only) is called
-only inside ``reveal()`` behind try/except, and every signal is looked up with
-``getattr`` so a missing ``SIGBUS`` degrades cleanly.
+``scrub()`` is kept byte-for-byte identical to the macOS port's so the two don't
+drift. Importable on a non-Windows test host: ``os.startfile`` (Windows-only) is
+called only inside ``reveal()`` behind try/except.
 """
 from __future__ import annotations
 
@@ -71,30 +72,40 @@ def _install_faulthandler() -> None:
     try:
         CRASH_PATH.parent.mkdir(parents=True, exist_ok=True)
         _crash_file = open(CRASH_PATH, "a", buffering=1, encoding="utf-8")
+        # enable() installs handlers for the fatal signals (SIGSEGV/SIGFPE/
+        # SIGABRT; faulthandler catches common access-violations) and dumps every
+        # thread's Python traceback to our held fd, then chains to the default so
+        # Windows Error Reporting still runs. (register() REFUSES these fatal
+        # signals — "use enable() instead" — so there is nothing more to register.)
         faulthandler.enable(file=_crash_file, all_threads=True)
-        import signal
-        # Windows faulthandler supports a subset (no SIGBUS); getattr skips the
-        # missing ones. chain=True keeps Windows Error Reporting in the loop.
-        for name in ("SIGSEGV", "SIGABRT", "SIGFPE", "SIGBUS"):
-            sig = getattr(signal, name, None)
-            if sig is None:
-                continue
-            try:
-                faulthandler.register(sig, file=_crash_file, all_threads=True, chain=True)
-            except (RuntimeError, ValueError, OSError):
-                pass
     except (OSError, ValueError, RuntimeError) as exc:
         log(f"faulthandler setup skipped: {type(exc).__name__}")
 
 
+def _format_record(where: str, exc_type, exc_tb) -> str:
+    """Build a payload-free crash record: exception TYPE + stack frames only.
+
+    Deliberately omits the exception message/args (``str(exc_value)``): those can
+    carry clipboard/table text or other payload — the same reason the catch sites
+    log ``type(exc).__name__`` only. Frame source lines are the app's own CODE,
+    not user data; ``scrub`` still anonymizes the file paths."""
+    name = getattr(exc_type, "__name__", "error")
+    lines = [f"UNCAUGHT [{where}] {name}"]
+    for frame in traceback.extract_tb(exc_tb):
+        lines.append(f"  {frame.filename}:{frame.lineno} in {frame.name}: {(frame.line or '').strip()}")
+    return scrub("\n".join(lines))
+
+
 def _record(where: str, exc_type, exc_value, exc_tb) -> None:
-    """Scrub + log an uncaught exception. Never raises."""
+    """Log an uncaught exception (type + frames, never the message). Never raises.
+
+    ``exc_value`` is accepted to match the hook signatures but intentionally not
+    logged — its text can contain payload."""
     try:
-        formatted = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
-        log(f"UNCAUGHT [{where}]\n{scrub(formatted)}")
-    except Exception:  # noqa: BLE001
+        log(_format_record(where, exc_type, exc_tb))
+    except Exception:  # noqa: BLE001 - a crash hook must never crash
         try:
-            log(f"UNCAUGHT [{where}] {getattr(exc_type, '__name__', 'error')} (unformattable)")
+            log(f"UNCAUGHT [{where}] {getattr(exc_type, '__name__', 'error')}")
         except Exception:  # noqa: BLE001
             pass
 
@@ -102,23 +113,44 @@ def _record(where: str, exc_type, exc_value, exc_tb) -> None:
 # --- Scrub ----------------------------------------------------------------
 
 def scrub(text: str) -> str:
-    """Remove PII so a shared log can't leak paths, usernames, drive labels, or
-    secrets. Over-scrubbing is the safe direction."""
+    """Best-effort PII redaction so a shared diagnostics file can't leak paths,
+    usernames, volume/drive names, or obvious secrets. Over-redaction is the safe
+    direction.
+
+    Best-effort BY DESIGN: the real guarantee is that payload is kept out of what
+    gets logged (see ``_format_record`` and the type-only catch sites), not that
+    this catches every secret. Kept byte-for-byte identical to the macOS port's
+    ``scrub()`` so the two don't drift."""
     s = text
     home = str(Path.home())
-    if home and home != ".":
-        s = s.replace(home, "%USERPROFILE%")
-    # C:\Users\<name>\… and /Users/<name>/… (defensive: both path styles).
-    s = re.sub(r"(?i)([A-Z]:\\Users\\)[^\\\n]+(\\)", r"\1<user>\2", s)
-    s = re.sub(r"(?i)([A-Z]:\\Users\\)[^\\\n]+", r"\1<user>", s)
+    if home and home not in ("", ".", "/", "\\"):
+        s = s.replace(home, "~")
+    # User home directories (POSIX + Windows, any drive letter).
     s = re.sub(r"/Users/[^/\n]+/", "~/", s)
     s = re.sub(r"/Users/[^/\n]+", "~", s)
+    s = re.sub(r"/home/[^/\n]+/", "~/", s)
+    s = re.sub(r"/home/[^/\n]+", "~", s)
+    s = re.sub(r"(?i)[A-Z]:\\Users\\[^\\\n]+", "~", s)
+    # Mounted volume / external-drive labels (macOS) and per-user temp dirs.
+    s = re.sub(r"/Volumes/[^\"'\n]*", "/Volumes/…", s)
+    s = re.sub(r"/private/var/folders/[^\s\"']*", "~tmp", s)
+    s = re.sub(r"/var/folders/[^\s\"']*", "~tmp", s)
+    # Standalone username token (reverse-DNS ids, dispatch-queue labels, …).
     user = _username()
     if user:
         s = re.sub(r"(?i)\b" + re.escape(user) + r"\b", "<user>", s)
-    s = re.sub(r"(?i)(api[_-]?key|secret|token|password|passwd|pwd|bearer)\b\s*[:=]\s*\S+",
-               r"\1=***", s)
-    s = re.sub(r"\b(sk|pk|ghp|gho|ghs|xox[baprs])[-_][A-Za-z0-9]{8,}", "***", s)
+    # Inline URL credentials:  scheme://user:pass@host -> scheme://***@host
+    s = re.sub(r"([A-Za-z][A-Za-z0-9+.\-]*://)[^/\s:@]+:[^/\s@]+@", r"\1***@", s)
+    # Secrets: bearer tokens (space form — the canonical "Authorization: Bearer
+    # <tok>"), keyword=value (incl. underscored keys like aws_secret_access_key),
+    # and well-known credential shapes that don't carry a keyword.
+    s = re.sub(r"(?i)\bbearer\s+[A-Za-z0-9._\-]{6,}", "Bearer ***", s)
+    s = re.sub(r"(?i)[\w.\-]*(?:api[_-]?key|secret|token|password|passwd|pwd|credential)[\w.\-]*\s*[:=]\s*\S+",
+               "***", s)
+    s = re.sub(r"\b(?:AKIA|ASIA)[0-9A-Z]{12,}", "***", s)                                     # AWS access key id
+    s = re.sub(r"\bAIza[0-9A-Za-z_\-]{20,}", "***", s)                                        # Google API key
+    s = re.sub(r"\beyJ[A-Za-z0-9_\-]{6,}\.[A-Za-z0-9_\-]{6,}\.[A-Za-z0-9_\-]{4,}", "***", s)  # JWT
+    s = re.sub(r"\b(?:sk|pk|ghp|gho|ghs|xox[baprs])[-_][A-Za-z0-9\-]{6,}", "***", s)          # prefixed tokens
     return s
 
 
@@ -140,8 +172,9 @@ def export_diagnostics() -> Path | None:
             f"Tabledown {__version__} (Windows)",
             _os_string(),
             "",
-            "This file is scrubbed: home paths, usernames, drive labels, and",
-            "secrets are removed. It contains NO clipboard or table contents.",
+            "Best-effort scrubbed: home paths, usernames, volume/drive names, and",
+            "obvious secrets are redacted. Crash records hold only error types and",
+            "code locations — never the exception message, clipboard, or table data.",
             "",
             "=== recent log ===",
             scrub(_tail_text(max_chars=60000)),

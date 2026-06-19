@@ -173,7 +173,13 @@ class TabledownWindowsApp:
         """
         def worker() -> None:
             try:
-                path = diagnostics.export_diagnostics() or diagnostics.LOG_PATH
+                path = diagnostics.export_diagnostics()
+                if path is None:
+                    # Do NOT reveal the raw, unscrubbed log as a "report".
+                    self._show_message_box_async(
+                        t("diagnostics.export_failed", self.lang), t("help.title", self.lang)
+                    )
+                    return
                 diagnostics.reveal(path)
             except Exception as exc:  # noqa: BLE001 - never kill the tray
                 log(f"share diagnostics failed: {type(exc).__name__}")

@@ -568,6 +568,11 @@ def run_diagnostics_tests() -> list[TestResult]:
     check("scrub_removes_home_and_user", _scrub_removes_home_and_user)
     check("scrub_removes_volume_name", _scrub_removes_volume_name)
     check("scrub_masks_secret_token", _scrub_masks_secret_token)
+    check("scrub_masks_space_bearer_token", _scrub_masks_space_bearer_token)
+    check("scrub_masks_underscored_secret_key", _scrub_masks_underscored_secret_key)
+    check("scrub_masks_url_credentials", _scrub_masks_url_credentials)
+    check("scrub_masks_cloud_key_prefixes", _scrub_masks_cloud_key_prefixes)
+    check("crash_record_omits_exception_message", _crash_record_omits_exception_message)
     check("install_hooks_sets_thread_excepthook", _install_hooks_sets_thread_excepthook)
 
     return tests
@@ -803,6 +808,57 @@ def _scrub_masks_secret_token() -> str:
     if "abcdef123456" in out or "ghp_AAAAAAAAAAAAAAAAAA" in out:
         raise AssertionError(f"secret not masked: {out!r}")
     return out
+
+
+def _scrub_masks_space_bearer_token() -> str:
+    from tablemark import diagnostics
+    out = diagnostics.scrub("Authorization: Bearer eyJhbGciOiJ.payloadpart9.signature99")
+    if "eyJhbGciOiJ" in out:
+        raise AssertionError(f"space-form bearer/JWT token leaked: {out!r}")
+    return out
+
+
+def _scrub_masks_underscored_secret_key() -> str:
+    from tablemark import diagnostics
+    out = diagnostics.scrub("aws_secret_access_key = wJalrXUtnFEMIabc123def")
+    if "wJalrXUtnFEMIabc123def" in out:
+        raise AssertionError(f"underscored secret key not masked: {out!r}")
+    return out
+
+
+def _scrub_masks_url_credentials() -> str:
+    from tablemark import diagnostics
+    out = diagnostics.scrub("postgres://admin:topsecretpw@db.example:5432/x")
+    if "topsecretpw" in out:
+        raise AssertionError(f"inline url credential leaked: {out!r}")
+    return out
+
+
+def _scrub_masks_cloud_key_prefixes() -> str:
+    from tablemark import diagnostics
+    samples = ["AKIAIOSFODNN7EXAMPLE", "sk-proj-AB12CD34EF56GH78", "ghp_ABCDEFGH12345678"]
+    out = diagnostics.scrub(" ".join(samples))
+    for s in samples:
+        if s in out:
+            raise AssertionError(f"cloud key not masked ({s}): {out!r}")
+    return out
+
+
+def _crash_record_omits_exception_message() -> str:
+    # The crash record must keep the exception TYPE + frames but NEVER the
+    # runtime exception value (which can carry clipboard/table payload). The
+    # secret is built at runtime so it is not present in the raise's source line.
+    from tablemark import diagnostics
+    secret = "PAYLOADCELL" + "42PRIVATEROW"
+    try:
+        raise ValueError(secret)
+    except ValueError as exc:
+        rec = diagnostics._format_record("watcher", type(exc), exc.__traceback__)
+    if secret in rec:
+        raise AssertionError(f"runtime exception message leaked into crash record: {rec!r}")
+    if "ValueError" not in rec:
+        raise AssertionError(f"exception type missing from record: {rec!r}")
+    return "type+frames recorded, runtime message omitted"
 
 
 def _install_hooks_sets_thread_excepthook() -> str:

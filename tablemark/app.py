@@ -428,9 +428,17 @@ class TabledownApp(rumps.App):
         """Write a scrubbed local log and reveal it in Finder for a bug report.
 
         Local only — nothing is sent anywhere. Touches no clipboard, so it can't
-        race the watcher. Falls back to revealing the raw log if export fails.
+        race the watcher. On export failure we do NOT fall back to revealing the
+        raw Tabledown.log: that file is unscrubbed and the user would attach it
+        believing it was sanitized.
         """
-        path = diagnostics.export_diagnostics() or diagnostics.LOG_PATH
+        path = diagnostics.export_diagnostics()
+        if path is None:
+            self._safe_alert(
+                t("xml.no_table_title", self.lang),
+                t("diagnostics.export_failed", self.lang),
+            )
+            return
         diagnostics.reveal(path)
 
     @staticmethod
