@@ -10,7 +10,7 @@ import time
 from PIL import Image, ImageChops, ImageDraw
 import pystray
 
-from . import single_instance, startup_task
+from . import diagnostics, single_instance, startup_task
 from .conversion import converted_clipboard
 from .i18n import SUPPORTED_LANGUAGES, resolve_language, save_preferred_language, t
 from .logger import log
@@ -101,6 +101,7 @@ class TabledownWindowsApp:
                     checked=lambda _item: self.login_enabled,
                 )
             )
+        items.append(pystray.MenuItem(t("menu.diagnostics", self.lang), self.share_diagnostics))
         items.append(pystray.MenuItem(t("menu.help", self.lang), self.show_help))
         items.append(pystray.MenuItem(t("menu.quit", self.lang), self.quit_app))
         return pystray.Menu(*items)
@@ -161,6 +162,28 @@ class TabledownWindowsApp:
         self._show_message_box_async(
             t("help.message", self.lang), t("help.title", self.lang)
         )
+
+    def share_diagnostics(self, _icon, _item) -> None:
+        """Write a scrubbed local log and open its folder in Explorer.
+
+        Local only — nothing is sent anywhere. Runs on its own thread so the
+        export + Explorer launch never blocks pystray's message pump, and is
+        fully wrapped: a pump-thread callback exception is caught by pystray,
+        not by sys/threading.excepthook, so it must not escape.
+        """
+        def worker() -> None:
+            try:
+                path = diagnostics.export_diagnostics() or diagnostics.LOG_PATH
+                diagnostics.reveal(path)
+            except Exception as exc:  # noqa: BLE001 - never kill the tray
+                log(f"share diagnostics failed: {type(exc).__name__}")
+
+        try:
+            threading.Thread(
+                target=worker, name="TabledownWindowsDiagnostics", daemon=True
+            ).start()
+        except RuntimeError as exc:  # noqa: BLE001 - can't spawn (resource limit)
+            log(f"diagnostics thread failed to start: {type(exc).__name__}")
 
     def quit_app(self, _icon, _item) -> None:
         self._stop_watcher.set()
@@ -254,7 +277,9 @@ class TabledownWindowsApp:
             )
             log("clipboard formats updated")
         except Exception as exc:  # noqa: BLE001 - tray app should keep watching
-            log(f"clipboard update failed: {exc}")
+            # Type only — this processes clipboard content and exc messages can
+            # carry table data we must never write to the shareable log.
+            log(f"clipboard update failed: {type(exc).__name__}")
 
     # --- Icon ---
 
@@ -344,6 +369,9 @@ def main() -> None:
     # stomp each other's conversions. macOS gets this from LaunchServices.
     if not single_instance.acquire_single_instance():
         return
+    # Capture failures that otherwise vanish (watcher-thread exceptions, native
+    # faults) into the local log — purely local, nothing is transmitted.
+    diagnostics.install_crash_hooks()
     TabledownWindowsApp().run()
 
 

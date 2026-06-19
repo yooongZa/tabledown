@@ -36,6 +36,7 @@ from .i18n import (
     save_preferred_language,
     t,
 )
+from . import diagnostics
 from . import login_item
 from .hotkey import GlobalHotkey
 from .logger import log
@@ -130,6 +131,12 @@ class TabledownApp(rumps.App):
         else:
             self.login_item_menu = None
 
+        # Support action: export a scrubbed local log for a bug report. Grouped
+        # with Help (support), not Settings — it's an action, not a preference.
+        self.diagnostics_item = rumps.MenuItem(
+            t("menu.diagnostics", self.lang),
+            callback=self.share_diagnostics,
+        )
         self.help_item = rumps.MenuItem(t("menu.help", self.lang), callback=self.show_help)
         self.quit_item = rumps.MenuItem(t("menu.quit", self.lang), callback=self.quit_app)
 
@@ -146,6 +153,7 @@ class TabledownApp(rumps.App):
             None,  # separator
             self.settings_item,
             None,  # separator
+            self.diagnostics_item,
             self.help_item,
             self.quit_item,
         ]
@@ -244,6 +252,7 @@ class TabledownApp(rumps.App):
             item.title = self._language_option_title(code)
         if self.login_item_menu is not None:
             self.login_item_menu.title = t("menu.login_item", self.lang)
+        self.diagnostics_item.title = t("menu.diagnostics", self.lang)
         self.help_item.title = t("menu.help", self.lang)
         self.quit_item.title = t("menu.quit", self.lang)
 
@@ -311,7 +320,9 @@ class TabledownApp(rumps.App):
             # gives no visible sign of success.
             self._flash_icon_success()
         except Exception as exc:  # noqa: BLE001 - surface failure to the user
-            log(f"copy as xml failed: {exc}")
+            # Log the exception TYPE only: this path handles clipboard content,
+            # and exc messages can embed table data (kept out of the shared log).
+            log(f"copy as xml failed: {type(exc).__name__}")
             rumps.alert(
                 title=t("xml.no_table_title", self.lang),
                 message=t("xml.no_table_message", self.lang),
@@ -413,6 +424,15 @@ class TabledownApp(rumps.App):
         if response == -1:
             self._open_github()
 
+    def share_diagnostics(self, _sender):
+        """Write a scrubbed local log and reveal it in Finder for a bug report.
+
+        Local only — nothing is sent anywhere. Touches no clipboard, so it can't
+        race the watcher. Falls back to revealing the raw log if export fails.
+        """
+        path = diagnostics.export_diagnostics() or diagnostics.LOG_PATH
+        diagnostics.reveal(path)
+
     @staticmethod
     def _open_github():
         """Open the project page (sandbox-safe via NSWorkspace, no subprocess)."""
@@ -475,7 +495,9 @@ class TabledownApp(rumps.App):
             # makes the next watcher tick a no-op, so this never flash-loops.
             AppHelper.callAfter(self._flash_icon_success, 0.5)
         except Exception as e:
-            log(f"clipboard update failed: {e}")
+            # Type only — this processes clipboard content and exc messages can
+            # carry table data we must never write to the shareable log.
+            log(f"clipboard update failed: {type(e).__name__}")
 
     def _converted_clipboard(self, content):
         """Return clipboard formats to write, or None when no update is needed.
@@ -539,6 +561,9 @@ class TabledownApp(rumps.App):
         return None
 
 def main():
+    # Capture failures that otherwise vanish (watcher-thread exceptions, native
+    # faults) into the local log — purely local, nothing is transmitted.
+    diagnostics.install_crash_hooks()
     TabledownApp().run()
 
 

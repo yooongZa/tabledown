@@ -489,6 +489,11 @@ def run_converter_tests() -> list[TestResult]:
             "",
         ),
     )
+    # Privacy: a malformed-table error must never echo clipboard-derived text
+    # (parser detail or the unexpected tag name, which is a header value here)
+    # because these messages can reach the user-shareable diagnostics log.
+    check("xml_parse_error_message_payload_free", _xml_parse_error_message_payload_free)
+    check("xml_unexpected_node_message_payload_free", _xml_unexpected_node_message_payload_free)
 
     return tests
 
@@ -538,6 +543,32 @@ def run_i18n_tests() -> list[TestResult]:
             t("menu.copy_xml", "en"),
         ),
     )
+    check(
+        "diagnostics_keys_localized",
+        lambda: _assert_not_equal(
+            t("menu.diagnostics", "ko"),
+            t("menu.diagnostics", "en"),
+        ),
+    )
+
+    return tests
+
+
+def run_diagnostics_tests() -> list[TestResult]:
+    tests = []
+
+    def check(name: str, fn) -> None:
+        started = time.perf_counter()
+        try:
+            detail = fn()
+            tests.append(TestResult(name, True, "diagnostics", detail or "ok", _elapsed(started)))
+        except Exception as exc:  # noqa: BLE001
+            tests.append(TestResult(name, False, "diagnostics", str(exc), _elapsed(started)))
+
+    check("scrub_removes_home_and_user", _scrub_removes_home_and_user)
+    check("scrub_removes_volume_name", _scrub_removes_volume_name)
+    check("scrub_masks_secret_token", _scrub_masks_secret_token)
+    check("install_hooks_sets_thread_excepthook", _install_hooks_sets_thread_excepthook)
 
     return tests
 
@@ -721,6 +752,77 @@ def _test_watcher_plain_text_unchanged() -> str:
     return "plain text untouched"
 
 
+def _xml_parse_error_message_payload_free() -> str:
+    # Malformed XML carrying a recognizable token. The raised ValueError must NOT
+    # echo the parser detail (line/column or source markup) — that can leak
+    # clipboard content into a shared log.
+    try:
+        table_xml_to_model("<표><행>SECRETCELL12345</행")
+    except ValueError as exc:
+        msg = str(exc)
+        if "line" in msg.lower() or "column" in msg.lower() or "SECRETCELL12345" in msg:
+            raise AssertionError(f"parse detail leaked into message: {msg!r}")
+        return f"clean: {msg!r}"
+    raise AssertionError("expected ValueError for malformed xml")
+
+
+def _xml_unexpected_node_message_payload_free() -> str:
+    # The unexpected tag name is a header VALUE in this format, so it must not
+    # appear in the error message (would leak table data into a shared log).
+    secret = "SECRETHEADER12345"
+    try:
+        table_xml_to_model(f"<표><{secret}>x</{secret}></표>")
+    except ValueError as exc:
+        if secret in str(exc):
+            raise AssertionError(f"tag name leaked into message: {str(exc)!r}")
+        return f"clean: {str(exc)!r}"
+    raise AssertionError("expected ValueError for unexpected node")
+
+
+def _scrub_removes_home_and_user() -> str:
+    import getpass
+    from tablemark import diagnostics
+    user = getpass.getuser() or "tester"
+    out = diagnostics.scrub(f'File "/Users/{user}/Library/Logs/Tabledown.log", line 5')
+    if user and user in out:
+        raise AssertionError(f"username leaked: {out!r}")
+    return out
+
+
+def _scrub_removes_volume_name() -> str:
+    from tablemark import diagnostics
+    out = diagnostics.scrub("mounted at /Volumes/My Secret Drive/data")
+    if "Secret" in out:
+        raise AssertionError(f"volume label leaked: {out!r}")
+    return out
+
+
+def _scrub_masks_secret_token() -> str:
+    from tablemark import diagnostics
+    out = diagnostics.scrub("token=abcdef123456 and ghp_AAAAAAAAAAAAAAAAAA")
+    if "abcdef123456" in out or "ghp_AAAAAAAAAAAAAAAAAA" in out:
+        raise AssertionError(f"secret not masked: {out!r}")
+    return out
+
+
+def _install_hooks_sets_thread_excepthook() -> str:
+    # threading.excepthook is the only way to see uncaught exceptions on the
+    # daemon clipboard-watcher thread — without it they vanish from the log.
+    import sys as _sys
+    import threading as _t
+    from tablemark import diagnostics
+    before_sys, before_thread = _sys.excepthook, _t.excepthook
+    try:
+        diagnostics._install_python_hooks()
+        if _t.excepthook is before_thread:
+            raise AssertionError("threading.excepthook not installed (watcher crashes would vanish)")
+        if _sys.excepthook is before_sys:
+            raise AssertionError("sys.excepthook not installed")
+        return "sys + threading excepthook installed"
+    finally:
+        _sys.excepthook, _t.excepthook = before_sys, before_thread
+
+
 def _wait_for(read_fn, done_fn, timeout: float = 2.0, interval: float = 0.05):
     deadline = time.monotonic() + timeout
     last_value = None
@@ -790,6 +892,7 @@ def main() -> int:
     results = []
     results.extend(run_converter_tests())
     results.extend(run_i18n_tests())
+    results.extend(run_diagnostics_tests())
     results.extend(run_login_item_tests())
     results.extend(run_clipboard_direct_tests())
     if args.watcher or args.require_watcher:

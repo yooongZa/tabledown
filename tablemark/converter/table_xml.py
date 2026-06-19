@@ -430,7 +430,10 @@ def _parse_table_root(xml: str) -> ET.Element:
     try:
         root = ET.fromstring(stripped)
     except ET.ParseError as exc:
-        raise ValueError(f"xml parse error: {exc}") from exc
+        # Keep the ParseError chained for local debugging (``from exc``) but keep
+        # it OUT of the message text: the parser detail can echo clipboard markup,
+        # and this message may reach the user-shareable diagnostics log.
+        raise ValueError("xml parse error") from exc
 
     rows: list[ET.Element] = []
     _collect_rows(root, rows)
@@ -478,7 +481,9 @@ def _collect_rows(node: ET.Element, rows: list[ET.Element]) -> None:
                 raise ValueError("empty vertical group")
             _collect_rows(child, rows)
         else:
-            raise ValueError(f"unexpected node <{_local_name(child.tag)}> under table")
+            # The tag name is clipboard-derived (a header value in this format),
+            # so keep it out of the message — this can reach the shared log.
+            raise ValueError("unexpected node under table")
 
 
 def _is_row_tag(element: ET.Element) -> bool:
@@ -500,7 +505,9 @@ def _validate_column_node(element: ET.Element) -> None:
         if any(_is_element(child) for child in element):
             raise ValueError("nested cell")
     else:
-        raise ValueError(f"unexpected node <{name}>")
+        # ``name`` is a clipboard-derived tag (a header value); keep it out of
+        # the message so it can't leak into the shared diagnostics log.
+        raise ValueError("unexpected node")
 
 
 def _parse_row_tree(row: ET.Element) -> list[tuple]:
