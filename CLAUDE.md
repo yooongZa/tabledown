@@ -184,7 +184,7 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
 | 상태 | 영속 | 근거 |
 |------|------|------|
 | 변환 토글(`enabled`) | **비영속** (매 실행 켜짐) | 토글은 "일시정지" 용도. 영속화하면 "몇 주 전에 꺼둔 걸 잊고 고장으로 오인"하는 사고가 더 흔함. macOS·Windows 동일. |
-| `fill_blanks`, 언어, Pro 캐시 | 영속 (NSUserDefaults / `%APPDATA%` JSON) | 명시적 환경설정. |
+| `fill_blanks`, 언어 | 영속 (NSUserDefaults / `%APPDATA%` JSON) | 명시적 환경설정. |
 | `welcome_shown` (첫 실행 안내 1회) | 영속 | 알럿 표시 **전에** 마킹 — 실패해도 매 실행 반복 금지. |
 | 로그인 시 자동 실행 | 영속 — **OS 가 보관**, 우리 설정 파일엔 안 씀 | macOS: SMAppService(시스템 로그인 항목). Windows: MSIX StartupTask(설정 ▸ 앱 ▸ 시작 프로그램). 둘 다 OS 가 진실의 원천이라 JSON/NSUserDefaults 그림자를 두지 말 것(드리프트 발생). |
 
@@ -227,14 +227,13 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
 
 ## UI 관례 (메뉴·피드백)
 
-- 메뉴 순서: 동작(토글·XML) → 설정 → 후원 → 도움말·종료. 후원을 설정 위로 올리지 말 것(첫인상).
-- '구매 복원'은 후원 서브메뉴 하단(결제 관련 항목 한곳에). Apple 요구는 "존재"이지 위치가 아님.
+- 메뉴 순서: 동작(토글·XML) → 설정 → 도움말·종료. 첫인상은 유틸리티.
 - 시스템 알림(UNUserNotification)은 쓰지 않는다 — 권한 프롬프트가 떠서 "권한 0개" 셀링포인트가 깨짐.
   성공 피드백은 **메뉴바 아이콘 1초 체크 플래시**(`_flash_icon_success`, 에셋은 `scripts/make_menu_icons.py` 생성).
-- 가격은 하드코딩 금지: SKProduct 의 localized price 를 메뉴/시트에 동적 표기, `PRO_PRICE_FALLBACK` 은
-  메타데이터 로딩 전 임시 표기 전용(ASC 가격과 일치 유지).
-- 구매 흐름 피드백 규칙: 구독 성공 알럿은 **사용자가 방금 시작한 구독에만**(자동 갱신·복원은 침묵),
-  사용자 취소(SKError code 2)는 침묵, 그 외 실패·복원 결과는 알럿.
+- **유료화 없음(2026-06-19 제거)**: 앱은 완전 무료다. 구독·기부(IAP)·‘구매 복원’·Pro 잠금은 모두 제거됐다
+  (`store.py` 삭제, `copy_as_xml` 게이팅 해제). XML 변환·⌘⌃C 단축키는 무료 기능. 유료화를 다시 넣자는
+  제안이 나오면 [project_distribution_strategy] 의 "무료 배포·예산 0" 결정과 함께 재논의할 것 — 실수로
+  되살리지 말 것.
 
 ## 빌드 / 실행
 

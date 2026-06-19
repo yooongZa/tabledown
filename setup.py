@@ -50,11 +50,8 @@ OPTIONS = {
         "NSHumanReadableCopyright": "© 2026 Tabledown",
     },
     "packages": ["rumps", "bs4", "AppKit"],
-    # StoreKit (IAP) is imported lazily/defensively in store.py, so name it
-    # explicitly for py2app's dependency graph to bundle it. The global hotkey
-    # (hotkey.py) binds the system Carbon.framework via ctypes at runtime and
-    # needs no module include.
-    "includes": ["StoreKit"],
+    # The global hotkey (hotkey.py) binds the system Carbon.framework via ctypes
+    # at runtime and needs no module include.
     "resources": [
         "assets/generated/tablemark_menu_40.png",
         "assets/generated/tablemark_menu_40_off.png",
