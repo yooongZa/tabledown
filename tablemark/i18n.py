@@ -26,6 +26,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "menu.login_item": "로그인 시 자동 실행",
         "menu.diagnostics": "문제 신고용 로그 열기",
         "diagnostics.export_failed": "진단 로그를 준비하지 못했습니다. 디스크 여유 공간을 확인하고 다시 시도해 주세요.",
+        "menu.donate": "후원하기",
         "menu.help": "도움말",
         "menu.quit": "종료",
         "help.open_github": "GitHub 열기",
@@ -45,7 +46,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "• ‘XML: 빈칸을 자동 채우기’ 를 켜면 병합 없이 비워둔 그룹 열(직급 등)의 빈칸을 바로 위 값으로 채웁니다.\n\n"
             "메뉴의 ‘Tabledown 사용’ 항목 왼쪽 체크 표시가 현재 상태입니다.\n"
             "체크가 켜져 있으면 변환이 동작하고, 꺼져 있으면 변환이 멈춥니다.\n"
-            "메뉴바 아이콘에 사선이 그어져 있으면 변환이 꺼져 있는 상태입니다."
+            "메뉴바 아이콘에 사선이 그어져 있으면 변환이 꺼져 있는 상태입니다.\n"
+            "단축키 ⌘⌃T 로 변환을 켜고 끌 수 있습니다."
         ),
     },
     "en": {
@@ -62,6 +64,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "menu.login_item": "Open at Login",
         "menu.diagnostics": "Open logs for bug report",
         "diagnostics.export_failed": "Couldn't prepare the diagnostics log. Check free disk space and try again.",
+        "menu.donate": "Support development",
         "menu.help": "Help",
         "menu.quit": "Quit",
         "help.open_github": "Open GitHub",
@@ -81,7 +84,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "• ‘XML: Auto-fill blank cells’ fills blanks in left grouping columns (e.g. rank) from the value above.\n\n"
             "The checkmark next to ‘Use Tabledown’ shows the current state.\n"
             "When checked, conversion is on. When unchecked, conversion pauses.\n"
-            "A slash through the menu bar icon means conversion is off."
+            "A slash through the menu bar icon means conversion is off.\n"
+            "The global shortcut ⌘⌃T toggles conversion on and off."
         ),
     },
 }

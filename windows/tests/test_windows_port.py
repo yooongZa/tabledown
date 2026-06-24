@@ -13,7 +13,7 @@ for path in (PROJECT_ROOT, WINDOWS_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from tabledown_windows import single_instance, startup_task
+from tabledown_windows import hotkey, single_instance, startup_task
 from tabledown_windows.conversion import WINDOWS_DROP_FORMATS, converted_clipboard
 from tabledown_windows.html_clipboard import CF_HTML_FORMAT_NAME, build_cf_html, extract_cf_html
 from tabledown_windows.i18n import SUPPORTED_LANGUAGES, detect_system_language, t
@@ -168,6 +168,13 @@ class WindowsPortTests(unittest.TestCase):
         self.assertEqual(t("menu.help", "ko"), "도움말")
         self.assertEqual(t("menu.help", "fr"), "Help")
         self.assertEqual(t("missing.key", "ko"), "missing.key")
+
+    def test_donate_label_resolves(self):
+        # The 'Support development' menu label must resolve in each language —
+        # not fall back to the bare key.
+        self.assertEqual(t("menu.donate", "ko"), "후원하기")
+        for lang in SUPPORTED_LANGUAGES:
+            self.assertNotEqual(t("menu.donate", lang), "menu.donate")
 
     def test_login_item_translations_exist(self):
         # The menu label and both "couldn't enable" hints must resolve in each
@@ -375,6 +382,96 @@ class SingleInstanceMainTests(unittest.TestCase):
             app.main()
         fake_app.assert_called_once_with()
         fake_app.return_value.run.assert_called_once_with()
+
+
+@unittest.skipUnless(sys.platform.startswith("win"), "tray app is Windows-only")
+class DonateMenuTests(unittest.TestCase):
+    """The optional 'Support development' link appears only when DONATE_URL is set."""
+
+    def _make_app(self):
+        # No login support (None) keeps the menu minimal; donate is independent.
+        with mock.patch.object(startup_task, "current_state", return_value=None):
+            from tabledown_windows.app import TabledownWindowsApp
+
+            return TabledownWindowsApp()
+
+    def _labels(self, app):
+        return [getattr(item, "text", "") for item in app.icon.menu]
+
+    def test_donate_item_shown_when_url_set(self):
+        from tabledown_windows import app
+
+        with mock.patch.object(app, "DONATE_URL", "https://example.com/donate"):
+            instance = self._make_app()
+            self.assertIn(t("menu.donate", instance.lang), self._labels(instance))
+
+    def test_donate_item_hidden_when_url_empty(self):
+        from tabledown_windows import app
+
+        with mock.patch.object(app, "DONATE_URL", ""):
+            instance = self._make_app()
+            self.assertNotIn(t("menu.donate", instance.lang), self._labels(instance))
+
+
+class HotkeyTests(unittest.TestCase):
+    """The Ctrl+Alt+T global hotkey (RegisterHotKey on a private pump thread).
+
+    No real user32 is touched — the worker thread/message loop is Windows-only,
+    so we exercise the register/dispatch/degrade logic with stubs (mirrors the
+    single-instance tests, which never spawn a real second process).
+    """
+
+    def _hk(self, callback=None):
+        return hotkey.GlobalHotkey(
+            hotkey.MOD_CONTROL | hotkey.MOD_ALT | hotkey.MOD_NOREPEAT,
+            hotkey.VK_T,
+            callback or (lambda: None),
+        )
+
+    def test_start_degrades_without_user32(self):
+        # Non-Windows host (or no user32): start() reports False and spawns no
+        # thread, so the tray runs fine without the accelerator.
+        hk = self._hk()
+        with mock.patch.object(hotkey, "_load_user32", return_value=None):
+            self.assertFalse(hk.start())
+        self.assertFalse(hk.registered)
+        self.assertIsNone(hk._thread)
+
+    def test_register_calls_registerhotkey_with_combo(self):
+        hk = self._hk()
+        user32 = mock.Mock()
+        user32.RegisterHotKey.return_value = 1
+        self.assertTrue(hk._register(user32))
+        user32.RegisterHotKey.assert_called_once_with(
+            None,
+            hotkey._HOTKEY_ID,
+            hotkey.MOD_CONTROL | hotkey.MOD_ALT | hotkey.MOD_NOREPEAT,
+            hotkey.VK_T,
+        )
+
+    def test_register_fails_when_combo_busy(self):
+        # RegisterHotKey returns 0 when another app already owns the combo.
+        hk = self._hk()
+        user32 = mock.Mock()
+        user32.RegisterHotKey.return_value = 0
+        self.assertFalse(hk._register(user32))
+
+    def test_handle_message_fires_on_matching_hotkey(self):
+        fired = []
+        hk = self._hk(lambda: fired.append(True))
+        hk._handle_message(mock.Mock(message=hotkey._WM_HOTKEY, wParam=hotkey._HOTKEY_ID))
+        self.assertEqual(fired, [True])
+
+    def test_handle_message_ignores_other_messages(self):
+        fired = []
+        hk = self._hk(lambda: fired.append(True))
+        hk._handle_message(mock.Mock(message=0x0100, wParam=hotkey._HOTKEY_ID))  # not WM_HOTKEY
+        hk._handle_message(mock.Mock(message=hotkey._WM_HOTKEY, wParam=999))      # other hotkey id
+        self.assertEqual(fired, [])
+
+    def test_stop_before_start_is_safe(self):
+        hk = self._hk()
+        hk.stop()  # no thread yet — must be a quiet no-op, not raise
 
 
 if __name__ == "__main__":

@@ -12,12 +12,19 @@ import pystray
 
 from . import diagnostics, single_instance, startup_task
 from .conversion import converted_clipboard
+from .hotkey import MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, VK_T, GlobalHotkey
 from .i18n import SUPPORTED_LANGUAGES, resolve_language, save_preferred_language, t
 from .logger import log
 from .settings import load_settings, save_setting
 from .win_clipboard import clipboard_change_count, read_clipboard, write_clipboard
 
 WELCOME_SHOWN_KEY = "welcome_shown"
+
+# Optional "Support / Donate" page — just an external web link (the app stays
+# fully free; this is NOT the StoreKit IAP donations removed 2026-06-19, see
+# CLAUDE.md "유료화 없음"). Empty hides the menu item; set the URL to show it.
+# TODO: fill in the donation page URL (keep in sync with macOS DONATE_URL).
+DONATE_URL = ""
 
 # MessageBoxW flags: MB_ICONINFORMATION.
 _MB_ICONINFORMATION = 0x00000040
@@ -56,6 +63,13 @@ class TabledownWindowsApp:
             title="Tabledown",
             menu=self._build_menu(),
         )
+        # Ctrl+Alt+T toggles conversion (parity with macOS ⌘⌃T). Created here,
+        # started in run() — construction must stay side-effect-free for tests
+        # that build the app without running it. MOD_NOREPEAT so holding the
+        # keys flips once, not repeatedly.
+        self._hotkey = GlobalHotkey(
+            MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_T, self._toggle_from_hotkey
+        )
 
     def run(self) -> None:
         watcher = threading.Thread(
@@ -65,6 +79,10 @@ class TabledownWindowsApp:
         )
         watcher.start()
         log("windows clipboard watcher started")
+        if self._hotkey.start():
+            log("windows global hotkey registered")
+        else:
+            log("windows global hotkey not registered")
         # setup runs on a pystray thread once the icon is ready; the first-run
         # welcome goes through _show_message_box_async, so it never blocks.
         self.icon.run(setup=self._on_ready)
@@ -103,6 +121,9 @@ class TabledownWindowsApp:
             )
         items.append(pystray.MenuItem(t("menu.diagnostics", self.lang), self.share_diagnostics))
         items.append(pystray.MenuItem(t("menu.help", self.lang), self.show_help))
+        # Support/donate: an external web link, shown only when DONATE_URL is set.
+        if DONATE_URL:
+            items.append(pystray.MenuItem(t("menu.donate", self.lang), self.open_donate))
         items.append(pystray.MenuItem(t("menu.quit", self.lang), self.quit_app))
         return pystray.Menu(*items)
 
@@ -130,13 +151,45 @@ class TabledownWindowsApp:
         return t(f"menu.language.{code}", self.lang) + mark
 
     def toggle(self, _icon, _item) -> None:
-        self.enabled = not self.enabled
-        self._refresh_menu()
+        # Menu click: runs on pystray's pump thread, so refreshing the menu is fine.
+        self._set_enabled(not self.enabled, refresh_menu=True)
+
+    def _toggle_from_hotkey(self) -> None:
+        # Ctrl+Alt+T: runs on the hotkey thread, NOT pystray's pump. The bool
+        # flip is the source of truth the watcher reads, so the toggle takes
+        # effect immediately regardless of any UI update. We skip _refresh_menu()
+        # (rebuilding the Win32 HMENU off the pump thread is unsafe) — the
+        # checkmark re-evaluates lazily from `self.enabled` the next time the
+        # menu opens. The icon image IS repainted for immediate feedback (parity
+        # with macOS, where the slash appears the instant you toggle); see the
+        # tradeoff note in _set_enabled.
+        self._set_enabled(not self.enabled, refresh_menu=False)
+
+    def _set_enabled(self, value: bool, *, refresh_menu: bool) -> None:
+        self.enabled = value
+        if refresh_menu:
+            self._refresh_menu()
         # Mirror the state on the icon itself (slash = off), like macOS.
+        #
+        # Tradeoff (hotkey path): `icon.icon =` is pystray's PUBLIC setter, but
+        # its win32 impl does DestroyIcon→LoadImage→Shell_NotifyIcon on the
+        # CALLING thread with no lock. From the hotkey thread that can race
+        # pystray's own pump-thread icon writes (explorer restart →
+        # WM_TASKBARCREATED, or a resolution change). The race is practically
+        # unreachable — a single user cannot click the tray menu and press the
+        # chord in the same microsecond, and explorer restarts are rare — and the
+        # worst case is a transient wrong/blank tray icon that self-corrects on
+        # the next repaint (a GDI handle misuse, never a crash). We accept it to
+        # keep immediate feedback without the alternatives: a permanently stale
+        # icon (skip the repaint) reads as "the toggle didn't work", and
+        # marshalling onto the pump thread would couple to pystray internals
+        # (_hwnd/_message_handlers) we can't exercise off Windows. The functional
+        # toggle (the bool above) never depends on this repaint.
         try:
             self.icon.icon = self._icon_image()
         except Exception as exc:  # noqa: BLE001 - state flip must never crash the tray
             log(f"tray icon update failed: {exc}")
+        log(f"conversion {'enabled' if self.enabled else 'disabled'}")
 
     def toggle_login_item(self, _icon, _item) -> None:
         # The WinRT toggle itself hops onto a private thread inside
@@ -162,6 +215,21 @@ class TabledownWindowsApp:
         self._show_message_box_async(
             t("help.message", self.lang), t("help.title", self.lang)
         )
+
+    def open_donate(self, _icon, _item) -> None:
+        """Open the donation page in the default browser."""
+        self._open_url(DONATE_URL)
+
+    @staticmethod
+    def _open_url(url: str) -> None:
+        """Open a URL in the default browser via ShellExecuteW (no subprocess)."""
+        if not url:
+            return
+        try:
+            # SW_SHOWNORMAL = 1. "open" verb hands the URL to the default browser.
+            ctypes.windll.shell32.ShellExecuteW(None, "open", url, None, None, 1)
+        except Exception as exc:  # noqa: BLE001 - opening a link must never crash the tray
+            log(f"opening URL failed: {type(exc).__name__}")
 
     def share_diagnostics(self, _icon, _item) -> None:
         """Write a scrubbed local log and open its folder in Explorer.
@@ -193,6 +261,7 @@ class TabledownWindowsApp:
 
     def quit_app(self, _icon, _item) -> None:
         self._stop_watcher.set()
+        self._hotkey.stop()
         self.icon.stop()
 
     def _set_language(self, code: str) -> None:

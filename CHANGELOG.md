@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-24
+
 ### Removed
 - **유료화 전면 제거 — 앱을 완전 무료로 전환.** StoreKit IAP 래퍼(`store.py`)를 삭제하고 XML 변환의 Pro 구독 게이팅을 해제 — 이제 누구나 ‘표를 XML로 복사’와 전역 단축키 ⌘⌃C 를 제한 없이 쓴다. 기부(Consumable 3종) 메뉴·‘구매 복원’ 항목·구독 시트·구매/복원 알럿을 모두 제거하고, `settings.py` 의 `pro_active`/`pro_expires` 캐시, `i18n` 의 결제·후원·Pro 문자열, `setup.py` 의 `StoreKit` include, `app.py` 의 관련 콜백·잠금(🔒) 표시도 함께 정리. 전역 단축키(`hotkey.py`)와 XML 변환 로직 자체는 그대로 — 게이팅만 사라졌다. 클립보드 변환 불변식·테스트 영향 없음(변환 테스트 38/38).
 
@@ -18,6 +20,8 @@
 - **로컬 진단 — 로컬 전용 크래시 캡처 + ‘문제 신고용 로그’ (외부 전송 0줄).** 직배포 환경에서 안 보이던 실패를 **로컬 로그**로 끌어온다. 외부로 보내는 코드는 한 줄도 없어 `windows/PRIVACY.md` 의 "no network connections, no telemetry … nothing is sent to any external server" 약속을 그대로 지킨다 (DiskOUT 식 *원격* 수집은 이 약속과 충돌해 의도적으로 채택하지 않음). 신규 `tablemark/diagnostics.py`·`windows/tabledown_windows/diagnostics.py`(동형): ① `install_crash_hooks()` — `sys.excepthook` + **`threading.excepthook`**(지금까지 무음으로 사라지던 **클립보드 워처 데몬 스레드의 미포착 예외**를 포착 — 가장 핫한 실패면) + `faulthandler`(네이티브 폴트 — `enable()` 가 덤프 후 기본 핸들러로 넘겨 OS 크래시리포터(.ips)도 그대로 동작), 전부 `Tabledown.log`/`Tabledown.crash` 에만 기록. **크래시 기록은 예외 타입+프레임 위치만 남기고 예외 메시지·페이로드는 기록하지 않는다**(공유 로그 안전성). ② 메뉴 ‘문제 신고용 로그 열기’(mac·Windows) → **스크럽된**(홈경로·유저명·볼륨/드라이브명·secret 제거) `Tabledown-diagnostics.txt` 생성 후 Finder/Explorer 로 열기 — 사용자가 직접 버그리포트에 첨부, 클립보드 미접촉(워처 레이스 없음). ③ **로그 누출 하드닝**: 클립보드 변환 catch 사이트(`copy as xml failed`/`clipboard update failed`)의 `{exc}` → `{type(exc).__name__}`, `converter/table_xml.py` 의 에러 메시지에서 클립보드 파생 텍스트(파서 detail·헤더 태그명) 제거 — 공유 로그에 표 데이터가 새지 않게. 회귀 테스트 추가: converter 누출 메시지 2 + diagnostics(scrub 3·threading.excepthook 1) + i18n 키 1.
 - **자동 변환 피드백 — 무반응 제거 (P0 후속).** 그동안 클립보드 자동 변환(Excel↔Markdown)은 **아무 표시 없이** 백그라운드에서 일어나, 사용자가 "변환됐다"는 걸 알 수 없고 붙여넣기 결과가 예상과 다를 때 원인이 Tabledown 인지조차 몰랐다(UX 리뷰 최상위 이슈). 이제 워처가 실제로 표를 변환하면 **메뉴바 아이콘이 0.5초간 체크 표시로 깜빡**인다(수동 XML 의 1초 플래시보다 짧게 — 매 복사마다 떠도 거슬리지 않게). 워처는 백그라운드 스레드라 `AppHelper.callAfter` 로 메인 스레드에 넘겨 아이콘을 건드린다. 변환 결과엔 `mark_generated` 가 찍혀 다음 워처 틱이 no-op 이 되므로 플래시가 무한 반복되지 않는다. 팝업·소리·시스템 알림 없음("권한 0개" 유지).
 - **전역 단축키 ⌘⌃C (`hotkey.py`)**: Carbon `RegisterEventHotKey` 로 클립보드의 표를 XML 로 바로 변환 — Accessibility·Input Monitoring 등 권한 불필요("권한 0개" 유지). 등록 실패해도 메뉴 항목은 그대로 동작(graceful). (유료 게이팅 없이 누구나 사용.)
+- **전역 단축키 — 자동변환 켜기/끄기 토글 (macOS ⌘⌃T · Windows Ctrl+Alt+T)**: 클립보드 자동 변환을 어느 앱에서든 키 하나로 일시정지/재개. 권한 불필요·등록 실패 시 메뉴로 graceful fallback(핫키는 액셀러레이터일 뿐). macOS 는 기존 단일 핫키(`tablemark/hotkey.py`)를 다중 핫키 매니저(`GlobalHotkeys`)로 일반화 — Carbon 핸들러 하나가 발화된 핫키 ID(`GetEventParameter`)로 ⌘⌃C/⌘⌃T 를 분기(핫키별 핸들러는 서로 이벤트를 삼키므로 금지). Windows 는 신규 `tabledown_windows/hotkey.py` — user32 `RegisterHotKey`(NULL hwnd) + 전용 메시지 루프 스레드(`MOD_NOREPEAT`), 비-Windows 에선 우아하게 degrade. 키 선택: ⌘⌃ 조합·`Ctrl+Alt` 은 흔한 시스템/앱 단축키와 안 겹치고 토글 글자는 양 플랫폼 T 로 통일. 회귀 테스트: macOS `run_hotkey_tests`(ID 분기·단일 fallback·오발 방지) + Windows `HotkeyTests`(등록/디스패치/degrade). 도움말·CLAUDE.md 갱신.
+- **‘후원하기’ 외부 링크 메뉴 (선택)**: 메뉴에 외부 후원 페이지를 여는 ‘후원하기’ 항목 추가(macOS `NSWorkspace`·Windows `ShellExecuteW`). **StoreKit IAP 가 아니라 단순 웹링크** — 앱은 여전히 완전 무료(2026-06-19 제거한 유료화와 무관). `DONATE_URL` 상수가 비어 있으면 항목을 숨기므로(login_item 처럼 graceful), URL 을 채워야 노출된다. i18n(한 ‘후원하기’/영 ‘Support development’)·CLAUDE.md(되살린 IAP 아님·스토어 심사 주의) 문서화.
 - **UX 정리 1차 — 무반응 제거 (P0, `outputs/tabledown-uxui-plan.md`):**
   - **XML 변환 성공 플래시**: ‘표를 XML로 복사’(메뉴·⌘⌃C) 성공 시 메뉴바 아이콘이 1초간 체크 표시로 바뀜 — 전역 단축키의 "성공했는지 알 수 없음" 해소. 시스템 알림 대신 아이콘 플래시인 이유: 권한 프롬프트 없이("권한 0개" 유지). (에셋 `tablemark_menu_40_check.png`, 생성기 `scripts/make_menu_icons.py`)
 - **UX 정리 2차 — 첫인상 (P1):**
@@ -119,7 +123,8 @@
 - Obsidian 에서 표 paste 시 발생하던 공백 처리 문제
 - Excel 로 Markdown paste 시 HTML clipboard format(클립보드 형식) 충돌 — HTML format 을 제거하여 plain text 만 사용
 
-[Unreleased]: https://github.com/yooongZa/tabledown/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/yooongZa/tabledown/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/yooongZa/tabledown/compare/v0.2.4...v0.4.0
 [0.2.4]: https://github.com/yooongZa/tabledown/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/yooongZa/tabledown/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/yooongZa/tabledown/compare/v0.2.1...v0.2.2

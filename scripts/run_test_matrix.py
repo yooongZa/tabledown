@@ -47,6 +47,7 @@ from tablemark.converter.table_xml import (
     table_xml_to_model,
 )
 from tablemark import login_item
+from tablemark.hotkey import CMD, CONTROL, KEY_C, KEY_T, GlobalHotkeys
 from tablemark.i18n import SUPPORTED_LANGUAGES, detect_system_language, t
 from tablemark.app import TabledownApp
 
@@ -550,6 +551,11 @@ def run_i18n_tests() -> list[TestResult]:
             t("menu.diagnostics", "en"),
         ),
     )
+    check("translate_korean_donate", lambda: _assert_equal(t("menu.donate", "ko"), "후원하기"))
+    check(
+        "donate_key_resolves_in_english",
+        lambda: _assert_not_equal(t("menu.donate", "en"), "menu.donate"),
+    )
 
     return tests
 
@@ -599,6 +605,62 @@ def run_login_item_tests() -> list[TestResult]:
     )
 
     return tests
+
+
+def run_hotkey_tests() -> list[TestResult]:
+    tests = []
+
+    def check(name: str, fn) -> None:
+        started = time.perf_counter()
+        try:
+            detail = fn()
+            tests.append(TestResult(name, True, "hotkey", detail or "ok", _elapsed(started)))
+        except Exception as exc:  # noqa: BLE001
+            tests.append(TestResult(name, False, "hotkey", str(exc), _elapsed(started)))
+
+    check("hotkey_keycodes_are_ansi_c_and_t", _hotkey_keycodes)
+    check("hotkey_dispatch_routes_by_id", _hotkey_dispatch_routes_by_id)
+    check("hotkey_single_binding_fallback", _hotkey_single_binding_fallback)
+    check("hotkey_unknown_id_does_not_misfire", _hotkey_unknown_id_no_misfire)
+    return tests
+
+
+def _hotkey_keycodes() -> str:
+    # The constants app.py composes the ⌘⌃C / ⌘⌃T combos from must stay correct.
+    return _assert_equal((KEY_C, KEY_T, CMD, CONTROL), (8, 17, 0x0100, 0x1000))
+
+
+def _hotkey_dispatch_routes_by_id() -> str:
+    # One Carbon handler serves both hotkeys; it must call the callback for the
+    # id that actually fired, not just the first/last bound (the two-handler bug
+    # this design replaces). No real Carbon: we drive _on_hotkey directly.
+    hk = GlobalHotkeys()
+    fired = []
+    hk._bindings = {1: lambda _s: fired.append("c"), 2: lambda _s: fired.append("t")}
+    hk._fired_hotkey_id = lambda _event: 2
+    hk._on_hotkey(None, object(), None)
+    return _assert_equal(fired, ["t"])
+
+
+def _hotkey_single_binding_fallback() -> str:
+    # If the id read fails (0) but exactly one hotkey is bound, the press must
+    # still fire — the event can only be ours, so never drop a real keystroke.
+    hk = GlobalHotkeys()
+    fired = []
+    hk._bindings = {5: lambda _s: fired.append("only")}
+    hk._fired_hotkey_id = lambda _event: 0
+    hk._on_hotkey(None, object(), None)
+    return _assert_equal(fired, ["only"])
+
+
+def _hotkey_unknown_id_no_misfire() -> str:
+    # Two bound + unknown id: must NOT guess, or it would fire the wrong action.
+    hk = GlobalHotkeys()
+    fired = []
+    hk._bindings = {1: lambda _s: fired.append("c"), 2: lambda _s: fired.append("t")}
+    hk._fired_hotkey_id = lambda _event: 0
+    hk._on_hotkey(None, object(), None)
+    return _assert_equal(fired, [])
 
 
 def run_clipboard_direct_tests() -> list[TestResult]:
@@ -950,6 +1012,7 @@ def main() -> int:
     results.extend(run_i18n_tests())
     results.extend(run_diagnostics_tests())
     results.extend(run_login_item_tests())
+    results.extend(run_hotkey_tests())
     results.extend(run_clipboard_direct_tests())
     if args.watcher or args.require_watcher:
         results.extend(run_watcher_tests(args.require_watcher))

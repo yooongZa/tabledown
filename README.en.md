@@ -143,6 +143,8 @@ Reverse direction:
 2. Select the starting cell in Excel and press `Cmd+V`
 3. Confirm that the table is split into cells
 
+To pause or resume auto-conversion, press the global shortcut **⌘⌃T** (or use the menu bar icon ▸ “Use Tabledown”). A slash through the menu bar icon means it is off.
+
 ## Troubleshooting
 
 If the paste result is not what you expected, check whether Tabledown is running and whether the diagnostic log shows a conversion event.
@@ -177,6 +179,7 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 
 ## Changelog
 
+- 2026-06-24: **Added a global shortcut to toggle auto-conversion on/off — macOS ⌘⌃T (Windows Ctrl+Alt+T).** Pause or resume clipboard auto-conversion from any app with one key. No permissions required; if registration fails it falls back gracefully to the menu item. macOS generalizes the former single hotkey into a multi-hotkey manager (one Carbon handler dispatches ⌘⌃C/⌘⌃T by the fired hotkey id), so XML (⌘⌃C) and the toggle (⌘⌃T) coexist. Windows uses user32 `RegisterHotKey` + a dedicated message-loop thread. The ⌘⌃ / `Ctrl+Alt` combos were chosen to avoid common system and app shortcuts.
 - 2026-06-19: **Added local diagnostics — crash capture + “Open logs for bug report” (nothing sent off-device).** Surfaces failures that were invisible in direct distribution into the local log — there's no network code at all, so the “no network connections, no telemetry … nothing is sent to any external server” promise still holds. `sys.excepthook` + **`threading.excepthook`** (catches the clipboard-watcher daemon-thread crashes that used to vanish silently) + `faulthandler` (native faults) write only to `Tabledown.log`/`.crash`. The “Open logs for bug report” menu writes a **scrubbed** diagnostics file (home paths, usernames, volume/drive names, and secrets removed) and reveals it in Finder/Explorer for you to attach to a bug report — no clipboard access (so it can't race the watcher). Conversion error messages and logs were also hardened so table data can't leak (macOS + Windows). The DiskOUT-style *remote* collection was deliberately not adopted, since it would conflict with the zero-telemetry promise.
 - 2026-06-19: **Added feedback for auto-conversion.** The Excel↔Markdown auto-conversion used to happen silently in the background, so you couldn't tell it ran (and an unexpected paste gave no hint Tabledown was the cause). Now the menu bar icon **briefly flashes a checkmark (0.5s, shorter than the 1s manual-XML flash)** whenever a table is converted. No popup, sound, or system notification (keeps the zero-permissions design).
 - 2026-06-19: **Removed monetization — the app is now fully free.** Dropped the Pro-subscription gate on XML conversion (menu and ⌘⌃C), and removed the donation IAPs, “Restore Purchases”, the subscription sheet, and the 🔒 lock marker (`store.py` deleted; related code/strings/dependency cleaned out of `settings.py`, `i18n.py`, `setup.py`, `requirements.txt`). The global hotkey and XML conversion logic are unchanged — only the gate is gone, so everyone uses XML for free. No impact on the clipboard invariants or tests (38/38).

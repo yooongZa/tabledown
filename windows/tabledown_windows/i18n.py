@@ -20,6 +20,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "menu.login_item": "로그인 시 자동 실행",
         "menu.diagnostics": "문제 신고용 로그 열기",
         "diagnostics.export_failed": "진단 로그를 준비하지 못했습니다. 디스크 여유 공간을 확인하고 다시 시도해 주세요.",
+        "menu.donate": "후원하기",
         "menu.help": "도움말",
         "menu.quit": "종료",
         "help.title": "Tabledown",
@@ -41,7 +42,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Excel 표를 복사하면 마크다운 에디터에서 Markdown 표로 붙고,\n"
             "Markdown 표를 복사하면 Excel에서 셀에 분리되어 붙습니다.\n\n"
             "트레이 메뉴의 ‘Tabledown 사용’ 체크 표시가 현재 상태입니다.\n"
-            "아이콘에 사선이 그어져 있으면 변환이 꺼져 있는 상태입니다."
+            "아이콘에 사선이 그어져 있으면 변환이 꺼져 있는 상태입니다.\n"
+            "단축키 Ctrl+Alt+T 로 변환을 켜고 끌 수 있습니다."
         ),
     },
     "en": {
@@ -52,6 +54,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "menu.login_item": "Open at Login",
         "menu.diagnostics": "Open logs for bug report",
         "diagnostics.export_failed": "Couldn't prepare the diagnostics log. Check free disk space and try again.",
+        "menu.donate": "Support development",
         "menu.help": "Help",
         "menu.quit": "Quit",
         "help.title": "Tabledown",
@@ -75,7 +78,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Excel tables paste as Markdown in a Markdown editor,\n"
             "and Markdown tables paste into separate cells in Excel.\n\n"
             "The checkmark next to 'Use Tabledown' in the tray menu shows the current state.\n"
-            "A slash through the tray icon means conversion is off."
+            "A slash through the tray icon means conversion is off.\n"
+            "The global shortcut Ctrl+Alt+T toggles conversion on and off."
         ),
     },
 }

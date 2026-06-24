@@ -234,6 +234,86 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
   (`store.py` 삭제, `copy_as_xml` 게이팅 해제). XML 변환·⌘⌃C 단축키는 무료 기능. 유료화를 다시 넣자는
   제안이 나오면 [project_distribution_strategy] 의 "무료 배포·예산 0" 결정과 함께 재논의할 것 — 실수로
   되살리지 말 것.
+- **‘후원하기’ 외부 링크(2026-06-24 — IAP 아님)**: 메뉴의 ‘후원하기’는 단순히 외부 홈페이지를 여는
+  링크다(`DONATE_URL` 상수 — macOS `tablemark/app.py`·`NSWorkspace.openURL_`, Windows
+  `tabledown_windows/app.py`·`ShellExecuteW`). **위에서 제거한 StoreKit IAP 와 전혀 다르다** — 앱 안에서
+  결제·구독·게이팅을 하지 않고, 앱은 여전히 완전 무료다. 그러니 "유료화 되살린 것"으로 보고 지우지 말 것.
+  `DONATE_URL` 이 비어 있으면 메뉴 항목을 **숨긴다**(login_item 처럼 graceful) — URL 을 채우면 나타난다.
+  두 상수(mac·Windows)를 같은 URL 로 유지할 것. **스토어 심사 주의**: Mac App Store·Windows Store 빌드에
+  개발자 후원 외부 링크는 정책상 회색지대일 수 있다(무료 유틸의 "개발 지원" 링크는 대체로 통과하나 확실치
+  않음). GitHub DMG·winget·직접 다운로드 빌드엔 제약이 없다 — 스토어 빌드에서만 숨기고 싶으면 빌드별로
+  `DONATE_URL` 을 비우면 됨.
+
+## 전역 단축키 (글로벌 핫키 — 2026-06-24)
+
+권한 0개 원칙 유지: macOS 는 Carbon `RegisterEventHotKey`, Windows 는 user32
+`RegisterHotKey` — **둘 다 Accessibility/Input Monitoring 권한이 필요 없다.** 핫키는
+항상 **액셀러레이터일 뿐** — 등록 실패해도 메뉴 항목은 그대로 동작하게 두는 graceful
+fallback 을 지킬 것(`register()`/`start()` 가 False 를 돌려줄 뿐 예외를 던지지 않음).
+
+**키 배정(2026-06-24 확정)**:
+| 동작 | macOS | Windows |
+|------|-------|---------|
+| 자동변환 켜기/끄기(토글) | `⌘⌃T` (신규) | `Ctrl+Alt+T` (신규, 유일한 핫키) |
+| 표→XML 복사 | `⌘⌃C` (기존) | — (XML 기능 자체가 Windows 엔 아직 없음) |
+- 선택 근거: `⌘⌃` 조합은 앱 충돌이 드물고 시스템 단축키(`⌃⌘F` 전체화면·`⌃⌘D` 사전·
+  `⌃⌘Space` 이모지)와 안 겹침. C↔T 는 키보드상 멀리 떨어져 오발 위험 낮음. Windows 는
+  `Ctrl+Alt`(≈⌘⌃) 관례를 따르되 `Ctrl+Shift+T`(탭 복원)·시스템 예약 조합을 피함. macOS·
+  Windows 모두 토글 글자를 **T 로 통일**.
+- **Windows XML 핫키는 해당 없음**: XML 수동변환(`copy_as_xml`)·그 모델 추출은 macOS 전용
+  기능이라 Windows 트레이 앱엔 없다. Windows 에 두 번째 핫키를 넣으려면 먼저 XML 기능부터
+  포팅해야 한다(별도 작업).
+
+### macOS — `tablemark/hotkey.py` (`GlobalHotkeys`)
+- **⚠️ 하나의 핸들러가 핫키 ID 로 분기 (회귀 금지)**: Carbon 은 모든 `kEventHotKeyPressed` 를
+  애플리케이션 이벤트 타겟에 설치된 핸들러들에 전달한다. 무조건 `noErr` 를 돌려주는 핸들러는
+  이벤트를 **소비**하므로, 핫키마다 핸들러를 따로 설치하면 가장 나중에 설치된 핸들러 하나만
+  (두 핫키 모두에 대해) 호출돼 **엉뚱한 콜백이 발화**한다. 그래서 핸들러는 **딱 하나**만 설치하고,
+  이벤트에서 발화된 핫키 ID 를 읽어(`GetEventParameter` → `EventHotKeyID`) 맞는 콜백을 고른다.
+  **이 구조를 "핫키별 핸들러"로 단순화하지 말 것.** (초기 단일핫키 설계는 핸들러 1개·핫키 1개라
+  이 문제가 없었음 — 두 번째 핫키를 더하며 매니저로 전환.)
+- `GetEventParameter` 의 `inBufferSize`/`outActualSize` 는 `ByteCount`=`unsigned long`(64비트
+  macOS 8바이트) → ctypes `c_ulong`. (SDK `MacTypes.h` 확인.) 잘못된 폭을 쓰면 호출 시 인자가
+  어긋난다.
+- CFUNCTYPE 트램펄린(`_handler_func`)과 그 void* 캐스트는 **강한 참조로 살려둘 것** — GC 되면
+  키 입력 시 해제된 메모리를 호출한다. 콜백은 메인 런루프 스레드에서 실행되므로 UI/클립보드 접근 안전.
+- 메뉴 항목의 `key=`+`_show_cmd_ctrl_shortcut`(⌘⌃ modifier mask)은 **순전히 표시용**(상태바 메뉴는
+  열려 있을 때만 key equivalent 처리). 실제 전역 트리거는 Carbon 핫키. 지우지 말 것(발견성).
+
+### Windows — `windows/tabledown_windows/hotkey.py` (`GlobalHotkey`)
+- **NULL hwnd → 등록 스레드 큐로 WM_HOTKEY**: `RegisterHotKey(NULL, …)` 는 WM_HOTKEY 를 **등록한
+  스레드의 메시지 큐**에 넣는다. 그래서 등록과 `GetMessageW` 펌프는 **같은 전용 스레드**에서 돈다.
+  pystray 가 자기 메시지 루프를 다른 스레드에서 돌리므로 그 큐를 공유/블록하면 안 된다.
+- `MOD_NOREPEAT` 로 누르고 있어도 한 번만 토글. `GetMessageW` 는 에러 시 -1 을 돌려주므로 restype 을
+  **부호 있는** `c_int` 로(BOOL 로 두면 -1 을 못 읽음).
+- **비-Windows degrade**: `_load_user32()` 는 `ctypes.WinDLL` 부재 시 None → `start()` False(스레드
+  안 띄움). `single_instance.py` 와 동일 패턴이라 테스트 러너(macOS/Linux)에서 import·테스트가 안 깨짐.
+- **bool 플립이 진실의 원천**: 토글은 `self.enabled` 플립이 본질(워처가 매 루프 읽음, GIL 원자적).
+  핫키 스레드에서 호출돼도 변환 동작은 즉시 반영된다. 메뉴 체크마크는 `checked=lambda: self.enabled`
+  라 다음에 메뉴 열 때 재평가되므로 **핫키 경로는 `_refresh_menu()` 를 건너뛴다**(펌프 스레드 밖에서
+  Win32 HMENU 재구성은 불안전).
+- **아이콘 리페인트 트레이드오프(의도된 결정 — 회귀 금지)**: 핫키 경로(`_set_enabled`)는 macOS 처럼
+  즉시 슬래시를 보여주려고 `self.icon.icon=` 로 아이콘을 다시 그린다. 이건 pystray **공개** setter지만
+  win32 구현이 호출 스레드에서 락 없이 `DestroyIcon→LoadImage→Shell_NotifyIcon` 을 한다 — 핫키
+  스레드에서 호출하면 pystray 자신의 펌프-스레드 아이콘 쓰기(explorer 재시작 `WM_TASKBARCREATED`·
+  해상도 변경)와 **이론상 경쟁**한다. 다만 한 사용자가 트레이 메뉴 클릭과 키 조합을 같은 마이크로초에
+  못 누르고 explorer 재시작도 드물어 **사실상 도달 불가**, 최악도 일시적 잘못된/빈 아이콘(다음 리페인트
+  때 자동 교정, GDI 핸들 오용일 뿐 크래시 아님)이다. 대안이 더 나빠 이 트레이드오프를 택함 — ① 리페인트
+  생략 시 **아이콘이 영구 stale**("토글이 안 먹은 듯") ② 펌프 스레드로 마샬링하면 Windows 밖에서 검증
+  불가한 pystray 내부(`_hwnd`/`_message_handlers`)에 결합. **기능 토글(bool 플립)은 이 리페인트에 절대
+  의존하지 않는다.** (리뷰에서 medium 으로 지적된 race — 위 근거로 수용. "그냥 race 니까 고쳐"로 되돌려
+  내부 결합이나 stale 아이콘을 도입하지 말 것.)
+- 워커는 데몬 스레드라 강제 종료에도 안 매달림. `stop()` 은 `PostThreadMessageW(WM_QUIT)` 로
+  `GetMessageW` 를 깨워 깔끔히 UnregisterHotKey. **ctypes 만 쓰므로 PyInstaller hidden import 불필요**
+  (startup_task 의 `--collect-all winsdk` 같은 처리 없음).
+
+### 회귀 방지 테스트
+- macOS(`scripts/run_test_matrix.py` `run_hotkey_tests`): `hotkey_dispatch_routes_by_id`(ID 로 분기),
+  `hotkey_single_binding_fallback`(ID 읽기 실패+1개면 그래도 발화), `hotkey_unknown_id_does_not_misfire`
+  (2개+미상 ID 면 추측 금지), `hotkey_keycodes_are_ansi_c_and_t`.
+- Windows(`windows/tests/test_windows_port.py` `HotkeyTests`): `start_degrades_without_user32`,
+  `register_calls_registerhotkey_with_combo`, `register_fails_when_combo_busy`,
+  `handle_message_fires_on_matching_hotkey`/`ignores_other_messages`, `stop_before_start_is_safe`.
 
 ## 빌드 / 실행
 

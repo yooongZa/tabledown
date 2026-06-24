@@ -1,17 +1,28 @@
-"""Carbon global hotkey (⌘⌃C) — permission-free, App Sandbox compatible.
+"""Carbon global hotkeys — permission-free, App Sandbox compatible.
 
-Registers a system-wide hotkey via Carbon's ``RegisterEventHotKey`` +
+Registers system-wide hotkeys via Carbon's ``RegisterEventHotKey`` +
 ``InstallEventHandler``. This path needs **no** Accessibility / Input Monitoring
 permission (unlike a CGEventTap or a pynput keyboard hook), which preserves
 Tabledown's "권한 0개" (zero-permissions) selling point. It is also the standard
 API many sandboxed Mac App Store apps use for global shortcuts.
 
+Tabledown binds two hotkeys: ⌘⌃C → copy-as-XML and ⌘⌃T → toggle conversion.
+
+⚠️ One handler, dispatch by id (회귀 금지). Carbon delivers EVERY
+``kEventHotKeyPressed`` to the handlers installed on the application event
+target. A handler that always returns ``noErr`` *consumes* the event, so
+installing one such handler per hotkey is wrong: only the most-recently-installed
+handler ever runs — for *both* hotkeys, firing the wrong callback. So we install
+exactly ONE handler and read the fired hotkey's id from the event
+(``GetEventParameter`` → ``EventHotKeyID``) to pick the right callback. Do not
+"simplify" this into per-hotkey handlers.
+
 Why ctypes and not a PyObjC framework: the modern PyObjC distribution ships no
 ``Carbon``/``HIToolbox`` module (pyobjc-framework-Carbon is legacy), but the
-symbols live in the always-present system ``Carbon.framework``. We bind the four
-C functions we need directly with ctypes. The installed event handler fires on
-the main run loop that rumps' NSApplication already runs, so the Python callback
-executes on the main thread — safe to touch UI / clipboard from it.
+symbols live in the always-present system ``Carbon.framework``. We bind the C
+functions we need directly with ctypes. The installed event handler fires on the
+main run loop that rumps' NSApplication already runs, so the Python callbacks
+execute on the main thread — safe to touch UI / clipboard from them.
 
 Failure is graceful: if anything fails to load or register we log and carry on;
 ``registered`` stays False and the corresponding menu item keeps working.
@@ -26,16 +37,22 @@ from ctypes import (
     byref,
     c_int32,
     c_uint32,
+    c_ulong,
     c_void_p,
 )
 
 from .logger import log
 
-# ⌘⌃C: Command + Control + C. Carbon modifier masks (Events.h) and the ANSI 'C'
-# virtual keycode (kVK_ANSI_C == 8). These are the values the spec fixes.
-_CMD_KEY = 0x0100  # cmdKey
-_CONTROL_KEY = 0x1000  # controlKey
-_KEY_C = 8  # kVK_ANSI_C
+# Carbon modifier masks (Events.h). Public so callers compose the combo they
+# want without re-deriving the magic numbers.
+CMD = 0x0100  # cmdKey
+CONTROL = 0x1000  # controlKey
+SHIFT = 0x0200  # shiftKey
+OPTION = 0x0800  # optionKey
+
+# ANSI virtual keycodes (Events.h, kVK_ANSI_*). C == 8, T == 17.
+KEY_C = 8  # kVK_ANSI_C
+KEY_T = 17  # kVK_ANSI_T
 
 # Carbon event constants.
 _EVENT_CLASS_KEYBOARD = (
@@ -45,7 +62,13 @@ _EVENT_HOTKEY_PRESSED = 6  # kEventHotKeyPressed
 _HOTKEY_SIGNATURE = (
     (ord("T") << 24) | (ord("D") << 16) | (ord("W") << 8) | ord("N")
 )  # 'TDWN'
-_HOTKEY_ID = 1
+# GetEventParameter: read the EventHotKeyID carried by a hotkey event.
+_PARAM_DIRECT_OBJECT = (
+    (ord("-") << 24) | (ord("-") << 16) | (ord("-") << 8) | ord("-")
+)  # kEventParamDirectObject '----'
+_TYPE_EVENT_HOTKEY_ID = (
+    (ord("h") << 24) | (ord("k") << 16) | (ord("i") << 8) | ord("d")
+)  # typeEventHotKeyID 'hkid'
 _NOERR = 0
 
 
@@ -94,6 +117,20 @@ def _load_carbon():
 
         carbon.UnregisterEventHotKey.argtypes = [c_void_p]
         carbon.UnregisterEventHotKey.restype = c_int32
+
+        # OSStatus GetEventParameter(EventRef, OSType name, OSType type,
+        #   OSType* outActualType, ByteCount bufSize, ByteCount* outSize, void* out)
+        # ByteCount is `unsigned long` (8 bytes on 64-bit macOS) -> c_ulong.
+        carbon.GetEventParameter.argtypes = [
+            c_void_p,  # EventRef
+            c_uint32,  # inName (OSType)
+            c_uint32,  # inDesiredType (OSType)
+            POINTER(c_uint32),  # outActualType (NULL ok)
+            c_ulong,  # inBufferSize (ByteCount)
+            POINTER(c_ulong),  # outActualSize (NULL ok)
+            c_void_p,  # outData
+        ]
+        carbon.GetEventParameter.restype = c_int32
     except AttributeError as exc:
         log(f"Carbon missing expected symbol: {exc}")
         return None
@@ -101,33 +138,46 @@ def _load_carbon():
     return carbon
 
 
-class GlobalHotkey:
-    """Registers ⌘⌃C and invokes a Python callback on press.
+class GlobalHotkeys:
+    """Registers one or more system-wide hotkeys behind a single Carbon handler.
 
     Usage:
-        hk = GlobalHotkey(self.copy_as_xml)
+        hk = GlobalHotkeys()
+        hk.add(KEY_C, CMD | CONTROL, self.copy_as_xml)
+        hk.add(KEY_T, CMD | CONTROL, self.toggle)
         hk.register()
         ...
         hk.unregister()   # optional; on quit
 
-    ``register()`` returns True on success. On failure it logs and returns False;
-    callers should keep their menu item functional regardless (the hotkey is an
-    accelerator, not the only entry point).
+    Each ``callback`` is invoked with a single positional argument (``None``) so
+    rumps menu callbacks (``def cb(self, _sender)``) work unchanged. ``register()``
+    returns True if at least one hotkey was registered. Failures are logged and
+    the corresponding menu items keep working — a hotkey is only an accelerator.
     """
 
-    def __init__(self, callback):
-        self._callback = callback
+    def __init__(self):
         self._carbon = None
         self._handler_ref = c_void_p()
-        self._hotkey_ref = c_void_p()
         # Strong refs: the CFUNCTYPE trampoline and its void* cast must outlive
-        # registration or Carbon would call freed memory when the key is pressed.
+        # registration or Carbon would call freed memory when a key is pressed.
         self._handler_func = None
         self._handler_func_ptr = None
+        self._specs = []  # queued (key_code, modifiers, callback) for register()
+        self._bindings = {}  # hotkey id -> callback (the live registrations)
+        self._hotkey_refs = {}  # hotkey id -> EventHotKeyRef (c_void_p)
+        self._next_id = 1
         self.registered = False
 
+    def add(self, key_code: int, modifiers: int, callback) -> "GlobalHotkeys":
+        """Queue a hotkey to bind. Call before ``register()``. Chainable."""
+        self._specs.append((key_code, modifiers, callback))
+        return self
+
     def register(self) -> bool:
-        """Install the event handler and register ⌘⌃C. True on success."""
+        """Install the shared handler and register every queued hotkey.
+
+        Returns True when the handler installed and at least one hotkey bound.
+        """
         if self.registered:
             return True
         carbon = _load_carbon()
@@ -155,41 +205,74 @@ class GlobalHotkey:
                 log(f"InstallEventHandler failed: status={status}")
                 return False
 
-            hotkey_id = _EventHotKeyID(_HOTKEY_SIGNATURE, _HOTKEY_ID)
-            status = carbon.RegisterEventHotKey(
-                _KEY_C,
-                _CMD_KEY | _CONTROL_KEY,
-                hotkey_id,
-                target,
-                0,
-                byref(self._hotkey_ref),
-            )
-            if status != _NOERR:
-                log(f"RegisterEventHotKey failed: status={status}")
-                return False
+            for key_code, modifiers, callback in self._specs:
+                hk_id = self._next_id
+                self._next_id += 1
+                ref = c_void_p()
+                hotkey_id = _EventHotKeyID(_HOTKEY_SIGNATURE, hk_id)
+                status = carbon.RegisterEventHotKey(
+                    key_code,
+                    modifiers,
+                    hotkey_id,
+                    target,
+                    0,
+                    byref(ref),
+                )
+                if status != _NOERR:
+                    log(f"RegisterEventHotKey failed (code={key_code}): status={status}")
+                    continue
+                self._bindings[hk_id] = callback
+                self._hotkey_refs[hk_id] = ref
 
-            self.registered = True
-            log("global hotkey ⌘⌃C registered")
-            return True
+            self.registered = bool(self._bindings)
+            if self.registered:
+                log(f"global hotkeys registered: {len(self._bindings)}")
+            return self.registered
         except Exception as exc:  # noqa: BLE001 - never let hotkey setup crash startup
             log(f"hotkey registration raised: {exc}")
             return False
 
-    def _on_hotkey(self, _call_ref, _event, _user_data) -> int:
+    def _fired_hotkey_id(self, event) -> int:
+        """Read the fired hotkey's id from the event, or 0 if unavailable."""
+        if not event or self._carbon is None:
+            return 0
+        hkid = _EventHotKeyID()
+        status = self._carbon.GetEventParameter(
+            event,
+            _PARAM_DIRECT_OBJECT,
+            _TYPE_EVENT_HOTKEY_ID,
+            None,
+            ctypes.sizeof(hkid),
+            None,
+            byref(hkid),
+        )
+        if status != _NOERR:
+            return 0
+        return int(hkid.id)
+
+    def _on_hotkey(self, _call_ref, event, _user_data) -> int:
         """Carbon handler trampoline — runs on the main run loop thread."""
         try:
-            # Carbon passes no sender; our callback (copy_as_xml) takes one arg.
-            self._callback(None)
+            callback = self._bindings.get(self._fired_hotkey_id(event))
+            if callback is None and len(self._bindings) == 1:
+                # Only one hotkey bound: even if the id read failed, the event
+                # can only be ours, so fire it rather than drop a real press.
+                callback = next(iter(self._bindings.values()))
+            if callback is not None:
+                callback(None)
         except Exception as exc:  # noqa: BLE001 - a handler must always return
             log(f"hotkey callback raised: {exc}")
         return _NOERR
 
     def unregister(self) -> None:
-        """Unregister the hotkey (best effort). Safe to call when not registered."""
-        if self._carbon is not None and self._hotkey_ref:
-            try:
-                self._carbon.UnregisterEventHotKey(self._hotkey_ref)
-            except Exception as exc:  # noqa: BLE001
-                log(f"UnregisterEventHotKey raised: {exc}")
-        self._hotkey_ref = c_void_p()
+        """Unregister every hotkey (best effort). Safe when nothing is bound."""
+        if self._carbon is not None:
+            for ref in self._hotkey_refs.values():
+                if ref:
+                    try:
+                        self._carbon.UnregisterEventHotKey(ref)
+                    except Exception as exc:  # noqa: BLE001
+                        log(f"UnregisterEventHotKey raised: {exc}")
+        self._hotkey_refs.clear()
+        self._bindings.clear()
         self.registered = False

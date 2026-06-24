@@ -38,7 +38,7 @@ from .i18n import (
 )
 from . import diagnostics
 from . import login_item
-from .hotkey import GlobalHotkey
+from .hotkey import CMD, CONTROL, KEY_C, KEY_T, GlobalHotkeys
 from .logger import log
 from . import __version__
 from .settings import (
@@ -50,6 +50,12 @@ from .settings import (
 
 
 GITHUB_URL = "https://github.com/yooongZa/tabledown"
+
+# Optional "Support / Donate" page. This is just an external web link (the app
+# stays fully free — NOT the StoreKit IAP donations removed 2026-06-19; see
+# CLAUDE.md "유료화 없음"). Leave empty to hide the menu item; set the URL to
+# show it. TODO: fill in the donation page URL.
+DONATE_URL = ""
 
 
 def _markdown_paste_block(markdown: str) -> str:
@@ -83,27 +89,16 @@ class TabledownApp(rumps.App):
         self.toggle_item = rumps.MenuItem(
             t("menu.toggle", self.lang),
             callback=self.toggle,
+            key="t",
         )
         self.toggle_item.state = 1 if self.enabled else 0
+        self._show_cmd_ctrl_shortcut(self.toggle_item)
         self.copy_xml_item = rumps.MenuItem(
             t("menu.copy_xml", self.lang),
             callback=self.copy_as_xml,
             key="c",
         )
-        # Show "⌘⌃C" next to the item. rumps' `key` gives a Command-only
-        # equivalent; OR in Control so the displayed/registered accelerator
-        # matches the global Carbon hotkey (⌘⌃C). Best-effort — purely cosmetic
-        # discoverability, so never let it crash startup.
-        try:
-            from AppKit import (
-                NSCommandKeyMask,
-                NSControlKeyMask,
-            )
-            self.copy_xml_item._menuitem.setKeyEquivalentModifierMask_(
-                NSCommandKeyMask | NSControlKeyMask
-            )
-        except Exception as exc:  # noqa: BLE001
-            log(f"failed to set XML shortcut modifier mask: {exc}")
+        self._show_cmd_ctrl_shortcut(self.copy_xml_item)
         self.fill_blanks_item = rumps.MenuItem(
             t("menu.fill_blanks", self.lang),
             callback=self.toggle_fill_blanks,
@@ -138,6 +133,12 @@ class TabledownApp(rumps.App):
             callback=self.share_diagnostics,
         )
         self.help_item = rumps.MenuItem(t("menu.help", self.lang), callback=self.show_help)
+        # Support/donate: an external web link, shown only when DONATE_URL is set.
+        self.donate_item = (
+            rumps.MenuItem(t("menu.donate", self.lang), callback=self.open_donate)
+            if DONATE_URL
+            else None
+        )
         self.quit_item = rumps.MenuItem(t("menu.quit", self.lang), callback=self.quit_app)
 
         self.settings_item = rumps.MenuItem(t("menu.settings", self.lang))
@@ -146,8 +147,8 @@ class TabledownApp(rumps.App):
             settings_children.append(self.login_item_menu)
         self.settings_item.update(settings_children)
 
-        # Order: actions, then preferences, then help/quit.
-        self.menu = [
+        # Order: actions, then preferences, then help/support/quit.
+        menu_items = [
             self.toggle_item,
             self.copy_xml_item,
             None,  # separator
@@ -155,14 +156,20 @@ class TabledownApp(rumps.App):
             None,  # separator
             self.diagnostics_item,
             self.help_item,
-            self.quit_item,
         ]
+        if self.donate_item is not None:
+            menu_items.append(self.donate_item)
+        menu_items.append(self.quit_item)
+        self.menu = menu_items
 
-        # --- Global hotkey ⌘⌃C -> copy_as_xml ---
-        # Strong-ref on self so the Carbon callback trampoline survives GC.
-        # Graceful: if registration fails the menu item still works.
-        self.hotkey = GlobalHotkey(self.copy_as_xml)
-        self.hotkey.register()
+        # --- Global hotkeys: ⌘⌃C -> copy_as_xml, ⌘⌃T -> toggle ---
+        # Strong-ref on self so the Carbon callback trampoline survives GC. One
+        # handler dispatches both by id (see hotkey.py). Graceful: if a hotkey
+        # fails to register, its menu item still works.
+        self.hotkeys = GlobalHotkeys()
+        self.hotkeys.add(KEY_C, CMD | CONTROL, self.copy_as_xml)
+        self.hotkeys.add(KEY_T, CMD | CONTROL, self.toggle)
+        self.hotkeys.register()
 
         self._stop_watcher = threading.Event()
         self._last_change_count = clipboard_change_count()
@@ -235,6 +242,24 @@ class TabledownApp(rumps.App):
         except Exception as exc:
             log(f"failed to clear stale visibility defaults: {exc}")
 
+    @staticmethod
+    def _show_cmd_ctrl_shortcut(item):
+        """Display "⌘⌃<key>" next to a menu item to advertise its global hotkey.
+
+        rumps' ``key=`` gives a Command-only equivalent; we OR in Control so the
+        text matches the Carbon hotkey (⌘⌃C / ⌘⌃T). Purely cosmetic
+        discoverability — for a status-bar app the key equivalent only fires
+        while the menu is open; the real global trigger is the Carbon hotkey. So
+        never let this crash startup.
+        """
+        try:
+            from AppKit import NSCommandKeyMask, NSControlKeyMask
+            item._menuitem.setKeyEquivalentModifierMask_(
+                NSCommandKeyMask | NSControlKeyMask
+            )
+        except Exception as exc:  # noqa: BLE001
+            log(f"failed to set shortcut modifier mask: {exc}")
+
     # --- Localization ---
 
     def _language_option_title(self, code: str) -> str:
@@ -254,6 +279,8 @@ class TabledownApp(rumps.App):
             self.login_item_menu.title = t("menu.login_item", self.lang)
         self.diagnostics_item.title = t("menu.diagnostics", self.lang)
         self.help_item.title = t("menu.help", self.lang)
+        if self.donate_item is not None:
+            self.donate_item.title = t("menu.donate", self.lang)
         self.quit_item.title = t("menu.quit", self.lang)
 
     def _make_language_setter(self, code: str):
@@ -441,17 +468,26 @@ class TabledownApp(rumps.App):
             return
         diagnostics.reveal(path)
 
+    def open_donate(self, _sender):
+        """Open the donation page in the default browser."""
+        self._open_url(DONATE_URL)
+
     @staticmethod
-    def _open_github():
-        """Open the project page (sandbox-safe via NSWorkspace, no subprocess)."""
+    def _open_url(url):
+        """Open a URL in the default browser (sandbox-safe via NSWorkspace, no subprocess)."""
+        if not url:
+            return
         try:
             from AppKit import NSWorkspace
             from Foundation import NSURL
-            NSWorkspace.sharedWorkspace().openURL_(
-                NSURL.URLWithString_(GITHUB_URL)
-            )
+            NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_(url))
         except Exception as exc:  # noqa: BLE001
-            log(f"opening GitHub failed: {exc}")
+            log(f"opening URL failed: {exc}")
+
+    @classmethod
+    def _open_github(cls):
+        """Open the project page (sandbox-safe via NSWorkspace, no subprocess)."""
+        cls._open_url(GITHUB_URL)
 
     def _show_welcome_once(self, timer):
         """First-run pointer: the app is menu-bar-only, so a fresh install
@@ -466,8 +502,8 @@ class TabledownApp(rumps.App):
 
     def quit_app(self, _):
         self._stop_watcher.set()
-        if getattr(self, "hotkey", None) is not None:
-            self.hotkey.unregister()
+        if getattr(self, "hotkeys", None) is not None:
+            self.hotkeys.unregister()
         rumps.quit_application()
 
     # --- Clipboard watcher ---
