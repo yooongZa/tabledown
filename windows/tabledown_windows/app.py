@@ -20,12 +20,6 @@ from .win_clipboard import clipboard_change_count, read_clipboard, write_clipboa
 
 WELCOME_SHOWN_KEY = "welcome_shown"
 
-# Optional "Support / Donate" page — just an external web link (the app stays
-# fully free; this is NOT the StoreKit IAP donations removed 2026-06-19, see
-# CLAUDE.md "유료화 없음"). Empty hides the menu item; set the URL to show it.
-# TODO: fill in the donation page URL (keep in sync with macOS DONATE_URL).
-DONATE_URL = ""
-
 # MessageBoxW flags: MB_ICONINFORMATION.
 _MB_ICONINFORMATION = 0x00000040
 # Pull the dialog to the foreground and keep it on top. A tray callback runs
@@ -121,9 +115,6 @@ class TabledownWindowsApp:
             )
         items.append(pystray.MenuItem(t("menu.diagnostics", self.lang), self.share_diagnostics))
         items.append(pystray.MenuItem(t("menu.help", self.lang), self.show_help))
-        # Support/donate: an external web link, shown only when DONATE_URL is set.
-        if DONATE_URL:
-            items.append(pystray.MenuItem(t("menu.donate", self.lang), self.open_donate))
         items.append(pystray.MenuItem(t("menu.quit", self.lang), self.quit_app))
         return pystray.Menu(*items)
 
@@ -215,21 +206,6 @@ class TabledownWindowsApp:
         self._show_message_box_async(
             t("help.message", self.lang), t("help.title", self.lang)
         )
-
-    def open_donate(self, _icon, _item) -> None:
-        """Open the donation page in the default browser."""
-        self._open_url(DONATE_URL)
-
-    @staticmethod
-    def _open_url(url: str) -> None:
-        """Open a URL in the default browser via ShellExecuteW (no subprocess)."""
-        if not url:
-            return
-        try:
-            # SW_SHOWNORMAL = 1. "open" verb hands the URL to the default browser.
-            ctypes.windll.shell32.ShellExecuteW(None, "open", url, None, None, 1)
-        except Exception as exc:  # noqa: BLE001 - opening a link must never crash the tray
-            log(f"opening URL failed: {type(exc).__name__}")
 
     def share_diagnostics(self, _icon, _item) -> None:
         """Write a scrubbed local log and open its folder in Explorer.

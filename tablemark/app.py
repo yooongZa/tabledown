@@ -51,12 +51,6 @@ from .settings import (
 
 GITHUB_URL = "https://github.com/yooongZa/tabledown"
 
-# Optional "Support / Donate" page. This is just an external web link (the app
-# stays fully free — NOT the StoreKit IAP donations removed 2026-06-19; see
-# CLAUDE.md "유료화 없음"). Leave empty to hide the menu item; set the URL to
-# show it. TODO: fill in the donation page URL.
-DONATE_URL = ""
-
 
 def _markdown_paste_block(markdown: str) -> str:
     """Return markdown padded so block parsers see a standalone table."""
@@ -133,12 +127,6 @@ class TabledownApp(rumps.App):
             callback=self.share_diagnostics,
         )
         self.help_item = rumps.MenuItem(t("menu.help", self.lang), callback=self.show_help)
-        # Support/donate: an external web link, shown only when DONATE_URL is set.
-        self.donate_item = (
-            rumps.MenuItem(t("menu.donate", self.lang), callback=self.open_donate)
-            if DONATE_URL
-            else None
-        )
         self.quit_item = rumps.MenuItem(t("menu.quit", self.lang), callback=self.quit_app)
 
         self.settings_item = rumps.MenuItem(t("menu.settings", self.lang))
@@ -157,8 +145,6 @@ class TabledownApp(rumps.App):
             self.diagnostics_item,
             self.help_item,
         ]
-        if self.donate_item is not None:
-            menu_items.append(self.donate_item)
         menu_items.append(self.quit_item)
         self.menu = menu_items
 
@@ -279,8 +265,6 @@ class TabledownApp(rumps.App):
             self.login_item_menu.title = t("menu.login_item", self.lang)
         self.diagnostics_item.title = t("menu.diagnostics", self.lang)
         self.help_item.title = t("menu.help", self.lang)
-        if self.donate_item is not None:
-            self.donate_item.title = t("menu.donate", self.lang)
         self.quit_item.title = t("menu.quit", self.lang)
 
     def _make_language_setter(self, code: str):
@@ -467,10 +451,6 @@ class TabledownApp(rumps.App):
             )
             return
         diagnostics.reveal(path)
-
-    def open_donate(self, _sender):
-        """Open the donation page in the default browser."""
-        self._open_url(DONATE_URL)
 
     @staticmethod
     def _open_url(url):

@@ -234,15 +234,13 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
   (`store.py` 삭제, `copy_as_xml` 게이팅 해제). XML 변환·⌘⌃C 단축키는 무료 기능. 유료화를 다시 넣자는
   제안이 나오면 [project_distribution_strategy] 의 "무료 배포·예산 0" 결정과 함께 재논의할 것 — 실수로
   되살리지 말 것.
-- **‘후원하기’ 외부 링크(2026-06-24 — IAP 아님)**: 메뉴의 ‘후원하기’는 단순히 외부 홈페이지를 여는
-  링크다(`DONATE_URL` 상수 — macOS `tablemark/app.py`·`NSWorkspace.openURL_`, Windows
-  `tabledown_windows/app.py`·`ShellExecuteW`). **위에서 제거한 StoreKit IAP 와 전혀 다르다** — 앱 안에서
-  결제·구독·게이팅을 하지 않고, 앱은 여전히 완전 무료다. 그러니 "유료화 되살린 것"으로 보고 지우지 말 것.
-  `DONATE_URL` 이 비어 있으면 메뉴 항목을 **숨긴다**(login_item 처럼 graceful) — URL 을 채우면 나타난다.
-  두 상수(mac·Windows)를 같은 URL 로 유지할 것. **스토어 심사 주의**: Mac App Store·Windows Store 빌드에
-  개발자 후원 외부 링크는 정책상 회색지대일 수 있다(무료 유틸의 "개발 지원" 링크는 대체로 통과하나 확실치
-  않음). GitHub DMG·winget·직접 다운로드 빌드엔 제약이 없다 — 스토어 빌드에서만 숨기고 싶으면 빌드별로
-  `DONATE_URL` 을 비우면 됨.
+- **‘후원하기’ 외부 링크 없음(2026-06-26 제거 — 출시된 적 없음)**: 0.4.0 개발 중 잠깐 넣었던 ‘후원하기’
+  외부 링크 메뉴(`DONATE_URL` 상수 + `open_donate` 핸들러, macOS `NSWorkspace`·Windows `ShellExecuteW`)는
+  **미출시 상태에서 제거**됐다(최신 릴리스 v0.2.4 엔 들어간 적 없고, `DONATE_URL=""` 라 사용자에게 노출된
+  적도 없음). 앱은 완전 무료라 후원·결제·게이팅 UI 를 두지 않는다. 외부 후원 링크(또는 IAP)를 다시 넣자는
+  제안이 나오면 [project_distribution_strategy] 의 "무료 배포·예산 0" 방향과 함께 재논의할 것 — 실수로
+  되살리지 말 것. (스토어 심사: Mac App Store·Windows Store 는 개발자 후원 외부 링크가 정책상 회색지대일 수
+  있어 굳이 다시 넣지 않는 편이 안전.)
 
 ## 전역 단축키 (글로벌 핫키 — 2026-06-24)
 

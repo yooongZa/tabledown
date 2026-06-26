@@ -551,11 +551,6 @@ def run_i18n_tests() -> list[TestResult]:
             t("menu.diagnostics", "en"),
         ),
     )
-    check("translate_korean_donate", lambda: _assert_equal(t("menu.donate", "ko"), "후원하기"))
-    check(
-        "donate_key_resolves_in_english",
-        lambda: _assert_not_equal(t("menu.donate", "en"), "menu.donate"),
-    )
 
     return tests
 

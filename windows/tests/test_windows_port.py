@@ -169,13 +169,6 @@ class WindowsPortTests(unittest.TestCase):
         self.assertEqual(t("menu.help", "fr"), "Help")
         self.assertEqual(t("missing.key", "ko"), "missing.key")
 
-    def test_donate_label_resolves(self):
-        # The 'Support development' menu label must resolve in each language —
-        # not fall back to the bare key.
-        self.assertEqual(t("menu.donate", "ko"), "후원하기")
-        for lang in SUPPORTED_LANGUAGES:
-            self.assertNotEqual(t("menu.donate", lang), "menu.donate")
-
     def test_login_item_translations_exist(self):
         # The menu label and both "couldn't enable" hints must resolve in each
         # language — not fall back to the bare key.
@@ -382,35 +375,6 @@ class SingleInstanceMainTests(unittest.TestCase):
             app.main()
         fake_app.assert_called_once_with()
         fake_app.return_value.run.assert_called_once_with()
-
-
-@unittest.skipUnless(sys.platform.startswith("win"), "tray app is Windows-only")
-class DonateMenuTests(unittest.TestCase):
-    """The optional 'Support development' link appears only when DONATE_URL is set."""
-
-    def _make_app(self):
-        # No login support (None) keeps the menu minimal; donate is independent.
-        with mock.patch.object(startup_task, "current_state", return_value=None):
-            from tabledown_windows.app import TabledownWindowsApp
-
-            return TabledownWindowsApp()
-
-    def _labels(self, app):
-        return [getattr(item, "text", "") for item in app.icon.menu]
-
-    def test_donate_item_shown_when_url_set(self):
-        from tabledown_windows import app
-
-        with mock.patch.object(app, "DONATE_URL", "https://example.com/donate"):
-            instance = self._make_app()
-            self.assertIn(t("menu.donate", instance.lang), self._labels(instance))
-
-    def test_donate_item_hidden_when_url_empty(self):
-        from tabledown_windows import app
-
-        with mock.patch.object(app, "DONATE_URL", ""):
-            instance = self._make_app()
-            self.assertNotIn(t("menu.donate", instance.lang), self._labels(instance))
 
 
 class HotkeyTests(unittest.TestCase):
