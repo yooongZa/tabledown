@@ -228,7 +228,7 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
 ## UI 관례 (메뉴·피드백)
 
 - 메뉴 순서: 동작(토글·XML) → 설정 → 도움말·종료. 첫인상은 유틸리티.
-- 시스템 알림(UNUserNotification)은 쓰지 않는다 — 권한 프롬프트가 떠서 "권한 0개" 셀링포인트가 깨짐.
+- 시스템 알림(UNUserNotification)은 쓰지 않는다 — 권한 프롬프트가 뜨고, 메뉴바 유틸리티엔 과한 피드백이라서.
   성공 피드백은 **메뉴바 아이콘 1초 체크 플래시**(`_flash_icon_success`, 에셋은 `scripts/make_menu_icons.py` 생성).
 - **유료화 없음(2026-06-19 제거)**: 앱은 완전 무료다. 구독·기부(IAP)·‘구매 복원’·Pro 잠금은 모두 제거됐다
   (`store.py` 삭제, `copy_as_xml` 게이팅 해제). XML 변환·⌘⌃C 단축키는 무료 기능. 유료화를 다시 넣자는
@@ -244,8 +244,8 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
 
 ## 전역 단축키 (글로벌 핫키 — 2026-06-24)
 
-권한 0개 원칙 유지: macOS 는 Carbon `RegisterEventHotKey`, Windows 는 user32
-`RegisterHotKey` — **둘 다 Accessibility/Input Monitoring 권한이 필요 없다.** 핫키는
+전역 핫키는 macOS 는 Carbon `RegisterEventHotKey`, Windows 는 user32
+`RegisterHotKey` 로 등록한다 — **둘 다 Accessibility/Input Monitoring 권한이 필요 없다.** 핫키는
 항상 **액셀러레이터일 뿐** — 등록 실패해도 메뉴 항목은 그대로 동작하게 두는 graceful
 fallback 을 지킬 것(`register()`/`start()` 가 False 를 돌려줄 뿐 예외를 던지지 않음).
 
