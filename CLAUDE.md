@@ -230,7 +230,7 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
 - 메뉴 순서: 동작(토글·XML) → 설정 → 도움말·종료. 첫인상은 유틸리티.
 - 시스템 알림(UNUserNotification)은 쓰지 않는다 — 권한 프롬프트가 떠서 "권한 0개" 셀링포인트가 깨짐.
   성공 피드백은 **메뉴바 아이콘 1초 체크 플래시**(`_flash_icon_success`, 에셋은 `scripts/make_menu_icons.py` 생성).
-- **유료화 없음(2026-06-19 제거)**: 앱은 완전 무료다. 구독·기부(IAP)·‘구매 복원’·Pro 잠금은 모두 제거됐다
+- **유료화 없음(2026-06-24 제거, 0.4.0)**: 앱은 완전 무료다. 구독·기부(IAP)·‘구매 복원’·Pro 잠금은 모두 제거됐다
   (`store.py` 삭제, `copy_as_xml` 게이팅 해제). XML 변환·⌘⌃C 단축키는 무료 기능. 유료화를 다시 넣자는
   제안이 나오면 [project_distribution_strategy] 의 "무료 배포·예산 0" 결정과 함께 재논의할 것 — 실수로
   되살리지 말 것.

@@ -7,7 +7,7 @@
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-06-24
+## [0.4.0] - 2026-06-26
 
 ### Removed
 - **유료화 전면 제거 — 앱을 완전 무료로 전환.** StoreKit IAP 래퍼(`store.py`)를 삭제하고 XML 변환의 Pro 구독 게이팅을 해제 — 이제 누구나 ‘표를 XML로 복사’와 전역 단축키 ⌘⌃C 를 제한 없이 쓴다. 기부(Consumable 3종) 메뉴·‘구매 복원’ 항목·구독 시트·구매/복원 알럿을 모두 제거하고, `settings.py` 의 `pro_active`/`pro_expires` 캐시, `i18n` 의 결제·후원·Pro 문자열, `setup.py` 의 `StoreKit` include, `app.py` 의 관련 콜백·잠금(🔒) 표시도 함께 정리. 전역 단축키(`hotkey.py`)와 XML 변환 로직 자체는 그대로 — 게이팅만 사라졌다. 클립보드 변환 불변식·테스트 영향 없음(변환 테스트 38/38).

@@ -5,12 +5,12 @@
 # Prerequisites:
 #   - "Developer ID Application" signing identity in the keychain
 #   - a notarytool keychain profile holding App Store Connect credentials:
-#       xcrun notarytool store-credentials "tabledown" \
+#       xcrun notarytool store-credentials "tabledown-notary" \
 #         --apple-id <APPLE_ID> --team-id 495S4FVMCB --password <APP_SPECIFIC_PASSWORD>
 #     (or an API key: --key <AuthKey.p8> --key-id <KEY_ID> --issuer <ISSUER_ID>)
 #
 # Usage:
-#   NOTARY_PROFILE=tabledown bash scripts/build_dmg.sh
+#   NOTARY_PROFILE=tabledown-notary bash scripts/build_dmg.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,7 +19,7 @@ DIST="$ROOT/dist"
 APP="$DIST/$APP_NAME.app"
 DMG="$DIST/$APP_NAME.dmg"
 ZIP="$DIST/$APP_NAME-notarized.zip"
-NOTARY_PROFILE="${NOTARY_PROFILE:-tabledown}"
+NOTARY_PROFILE="${NOTARY_PROFILE:-tabledown-notary}"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
