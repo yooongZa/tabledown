@@ -6,7 +6,7 @@ permission (unlike a CGEventTap or a pynput keyboard hook), which preserves
 Tabledown's "권한 0개" (zero-permissions) selling point. It is also the standard
 API many sandboxed Mac App Store apps use for global shortcuts.
 
-Tabledown binds two hotkeys: ⌘⌃C → copy-as-XML and ⌘⌃T → toggle conversion.
+Tabledown binds two hotkeys: ⌘⌃X → copy-as-XML and ⌘⌃T → toggle conversion.
 
 ⚠️ One handler, dispatch by id (회귀 금지). Carbon delivers EVERY
 ``kEventHotKeyPressed`` to the handlers installed on the application event
@@ -50,8 +50,8 @@ CONTROL = 0x1000  # controlKey
 SHIFT = 0x0200  # shiftKey
 OPTION = 0x0800  # optionKey
 
-# ANSI virtual keycodes (Events.h, kVK_ANSI_*). C == 8, T == 17.
-KEY_C = 8  # kVK_ANSI_C
+# ANSI virtual keycodes (Events.h, kVK_ANSI_*). X == 7, T == 17.
+KEY_X = 7  # kVK_ANSI_X (mnemonic for XML)
 KEY_T = 17  # kVK_ANSI_T
 
 # Carbon event constants.
@@ -143,7 +143,7 @@ class GlobalHotkeys:
 
     Usage:
         hk = GlobalHotkeys()
-        hk.add(KEY_C, CMD | CONTROL, self.copy_as_xml)
+        hk.add(KEY_X, CMD | CONTROL, self.copy_as_xml)
         hk.add(KEY_T, CMD | CONTROL, self.toggle)
         hk.register()
         ...

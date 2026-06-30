@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-06-29
+
+### Changed
+- **표→XML 전역 단축키를 ⌘⌃C → ⌘⌃X 로 변경.** X = **X**ML mnemonic 으로 더 직관적. macOS 기본 단축키(`⌃⌘Space`·`⌃⌘F`·`⌃⌘Q`·`⌃⌘D` 등)·앱 단축키와 안 겹치고, 토글 `⌘⌃T` 와도 키보드상 멀리 떨어져 오발 위험 낮음. 변환 동작 자체는 그대로(클립보드의 표→XML 복사, HTML drop). `hotkey.py`(`KEY_X = 7`, kVK_ANSI_X)·`app.py`(핫키 등록 + 메뉴 key)·도움말·회귀 테스트(`hotkey_keycodes_are_ansi_x_and_t`) 갱신. 변환·핫키 테스트 영향 없음(converter 40/40, hotkey 4/4).
+
 ## [0.4.0] - 2026-06-26
 
 ### Removed

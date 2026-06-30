@@ -231,7 +231,7 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
 - 시스템 알림(UNUserNotification)은 쓰지 않는다 — 권한 프롬프트가 떠서 "권한 0개" 셀링포인트가 깨짐.
   성공 피드백은 **메뉴바 아이콘 1초 체크 플래시**(`_flash_icon_success`, 에셋은 `scripts/make_menu_icons.py` 생성).
 - **유료화 없음(2026-06-24 제거, 0.4.0)**: 앱은 완전 무료다. 구독·기부(IAP)·‘구매 복원’·Pro 잠금은 모두 제거됐다
-  (`store.py` 삭제, `copy_as_xml` 게이팅 해제). XML 변환·⌘⌃C 단축키는 무료 기능. 유료화를 다시 넣자는
+  (`store.py` 삭제, `copy_as_xml` 게이팅 해제). XML 변환·⌘⌃X 단축키는 무료 기능. 유료화를 다시 넣자는
   제안이 나오면 [project_distribution_strategy] 의 "무료 배포·예산 0" 결정과 함께 재논의할 것 — 실수로
   되살리지 말 것.
 - **‘후원하기’ 외부 링크 없음(2026-06-26 제거 — 출시된 적 없음)**: 0.4.0 개발 중 잠깐 넣었던 ‘후원하기’
@@ -249,15 +249,20 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
 항상 **액셀러레이터일 뿐** — 등록 실패해도 메뉴 항목은 그대로 동작하게 두는 graceful
 fallback 을 지킬 것(`register()`/`start()` 가 False 를 돌려줄 뿐 예외를 던지지 않음).
 
-**키 배정(2026-06-24 확정)**:
+**키 배정(2026-06-24 확정, XML 키는 2026-06-29 ⌘⌃C→⌘⌃X 로 변경)**:
 | 동작 | macOS | Windows |
 |------|-------|---------|
 | 자동변환 켜기/끄기(토글) | `⌘⌃T` (신규) | `Ctrl+Alt+T` (신규, 유일한 핫키) |
-| 표→XML 복사 | `⌘⌃C` (기존) | — (XML 기능 자체가 Windows 엔 아직 없음) |
+| 표→XML 복사 | `⌘⌃X` (`X`=XML mnemonic) | — (XML 기능 자체가 Windows 엔 아직 없음) |
 - 선택 근거: `⌘⌃` 조합은 앱 충돌이 드물고 시스템 단축키(`⌃⌘F` 전체화면·`⌃⌘D` 사전·
-  `⌃⌘Space` 이모지)와 안 겹침. C↔T 는 키보드상 멀리 떨어져 오발 위험 낮음. Windows 는
+  `⌃⌘Space` 이모지·`⌃⌘Q` 잠금)와 안 겹침. X↔T 는 키보드상 멀리 떨어져 오발 위험 낮음. Windows 는
   `Ctrl+Alt`(≈⌘⌃) 관례를 따르되 `Ctrl+Shift+T`(탭 복원)·시스템 예약 조합을 피함. macOS·
   Windows 모두 토글 글자를 **T 로 통일**.
+- **XML 키 변경 이력(2026-06-29)**: 0.4.0 까진 `⌘⌃C`(C=Copy — XML 동작이 복사라 동작과 일치)였으나,
+  사용자 요청으로 `⌘⌃X`(X=XML — 기능명 직관) 로 변경(0.4.1). `⌘⌃X` 도 macOS 기본·앱 단축키와
+  충돌 없음(`⌘X` 잘라내기는 Ctrl 이 빠진 별개 조합). 키코드 `KEY_X = 7`(kVK_ANSI_X), 회귀 테스트
+  이름도 `hotkey_keycodes_are_ansi_x_and_t` 로 갱신. **다시 C 로 되돌리자는 제안이 나오면 이
+  사용자 확정 변경과 함께 재논의할 것.**
 - **Windows XML 핫키는 해당 없음**: XML 수동변환(`copy_as_xml`)·그 모델 추출은 macOS 전용
   기능이라 Windows 트레이 앱엔 없다. Windows 에 두 번째 핫키를 넣으려면 먼저 XML 기능부터
   포팅해야 한다(별도 작업).

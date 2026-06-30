@@ -38,7 +38,7 @@ from .i18n import (
 )
 from . import diagnostics
 from . import login_item
-from .hotkey import CMD, CONTROL, KEY_C, KEY_T, GlobalHotkeys
+from .hotkey import CMD, CONTROL, KEY_T, KEY_X, GlobalHotkeys
 from .logger import log
 from . import __version__
 from .settings import (
@@ -90,7 +90,7 @@ class TabledownApp(rumps.App):
         self.copy_xml_item = rumps.MenuItem(
             t("menu.copy_xml", self.lang),
             callback=self.copy_as_xml,
-            key="c",
+            key="x",
         )
         self._show_cmd_ctrl_shortcut(self.copy_xml_item)
         self.fill_blanks_item = rumps.MenuItem(
@@ -148,12 +148,12 @@ class TabledownApp(rumps.App):
         menu_items.append(self.quit_item)
         self.menu = menu_items
 
-        # --- Global hotkeys: ⌘⌃C -> copy_as_xml, ⌘⌃T -> toggle ---
+        # --- Global hotkeys: ⌘⌃X -> copy_as_xml, ⌘⌃T -> toggle ---
         # Strong-ref on self so the Carbon callback trampoline survives GC. One
         # handler dispatches both by id (see hotkey.py). Graceful: if a hotkey
         # fails to register, its menu item still works.
         self.hotkeys = GlobalHotkeys()
-        self.hotkeys.add(KEY_C, CMD | CONTROL, self.copy_as_xml)
+        self.hotkeys.add(KEY_X, CMD | CONTROL, self.copy_as_xml)
         self.hotkeys.add(KEY_T, CMD | CONTROL, self.toggle)
         self.hotkeys.register()
 
@@ -233,7 +233,7 @@ class TabledownApp(rumps.App):
         """Display "⌘⌃<key>" next to a menu item to advertise its global hotkey.
 
         rumps' ``key=`` gives a Command-only equivalent; we OR in Control so the
-        text matches the Carbon hotkey (⌘⌃C / ⌘⌃T). Purely cosmetic
+        text matches the Carbon hotkey (⌘⌃X / ⌘⌃T). Purely cosmetic
         discoverability — for a status-bar app the key equivalent only fires
         while the menu is open; the real global trigger is the Carbon hotkey. So
         never let this crash startup.

@@ -47,7 +47,7 @@ from tablemark.converter.table_xml import (
     table_xml_to_model,
 )
 from tablemark import login_item
-from tablemark.hotkey import CMD, CONTROL, KEY_C, KEY_T, GlobalHotkeys
+from tablemark.hotkey import CMD, CONTROL, KEY_T, KEY_X, GlobalHotkeys
 from tablemark.i18n import SUPPORTED_LANGUAGES, detect_system_language, t
 from tablemark.app import TabledownApp
 
@@ -613,7 +613,7 @@ def run_hotkey_tests() -> list[TestResult]:
         except Exception as exc:  # noqa: BLE001
             tests.append(TestResult(name, False, "hotkey", str(exc), _elapsed(started)))
 
-    check("hotkey_keycodes_are_ansi_c_and_t", _hotkey_keycodes)
+    check("hotkey_keycodes_are_ansi_x_and_t", _hotkey_keycodes)
     check("hotkey_dispatch_routes_by_id", _hotkey_dispatch_routes_by_id)
     check("hotkey_single_binding_fallback", _hotkey_single_binding_fallback)
     check("hotkey_unknown_id_does_not_misfire", _hotkey_unknown_id_no_misfire)
@@ -621,8 +621,8 @@ def run_hotkey_tests() -> list[TestResult]:
 
 
 def _hotkey_keycodes() -> str:
-    # The constants app.py composes the ⌘⌃C / ⌘⌃T combos from must stay correct.
-    return _assert_equal((KEY_C, KEY_T, CMD, CONTROL), (8, 17, 0x0100, 0x1000))
+    # The constants app.py composes the ⌘⌃X / ⌘⌃T combos from must stay correct.
+    return _assert_equal((KEY_X, KEY_T, CMD, CONTROL), (7, 17, 0x0100, 0x1000))
 
 
 def _hotkey_dispatch_routes_by_id() -> str:

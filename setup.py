@@ -48,6 +48,11 @@ OPTIONS = {
         "LSApplicationCategoryType": "public.app-category.productivity",
         "LSMinimumSystemVersion": "12.0",
         "NSHumanReadableCopyright": "© 2026 Tabledown",
+        # The app makes no network connections and uses only exempt encryption
+        # (none of its own). Declaring this here answers TestFlight's export-
+        # compliance question at build time, so each upload no longer shows
+        # "Missing Compliance" requiring a manual "No/exempt" answer in ASC.
+        "ITSAppUsesNonExemptEncryption": False,
     },
     "packages": ["rumps", "bs4", "AppKit"],
     # The global hotkey (hotkey.py) binds the system Carbon.framework via ctypes
