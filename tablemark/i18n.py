@@ -14,9 +14,9 @@ DEFAULT_LANGUAGE = "en"
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "ko": {
         "menu.toggle": "Tabledown 사용",
-        "menu.copy_xml": "표를 XML로 복사",
+        "menu.copy_xml": "복사한 표를 XML로 변환",
         "menu.fill_blanks": "XML: 빈칸을 자동 채우기",
-        "menu.fill_blanks_tooltip": "표를 XML로 복사할 때, 비어있는 칸을 바로 위/좌측의 칸 값으로 자동 채웁니다. 데이터(값) 영역의 빈 칸은 그대로 둡니다.",
+        "menu.fill_blanks_tooltip": "표를 XML로 변환할 때, 비어있는 칸을 바로 위/좌측의 칸 값으로 자동 채웁니다. 데이터(값) 영역의 빈 칸은 그대로 둡니다.",
         "xml.no_table_title": "Tabledown",
         "xml.no_table_message": "클립보드에서 표를 찾을 수 없습니다.\n먼저 Excel/스프레드시트 표나 마크다운 표를 복사한 뒤 다시 시도하세요.",
         "menu.settings": "설정",
@@ -40,7 +40,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Markdown 표를 복사하면 Excel에서 셀에 분리되어 붙습니다.\n"
             "표가 변환되면 메뉴바 아이콘이 잠깐 체크 표시로 바뀝니다.\n\n"
             "XML:\n"
-            "• 메뉴의 ‘표를 XML로 복사’ 를 누르면 현재 클립보드의 표가 LLM 친화적 XML로 변환됩니다.\n"
+            "• 메뉴의 ‘복사한 표를 XML로 변환’ 을 누르면 현재 클립보드의 표가 LLM 친화적 XML로 변환됩니다.\n"
             "• 단축키 ⌘⌃X 로도 바로 변환할 수 있습니다. 성공하면 메뉴바 아이콘이 잠시 체크 표시로 바뀝니다.\n"
             "• ‘XML: 빈칸을 자동 채우기’ 를 켜면 병합 없이 비워둔 그룹 열(직급 등)의 빈칸을 바로 위 값으로 채웁니다.\n\n"
             "메뉴의 ‘Tabledown 사용’ 항목 왼쪽 체크 표시가 현재 상태입니다.\n"
@@ -51,9 +51,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "en": {
         "menu.toggle": "Use Tabledown",
-        "menu.copy_xml": "Copy table as XML",
+        "menu.copy_xml": "Convert copied table to XML",
         "menu.fill_blanks": "XML: Auto-fill blank cells",
-        "menu.fill_blanks_tooltip": "When copying a table as XML, blank cells are auto-filled from the cell directly above or to the left. Data (value) cells are left as-is.",
+        "menu.fill_blanks_tooltip": "When converting a table to XML, blank cells are auto-filled from the cell directly above or to the left. Data (value) cells are left as-is.",
         "xml.no_table_title": "Tabledown",
         "xml.no_table_message": "No table found on the clipboard.\nCopy an Excel/Sheets table or a Markdown table first, then try again.",
         "menu.settings": "Settings",
@@ -77,7 +77,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "and Markdown tables paste into separate cells in Excel.\n"
             "When a table is converted, the menu bar icon briefly shows a checkmark.\n\n"
             "XML:\n"
-            "• Click ‘Copy table as XML’ to turn the clipboard table into LLM-friendly XML.\n"
+            "• Click ‘Convert copied table to XML’ to turn the clipboard table into LLM-friendly XML.\n"
             "• The global shortcut ⌘⌃X does the same — on success the menu bar icon briefly shows a checkmark.\n"
             "• ‘XML: Auto-fill blank cells’ fills blanks in left grouping columns (e.g. rank) from the value above.\n\n"
             "The checkmark next to ‘Use Tabledown’ shows the current state.\n"
