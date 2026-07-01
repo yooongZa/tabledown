@@ -31,7 +31,10 @@ jobs:
 
       - name: Build self-signed MSIX (also runs PyInstaller onedir)
         shell: pwsh
-        run: powershell -ExecutionPolicy Bypass -File windows/build_msix.ps1 -SelfSign
+        # pwsh (PowerShell 7), not `powershell` (5.1): the .ps1 scripts are UTF-8
+        # without a BOM (Korean comments + an em-dash). 5.1 decodes them as the
+        # legacy ANSI codepage and the em-dash breaks the parser; 7 reads UTF-8.
+        run: pwsh -File windows/build_msix.ps1 -SelfSign
 
       - name: Export the public cert (.cer) users trust before installing
         shell: pwsh
