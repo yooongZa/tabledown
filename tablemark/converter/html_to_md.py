@@ -9,8 +9,16 @@ _BLOCK_TAGS = {
 }
 
 
-def html_table_to_markdown(html: str) -> str:
+def html_table_to_markdown(html: str, fill_merged_headers: bool = False) -> str:
     """Parse HTML and return a markdown table string.
+
+    Merged cells become blanks (Markdown cannot draw a span). When
+    ``fill_merged_headers`` is set, the *header frame* is forward-filled so the
+    blanks left by a merge carry their value — a group-header band (a colspan
+    label) spreads right, and the left key columns (a rowspan/grouping value)
+    spread down. The data/value region is never filled, so a genuinely empty
+    value stays empty (the user-controlled "빈칸을 자동 채우기" option). See
+    _fill_header_frame.
 
     Raises:
         ValueError: if no table is found or it's empty.
@@ -30,6 +38,9 @@ def html_table_to_markdown(html: str) -> str:
     rows = [r + [" "] * (max_cols - len(r)) for r in rows]
     rows = _trim_trailing_empty_columns(rows)
     max_cols = max(len(r) for r in rows)
+
+    if fill_merged_headers:
+        rows = _fill_header_frame(table, rows)
 
     # First row = header. If only one row, treat it as header with empty body.
     header = rows[0]
@@ -161,6 +172,67 @@ def forward_fill_key_columns(rows: list[list[str]]) -> list[list[str]]:
                 last = row[col]
             elif last:
                 row[col] = last
+    return rows
+
+
+def _fill_header_frame(table, rows: list[list[str]]) -> list[list[str]]:
+    """Forward-fill the *header frame* of a Markdown grid, leaving values blank.
+
+    Markdown cannot draw a merge, but it can carry the merged value: this fills
+    the blanks a merge left behind, restricted to the header frame so no value is
+    invented in the data region (the same guard forward_fill_key_columns uses):
+
+    - Horizontal — a group-header *band* (a row carrying a ``colspan`` > 1 label,
+      e.g. "1분기" over 1/2/3월) spreads its label right across the band. A
+      single full-width cell (a *title* row, not a group header) is left alone.
+    - Vertical — the left *key* columns (a ``rowspan`` or blank grouping such as
+      "부장" over two rows) spread their value down. The key range is the leading
+      columns that still hold a blank in the non-header rows, up to the first
+      fully-populated column (the data region) — value blanks past it are left as
+      "genuinely empty".
+
+    ``rows`` is the padded/trimmed grid (row count matches the raw table, so the
+    span ``meta`` indices align); mutated in place and returned.
+    """
+    if not rows:
+        return rows
+    _, meta = _table_to_filled_grid(table)
+    nrows = len(rows)
+    ncols = max(len(row) for row in rows)
+    header_rows = set(_detect_header_rows(list(range(nrows)), meta))
+
+    # 1) Horizontal fill of group-header bands.
+    for index in header_rows:
+        if index >= len(meta):
+            continue
+        origins = meta[index]
+        is_title = len(origins) == 1 and origins[0][0] >= ncols
+        if is_title or not any(colspan > 1 for colspan, _ in origins):
+            continue
+        last = ""
+        for col in range(len(rows[index])):
+            if rows[index][col].strip():
+                last = rows[index][col]
+            elif last:
+                rows[index][col] = last
+
+    # 2) Vertical fill of the left key columns.
+    body = [index for index in range(nrows) if index not in header_rows]
+    key_cols = 0
+    for col in range(ncols):
+        cells = [rows[index][col] for index in body if col < len(rows[index])]
+        if cells and all(cell.strip() for cell in cells):
+            break
+        key_cols = col + 1
+    for col in range(key_cols):
+        last = ""
+        for index in range(nrows):
+            if col >= len(rows[index]):
+                continue
+            if rows[index][col].strip():
+                last = rows[index][col]
+            elif last:
+                rows[index][col] = last
     return rows
 
 
@@ -430,7 +502,7 @@ def html_has_content_outside_table(html: str) -> bool:
     return bool(soup.get_text(strip=True))
 
 
-def convert_document_tables(html: str) -> str:
+def convert_document_tables(html: str, fill_merged_headers: bool = False) -> str:
     """Render each <table> in a document as Markdown, keep other text as-is.
 
     Every <table> becomes a GFM Markdown table; the surrounding content
@@ -451,7 +523,7 @@ def convert_document_tables(html: str) -> str:
     for index, table in enumerate(soup.find_all("table")):
         key = f"\x00TABLE{index}\x00"
         try:
-            placeholders[key] = html_table_to_markdown(str(table))
+            placeholders[key] = html_table_to_markdown(str(table), fill_merged_headers)
         except ValueError:
             placeholders[key] = ""
         table.replace_with(key)

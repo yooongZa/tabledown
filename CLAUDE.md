@@ -137,22 +137,34 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   (`drop_types=RENDERED_TABLE_TYPES | HTML_TYPES`). 그래야 어디에 붙여도 "표가 아니라 XML"이
   나온다. 불변식 3 은 **자동 변환(`_converted_clipboard`)** 에만 적용되는 규칙이므로, 이
   메뉴 동작의 html drop 을 "회귀"로 보고 되돌리지 말 것.
-- **병합 셀은 XML 경로 전용 `html_table_to_model` 이 처리** (마크다운 경로 `html_table_to_markdown`
-  은 건드리지 말 것 — Markdown 은 병합/계층 표현 불가라 포기). XML 경로는: ① rowspan 값을 아래로
+- **병합 셀의 계층/다단 헤더 *구조* 보존은 XML 경로 전용 `html_table_to_model` 이 한다** (마크다운은
+  병합·계층을 *그릴* 수 없어, 다단 헤더는 리프 헤더 행이 본문으로 내려가는 평면 구조로 둔다 —
+  **의도된 동작, 이 구조는 건드리지 말 것**). 단 마크다운도 병합이 남긴 *빈칸은 채울 수 있다* —
+  ‘빈칸을 자동 채우기’ 옵션이 켜지면 `_fill_header_frame` 이 헤더 프레임만 forward-fill 한다(값
+  영역 보존, 아래 옵션 항목 참조). 그래도 리프-본문 강등 구조 자체는 그대로다. XML 경로는: ① rowspan 값을 아래로
   채우고(forward-fill), ② 전체 열 병합 제목 행(단일 cell colspan=전체)은 건너뛰고, ③ 다단
   그룹 헤더는 `<th>`/`<thead>` 가 있으면 그걸로, 없으면(=실제 Excel 은 전부 `<td>`) **colspan 으로
   추론**해(상단의 가로병합 있는 행들 + 그 아래 leaf 한 줄) **헤더 레벨들을 분리 보존**한다 →
   `model_to_xml` 이 `<열그룹>` 으로 중첩(평면 결합 금지). 실제 Excel 은 `th` 를 안 쓰므로 **colspan
   기반 헤더 추론을 제거하면 다단 헤더가 다시 깨진다.** (`html_table_to_rows` 는 이 모델을 한 줄
   헤더로 평면 결합한 뷰 — 마크다운·빈칸 채우기용.)
-- **‘XML: 빈칸을 자동 채우기’ 옵션(`forward_fill_key_columns`, 기본 꺼짐, `settings.py`/NSUserDefaults
-  영속)**: 병합을 안 하고 빈칸으로 그룹을 표현한 표(직급을 그룹 첫 행에만 쓰고 아래는 비움 —
-  현실에서 흔함)를 위해, 클릭 변환(`copy_as_xml`→`_clipboard_table_model`) 시 **왼쪽 키 열의 빈칸만**
-  채운다 — ① 먼저 **위(세로)** 값으로, ② 그래도 빈 칸은 **좌측(가로)** 값으로(병합의 rowspan→위·
-  colspan→좌측 origin 과 같은 원리). 가드: 열을 왼쪽→오른쪽으로 보다 **빈칸 없는(꽉 찬) 열을 만나면 멈춤** — 그
-  오른쪽 값 열의 빈칸은 "진짜 없음"일 수 있어 건드리지 않는다(pandas·Power Query 관례: 그룹 열만
-  채우고 값 열은 보존). **이 가드를 빼고 전체를 채우면 값 열 빈값이 왜곡된다.** 기본 꺼짐도 같은
-  이유(안전 — 데이터를 임의 생성하지 않음). 마크다운 경로엔 적용 안 함(병합/빈칸 표현 불가).
+- **‘빈칸을 자동 채우기’ 옵션(`fill_blanks`, 기본 꺼짐, `settings.py`/NSUserDefaults 영속)**: 병합을
+  안 하고 빈칸으로 그룹을 표현한 표(직급을 그룹 첫 행에만 쓰고 아래는 비움 — 현실에서 흔함)를
+  위해 빈칸을 채운다. **하나의 토글이 XML·마크다운 두 경로 공통**(2026-06-30 통합 — 옛 라벨 "XML:
+  빈칸을 자동 채우기"에서 "XML:" 제거). 공통 가드: 열을 왼쪽→오른쪽으로 보다 **빈칸 없는(꽉 찬)
+  열을 만나면 멈춤** — 그 오른쪽 값 열의 빈칸은 "진짜 없음"일 수 있어 건드리지 않는다(pandas·Power
+  Query 관례: 그룹 열만 채우고 값 열은 보존). **이 가드를 빼고 전체를 채우면 값 열 빈값이 왜곡된다.**
+  기본 꺼짐도 같은 이유(안전 — 데이터를 임의 생성하지 않음).
+  - **XML 경로(`copy_as_xml`→`_clipboard_table_model`→`forward_fill_key_columns`)**: **왼쪽 키 열의
+    빈칸만** 채운다 — ① 먼저 **위(세로)** 값으로, ② 그래도 빈 칸은 **좌측(가로)** 값으로(병합의
+    rowspan→위·colspan→좌측 origin 과 같은 원리). 가로 다단 헤더는 `<열그룹>` 중첩이 처리하므로 여기선 안 채움.
+  - **마크다운 경로(`_converted_clipboard`→`html_table_to_markdown`/`convert_document_tables`→`_fill_header_frame`)**:
+    마크다운 그리드의 **헤더 프레임만** forward-fill 한다 — ① **그룹 헤더 밴드**(colspan 라벨)를 가로로
+    펴고(`1분기`→`1분기 1분기 1분기`; 전체폭 단일 *제목* 행은 제외), ② **왼쪽 키 열**(rowspan/그룹)을
+    세로로 편다(`부장`→아래로). 값 영역은 그대로(빈 값 보존 — 회귀 테스트 `markdown_fill_keeps_value_blank`).
+    **B·C 의 리프-헤더-본문 강등 구조는 의도된 동작이라 그대로 두고 밴드의 빈칸만 채운다**(불변식 5 의
+    구조 보존과 충돌 아님 — 채우는 건 빈칸뿐). **이 마크다운 채우기를 "회귀"로 보고 되돌리지 말 것**
+    (2026-06-30 사용자 요청으로 추가, 토글 OFF 면 종전과 100% 동일).
 
 ### 회귀 방지 테스트 (변환 로직 수정 후 반드시 통과)
 `scripts/run_test_matrix.py` 의 converter 테스트군:
@@ -166,8 +178,12 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
 - `merged_excel_to_xml_nests_group_header`, `merged_excel_to_xml_keeps_subheader_cell` → 불변식 5
   (가로 다단 헤더를 `<열그룹>` 으로 중첩 보존)
 - `forward_fill_fills_left_key_column`, `forward_fill_stops_at_data_column` → 불변식 5
-  (빈 칸 채우기: 키 열만 채우고 값 열은 보존)
+  (XML 빈 칸 채우기: 키 열만 채우고 값 열은 보존)
 - `forward_fill_horizontal_left` → 불변식 5 (위가 비면 좌측 값으로 가로 채움)
+- `markdown_fill_vertical_key_column`, `markdown_fill_horizontal_band_and_key` → 불변식 5
+  (마크다운 헤더 프레임 채우기: 세로 키 열 + 가로 그룹 밴드)
+- `markdown_fill_keeps_value_blank` → 불변식 5 (마크다운 채우기도 값 영역 빈칸은 보존)
+- `markdown_fill_off_keeps_blanks` → 불변식 5 (토글 OFF 면 병합 빈칸 유지 — 종전 동작 무회귀)
 
 실행 (시스템 클립보드 안 건드리는 순수 변환 테스트만):
 ```bash

@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-01
+
+### Added
+- **마크다운 자동 변환에도 ‘빈칸을 자동 채우기’ 적용 — 병합 헤더가 남긴 빈칸을 채운다.** 지금까지 Excel/Sheets 표를 마크다운으로 자동 변환할 때 병합 셀은 무조건 빈칸으로 남았다(세로 병합 `부장` 아래는 공백, 가로 병합 그룹 헤더 `1분기`는 한 칸에만). 이제 설정 ‘빈칸을 자동 채우기’(기본 꺼짐)가 켜져 있으면 마크다운 경로도 **헤더 프레임만** forward-fill 한다 — ① 그룹 헤더 밴드(colspan 라벨)를 가로로 펴고(`1분기`→`1분기 1분기 1분기`), ② 왼쪽 키 열(rowspan/그룹)을 세로로 편다(`부장`→아래로). **값(데이터) 영역의 빈칸은 그대로 보존**(전체폭 단일 *제목* 행도 제외) — XML 경로의 `forward_fill_key_columns` 와 동일한 "그룹 열만 채우고 값 열은 보존" 가드. 다단 헤더에서 리프 헤더 행이 본문으로 내려가는 평면 구조는 마크다운 표 문법상 그대로 두고(의도된 동작), **밴드의 빈칸만** 채운다. 신규 `converter/html_to_md.py:_fill_header_frame`, 회귀 테스트 4개(`markdown_fill_vertical_key_column`·`markdown_fill_horizontal_band_and_key`·`markdown_fill_keeps_value_blank`·`markdown_fill_off_keeps_blanks`). 토글 OFF(기본)면 종전과 100% 동일.
+
+### Changed
+- **‘빈칸을 자동 채우기’ 토글을 XML·마크다운 두 경로 공통으로 통합.** 옛 라벨 "XML: 빈칸을 자동 채우기"에서 **"XML:" 을 제거**(한·영 `i18n.py`) — 하나의 설정(`fill_blanks`, `settings.py`/NSUserDefaults 영속, 기본 꺼짐)이 이제 XML 변환과 마크다운 자동 변환 양쪽의 빈칸 채우기를 함께 제어한다. 툴팁도 두 경로를 모두 언급하도록 갱신.
+
 ## [0.4.2] - 2026-06-30
 
 ### Changed

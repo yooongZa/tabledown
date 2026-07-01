@@ -15,8 +15,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "ko": {
         "menu.toggle": "Tabledown 사용",
         "menu.copy_xml": "복사한 표를 XML로 변환",
-        "menu.fill_blanks": "XML: 빈칸을 자동 채우기",
-        "menu.fill_blanks_tooltip": "표를 XML로 변환할 때, 비어있는 칸을 바로 위/좌측의 칸 값으로 자동 채웁니다. 데이터(값) 영역의 빈 칸은 그대로 둡니다.",
+        "menu.fill_blanks": "빈칸을 자동 채우기",
+        "menu.fill_blanks_tooltip": "표를 변환할 때(마크다운·XML) 병합·빈 칸을 바로 위/좌측의 칸 값으로 자동 채웁니다. 헤더 영역만 채우고 데이터(값) 영역의 빈 칸은 그대로 둡니다.",
         "xml.no_table_title": "Tabledown",
         "xml.no_table_message": "클립보드에서 표를 찾을 수 없습니다.\n먼저 Excel/스프레드시트 표나 마크다운 표를 복사한 뒤 다시 시도하세요.",
         "menu.settings": "설정",
@@ -52,8 +52,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "en": {
         "menu.toggle": "Use Tabledown",
         "menu.copy_xml": "Convert copied table to XML",
-        "menu.fill_blanks": "XML: Auto-fill blank cells",
-        "menu.fill_blanks_tooltip": "When converting a table to XML, blank cells are auto-filled from the cell directly above or to the left. Data (value) cells are left as-is.",
+        "menu.fill_blanks": "Auto-fill blank cells",
+        "menu.fill_blanks_tooltip": "When converting a table (Markdown or XML), merged/blank cells are auto-filled from the cell directly above or to the left. Only header areas are filled; data (value) cells are left as-is.",
         "xml.no_table_title": "Tabledown",
         "xml.no_table_message": "No table found on the clipboard.\nCopy an Excel/Sheets table or a Markdown table first, then try again.",
         "menu.settings": "Settings",

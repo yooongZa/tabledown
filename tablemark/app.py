@@ -382,7 +382,8 @@ class TabledownApp(rumps.App):
         multi-level group headers survive (a Markdown/plain table has a single
         level). When ``fill_blanks`` is set, blank cells in the left grouping
         columns are forward-filled (see forward_fill_key_columns) — the
-        user-controlled "XML: 빈칸을 자동 채우기" option, off by default.
+        user-controlled "빈칸을 자동 채우기" option, off by default. (The same
+        toggle drives the Markdown path's _fill_header_frame.)
         """
         html = content.get("html", "")
         text = content.get("text", "")
@@ -552,6 +553,13 @@ class TabledownApp(rumps.App):
                 "html": markdown_table_to_html(text),
             }
 
+        # Same opt-in toggle as the XML path: when on, forward-fill the merged
+        # header frame so a group-header band / left key column carry their value
+        # instead of leaving blanks (value cells stay blank). getattr guards the
+        # static-call test path (self is None) — defaults to off. See
+        # _fill_header_frame.
+        fill = bool(getattr(self, "fill_blanks", False))
+
         if has_html_table:
             # A table embedded in a document (headings, paragraphs, lists):
             # render its tables as Markdown in the text slot but KEEP the
@@ -560,7 +568,7 @@ class TabledownApp(rumps.App):
             # <table> from HTML and paste a real table. Only RENDERED image
             # formats are dropped, never the HTML.
             if html_has_content_outside_table(html):
-                converted = convert_document_tables(html)
+                converted = convert_document_tables(html, fill)
                 if not converted.strip() or converted.strip() == text.strip():
                     return None
                 log("detected table in document")
@@ -573,7 +581,7 @@ class TabledownApp(rumps.App):
             # gets Markdown; Excel/Word reading HTML still paste a real table, so
             # one copy works for every destination (same rule as web tables and
             # documents). Only RENDERED image formats are dropped, never HTML.
-            markdown = html_table_to_markdown(html)
+            markdown = html_table_to_markdown(html, fill)
             if text.strip() == markdown.strip():
                 return None
             log("detected html table")

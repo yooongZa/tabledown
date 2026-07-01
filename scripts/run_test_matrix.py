@@ -68,6 +68,28 @@ HTML_NOISE = """
 </body></html>
 """
 
+# Markdown header-frame fill (fill_merged_headers): merged headers leave blanks
+# the toggle forward-fills. VKEY = vertical key merge (부장 spans 2 rows). HV =
+# horizontal group band (1분기/2분기 colspan) + vertical key. VGUARD = a value
+# column (비고) with a genuine blank that must NOT be filled.
+HTML_MD_VKEY = (
+    "<table><tr><th>직급</th><th>이름</th><th>금액</th></tr>"
+    "<tr><td rowspan='2'>부장</td><td>김철수</td><td>100</td></tr>"
+    "<tr><td>이영희</td><td>200</td></tr>"
+    "<tr><td>차장</td><td>박민수</td><td>300</td></tr></table>"
+)
+HTML_MD_HV = (
+    "<table><tr><td></td><td colspan='3'>1분기</td><td colspan='3'>2분기</td></tr>"
+    "<tr><td>직급</td><td>1월</td><td>2월</td><td>3월</td><td>4월</td><td>5월</td><td>6월</td></tr>"
+    "<tr><td rowspan='2'>부장</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td></tr>"
+    "<tr><td>7</td><td>8</td><td>9</td><td>10</td><td>11</td><td>12</td></tr></table>"
+)
+HTML_MD_VGUARD = (
+    "<table><tr><th>직급</th><th>이름</th><th>비고</th></tr>"
+    "<tr><td rowspan='2'>부장</td><td>김철수</td><td>우수</td></tr>"
+    "<tr><td>이영희</td><td></td></tr></table>"
+)
+
 XML_TABLE = (
     "<dataset>\n"
     '  <row>\n    <cell name="Name">Alice</cell>\n    <cell name="Score">95</cell>\n  </row>\n'
@@ -488,6 +510,54 @@ def run_converter_tests() -> list[TestResult]:
             # default (option OFF): the blank stays blank — no invented data.
             TabledownApp._clipboard_table_model({"html": HTML_BLANK_GROUP})[1][1][0],
             "",
+        ),
+    )
+    # Markdown header-frame fill (same toggle as the XML path; off by default).
+    check(
+        "markdown_fill_vertical_key_column",
+        lambda: _assert_equal(
+            # 부장 (rowspan key) carries down to 이영희's row instead of a blank.
+            html_table_to_markdown(HTML_MD_VKEY, True).split("\n"),
+            [
+                "| 직급 | 이름 | 금액 |",
+                "| --- | --- | --- |",
+                "| 부장 | 김철수 | 100 |",
+                "| 부장 | 이영희 | 200 |",
+                "| 차장 | 박민수 | 300 |",
+            ],
+        ),
+    )
+    check(
+        "markdown_fill_horizontal_band_and_key",
+        lambda: _assert_equal(
+            # group band 1분기/2분기 spreads right (header line); 부장 spreads down
+            # (last line). Leaf header (직급/1월…) stays demoted to the body — the
+            # intended B·C structure is preserved, only the band blanks are filled.
+            [
+                html_table_to_markdown(HTML_MD_HV, True).split("\n")[0],
+                html_table_to_markdown(HTML_MD_HV, True).split("\n")[-1],
+            ],
+            [
+                "|   | 1분기 | 1분기 | 1분기 | 2분기 | 2분기 | 2분기 |",
+                "| 부장 | 7 | 8 | 9 | 10 | 11 | 12 |",
+            ],
+        ),
+    )
+    check(
+        "markdown_fill_keeps_value_blank",
+        lambda: _assert_equal(
+            # guard: 직급 (key) fills to 부장, but the empty 비고 (a value column)
+            # stays blank — header frame only, never the data region.
+            html_table_to_markdown(HTML_MD_VGUARD, True).split("\n")[-1],
+            "| 부장 | 이영희 |   |",
+        ),
+    )
+    check(
+        "markdown_fill_off_keeps_blanks",
+        lambda: _assert_equal(
+            # default (OFF): merged cells stay blank — current behavior unchanged.
+            html_table_to_markdown(HTML_MD_VKEY, False).split("\n")[3],
+            "|   | 이영희 | 200 |",
         ),
     )
     # Privacy: a malformed-table error must never echo clipboard-derived text
