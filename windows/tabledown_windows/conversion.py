@@ -49,8 +49,14 @@ def markdown_paste_block(markdown: str) -> str:
     return "\n" + markdown.strip() + "\n"
 
 
-def converted_clipboard(content: dict) -> dict | None:
-    """Return clipboard formats to write, or None when no update is needed."""
+def converted_clipboard(content: dict, fill_blanks: bool = False) -> dict | None:
+    """Return clipboard formats to write, or None when no update is needed.
+
+    ``fill_blanks`` mirrors the macOS "빈칸을 자동 채우기" toggle (0.5.0): when on,
+    the Markdown paths forward-fill the merged header frame (a group-header band
+    spreads right, left key columns spread down) instead of leaving blanks. The
+    value/data region is preserved. Off by default -> behavior unchanged.
+    """
     if content.get("generated"):
         return None
 
@@ -75,7 +81,7 @@ def converted_clipboard(content: dict) -> dict | None:
         # its tables as Markdown in the text slot but KEEP the original HTML so
         # rich editors still paste a real table. Only rendered images are dropped.
         if html_has_content_outside_table(html):
-            converted = convert_document_tables(html)
+            converted = convert_document_tables(html, fill_blanks)
             if not converted.strip() or converted.strip() == text.strip():
                 return None
             return {
@@ -85,7 +91,7 @@ def converted_clipboard(content: dict) -> dict | None:
         # A bare Excel/Sheets table: Markdown into the text slot, KEEP the HTML
         # <table> so one copy works for every destination. Only rendered images
         # are dropped — never the HTML (invariant 3, unified in 0.2.4).
-        markdown = html_table_to_markdown(html)
+        markdown = html_table_to_markdown(html, fill_blanks)
         if text.strip() == markdown.strip():
             return None
         return {

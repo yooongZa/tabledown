@@ -28,6 +28,16 @@ HTML_DOCUMENT = (
     "<table><tr><th>제품</th><th>수량</th></tr><tr><td>키보드</td><td>3</td></tr></table>"
     "<p>After</p></body></html>"
 )
+# A bare table with a vertical merge (부장 spans 2 rows) — mirrors HTML_MD_VKEY in
+# scripts/run_test_matrix.py. The "빈칸을 자동 채우기" toggle (0.5.0) forward-fills
+# the merged key column in the Markdown path; off by default the blank stays.
+HTML_MERGED_VKEY = (
+    "<table><tr><th>직급</th><th>이름</th><th>금액</th></tr>"
+    "<tr><td rowspan='2'>부장</td><td>김철수</td><td>100</td></tr>"
+    "<tr><td>이영희</td><td>200</td></tr>"
+    "<tr><td>차장</td><td>박민수</td><td>300</td></tr></table>"
+)
+MERGED_VKEY_TEXT = "직급\t이름\t금액\n부장\t김철수\t100\n이영희\t200\n차장\t박민수\t300"
 
 
 def _excel_style_cf_html(interior: str) -> bytes:
@@ -154,6 +164,26 @@ class WindowsPortTests(unittest.TestCase):
         self.assertIsNone(result.get("html"))
         self.assertNotIn(CF_HTML_FORMAT_NAME, result["drop_formats"])
 
+    def test_fill_blanks_off_keeps_merged_header_blank(self):
+        # 0.5.0 default (toggle OFF): a merged cell stays blank in the Markdown —
+        # no invented data, behavior unchanged from before the toggle existed.
+        result = converted_clipboard({"html": HTML_MERGED_VKEY, "text": MERGED_VKEY_TEXT})
+
+        self.assertIn("|   | 이영희 | 200 |", result["text"])
+        self.assertNotIn("| 부장 | 이영희 | 200 |", result["text"])
+
+    def test_fill_blanks_on_fills_merged_header(self):
+        # 0.5.0 (toggle ON): the merged key column (부장, rowspan) carries down to
+        # 이영희's row instead of leaving a blank — parity with the macOS path.
+        result = converted_clipboard(
+            {"html": HTML_MERGED_VKEY, "text": MERGED_VKEY_TEXT}, fill_blanks=True
+        )
+
+        self.assertIn("| 부장 | 이영희 | 200 |", result["text"])
+        # HTML slot is still preserved (only rendered images dropped) — the fill
+        # is a text-slot concern and must not change the drop set (invariant 3).
+        self.assertNotIn(CF_HTML_FORMAT_NAME, result["drop_formats"])
+
     def test_markdown_clipboard_adds_html_table(self):
         result = converted_clipboard({"text": MARKDOWN_BASIC})
 
@@ -177,6 +207,12 @@ class WindowsPortTests(unittest.TestCase):
         for lang in SUPPORTED_LANGUAGES:
             for key in ("login_item.blocked_by_user", "login_item.blocked_by_policy"):
                 self.assertNotEqual(t(key, lang), key)
+
+    def test_fill_blanks_translations_exist(self):
+        # The 0.5.0 "빈칸을 자동 채우기" label must resolve in each language, not
+        # fall back to the bare key.
+        self.assertEqual(t("menu.fill_blanks", "ko"), "빈칸을 자동 채우기")
+        self.assertEqual(t("menu.fill_blanks", "en"), "Auto-fill blank cells")
 
 
 class _FakeWinrtTask:
@@ -323,6 +359,23 @@ class LoginMenuTests(unittest.TestCase):
             app.toggle_login_item(None, None)
         self.assertTrue(app.login_enabled)
         self.assertEqual(shown, [])  # success is silent — the checkmark says it
+
+    def test_menu_includes_fill_blanks_toggle(self):
+        app = self._make_app(supported=False)
+        self.assertIn(t("menu.fill_blanks", app.lang), self._labels(app))
+
+    def test_toggle_fill_blanks_flips_and_persists(self):
+        app = self._make_app(supported=False)
+        self.assertFalse(app.fill_blanks)  # off by default
+        saved = []
+        from tabledown_windows.app import FILL_BLANKS_KEY
+
+        with mock.patch("tabledown_windows.app.save_setting",
+                        side_effect=lambda key, value: saved.append((key, value))), \
+             mock.patch.object(app, "_refresh_menu"):
+            app.toggle_fill_blanks(None, None)
+        self.assertTrue(app.fill_blanks)
+        self.assertEqual(saved, [(FILL_BLANKS_KEY, True)])
 
 
 class SingleInstanceTests(unittest.TestCase):

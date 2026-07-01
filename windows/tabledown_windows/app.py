@@ -19,6 +19,9 @@ from .settings import load_settings, save_setting
 from .win_clipboard import clipboard_change_count, read_clipboard, write_clipboard
 
 WELCOME_SHOWN_KEY = "welcome_shown"
+# Persisted "빈칸을 자동 채우기" preference (0.5.0, parity with macOS fill_blanks).
+# Off by default so a merge stays blank unless the user opts in.
+FILL_BLANKS_KEY = "fill_blanks"
 
 # MessageBoxW flags: MB_ICONINFORMATION.
 _MB_ICONINFORMATION = 0x00000040
@@ -39,6 +42,10 @@ class TabledownWindowsApp:
         log("windows app starting")
         self.enabled = True
         self.lang = resolve_language()
+        # Persisted preference (parity with macOS): drives the Markdown path's
+        # merged-header fill. Off by default, so behavior is unchanged unless the
+        # user turns it on. (enabled stays non-persistent — see settings policy.)
+        self.fill_blanks = bool(load_settings().get(FILL_BLANKS_KEY, False))
         self._stop_watcher = threading.Event()
         self._last_change_count = clipboard_change_count()
         self._base_icon = None  # cached full-color source image
@@ -101,6 +108,13 @@ class TabledownWindowsApp:
                 checked=lambda _item: self.enabled,
             ),
             pystray.Menu.SEPARATOR,
+            # Preference: fill merged-header blanks in the Markdown conversion
+            # (0.5.0). Checkmark re-reads self.fill_blanks each time the menu opens.
+            pystray.MenuItem(
+                t("menu.fill_blanks", self.lang),
+                self.toggle_fill_blanks,
+                checked=lambda _item: self.fill_blanks,
+            ),
             pystray.MenuItem(t("menu.language", self.lang), pystray.Menu(*language_items)),
         ]
         # Preferences (language + login) sit before help/quit. The login toggle
@@ -144,6 +158,14 @@ class TabledownWindowsApp:
     def toggle(self, _icon, _item) -> None:
         # Menu click: runs on pystray's pump thread, so refreshing the menu is fine.
         self._set_enabled(not self.enabled, refresh_menu=True)
+
+    def toggle_fill_blanks(self, _icon, _item) -> None:
+        # Menu click (pump thread): flip, persist, and refresh so the checkmark
+        # reflects the new state. Read live by the watcher on the next conversion.
+        self.fill_blanks = not self.fill_blanks
+        save_setting(FILL_BLANKS_KEY, self.fill_blanks)
+        log(f"fill blanks {'enabled' if self.fill_blanks else 'disabled'}")
+        self._refresh_menu()
 
     def _toggle_from_hotkey(self) -> None:
         # Ctrl+Alt+T: runs on the hotkey thread, NOT pystray's pump. The bool
@@ -316,7 +338,7 @@ class TabledownWindowsApp:
     def _augment_clipboard(self) -> None:
         try:
             content = read_clipboard()
-            updated = converted_clipboard(content)
+            updated = converted_clipboard(content, self.fill_blanks)
             if updated is None:
                 return
 

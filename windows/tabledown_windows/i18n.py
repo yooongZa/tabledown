@@ -14,6 +14,7 @@ DEFAULT_LANGUAGE = "en"
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "ko": {
         "menu.toggle": "Tabledown 사용",
+        "menu.fill_blanks": "빈칸을 자동 채우기",
         "menu.language": "언어",
         "menu.language.ko": "한국어",
         "menu.language.en": "English",
@@ -47,6 +48,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "en": {
         "menu.toggle": "Use Tabledown",
+        "menu.fill_blanks": "Auto-fill blank cells",
         "menu.language": "Language",
         "menu.language.ko": "한국어",
         "menu.language.en": "English",
