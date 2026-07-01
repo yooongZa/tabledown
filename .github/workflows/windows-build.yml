@@ -1,0 +1,85 @@
+name: Windows build (test installer)
+
+# Manual trigger only — builds a testable Windows package on a windows-latest
+# runner (PyInstaller can't cross-compile from macOS). Produces two artifacts:
+#   * a portable PyInstaller build (unzip, run the .exe — no install, no admin)
+#   * a self-signed MSIX + its public cert (for testing the *installed* app)
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create build venv (windows/.venv, where the PS1 scripts look)
+        shell: pwsh
+        run: |
+          python -m venv windows/.venv
+          windows/.venv/Scripts/python -m pip install --upgrade pip
+          windows/.venv/Scripts/pip install -r windows/requirements.txt
+
+      - name: Run Windows test suite (the tray tests skipped on non-Windows)
+        shell: pwsh
+        working-directory: windows/tests
+        run: ..\.venv\Scripts\python -m unittest test_windows_port -v
+
+      - name: Build self-signed MSIX (also runs PyInstaller onedir)
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File windows/build_msix.ps1 -SelfSign
+
+      - name: Export the public cert (.cer) users trust before installing
+        shell: pwsh
+        run: |
+          $col = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2Collection
+          $col.Import("windows/dist/Tabledown-dev.pfx", "tabledown", 'DefaultKeySet')
+          [IO.File]::WriteAllBytes("windows/dist/Tabledown-dev.cer", $col[0].Export('Cert'))
+
+      - name: Zip the portable PyInstaller build
+        shell: pwsh
+        run: |
+          $v = (windows/.venv/Scripts/python -c "import sys; sys.path.insert(0,'windows'); import tabledown_windows; print(tabledown_windows.__version__)").Trim()
+          Compress-Archive -Path windows/dist/Tabledown-Windows `
+            -DestinationPath "windows/dist/Tabledown-Windows-portable-$v.zip" -Force
+
+      - name: Write install notes
+        shell: pwsh
+        run: |
+          @"
+          Tabledown — Windows test build
+          ==============================
+
+          A) Portable (easiest — no install, no admin):
+             1. Unzip Tabledown-Windows-portable-*.zip
+             2. Run Tabledown-Windows\Tabledown-Windows.exe
+             3. A table icon appears in the tray. (The "Open at Login" toggle is
+                hidden here — it needs the installed MSIX. Everything else,
+                including "Auto-fill blank cells", works.)
+
+          B) Installed (MSIX — tests the packaged app):
+             1. Trust the dev cert (admin PowerShell, one time):
+                Import-Certificate -FilePath Tabledown-dev.cer -CertStoreLocation Cert:\LocalMachine\Root
+             2. Add-AppxPackage Tabledown-0.2.7.0.msix
+             3. Launch Tabledown from the Start menu.
+
+          Testing the 0.5.0 "Auto-fill blank cells" feature:
+             - Tray menu -> toggle "빈칸을 자동 채우기" (Auto-fill blank cells) ON.
+             - Copy a merged-cell table from Excel, paste into a Markdown editor:
+               the merged header now carries its value instead of a blank.
+             - Toggle OFF -> re-copy -> blanks stay blank (default behavior).
+          "@ | Set-Content -Path windows/dist/INSTALL.txt -Encoding UTF8
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tabledown-windows-test-build
+          path: |
+            windows/dist/Tabledown-*.msix
+            windows/dist/Tabledown-dev.cer
+            windows/dist/Tabledown-Windows-portable-*.zip
+            windows/dist/INSTALL.txt
+          if-no-files-found: error
