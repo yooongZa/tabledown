@@ -7,6 +7,40 @@ Tabledown 은 macOS 메뉴바 앱으로, 클립보드를 감시하며 **Excel/Sh
 개인프로젝트로 브런치를 새로 만들 필요는 없다. 다만 작업사항 및 히스토리를 커밋단위로 잘 정리하도록 한다. 
 
 
+## 리포 지도 (신규 세션 필독)
+
+### 두 플랫폼 구조
+- **macOS 앱**: `tablemark/` (진입점 `run.py` → `tablemark.app.main`). rumps 메뉴바 앱.
+- **Windows 트레이 포트**: `windows/tabledown_windows/` (진입점 `windows/run_windows.py` → `tabledown_windows.app.main`). pystray 트레이 앱.
+- **이름 유래(헷갈림 주의)**: 앱 이름은 **Tabledown**, 파이썬 패키지명은 **`tablemark`**(옛 이름 TableMark 잔재 — 에셋에도 남음, 예 `assets/TableMark.icns`), 리포 폴더명은 **`t2m`**. 셋 다 같은 앱을 가리킨다.
+
+### 변환 코드 — 공유 vs 중복 (수정 시 동기화 판단)
+- **순수 변환 로직은 공유**: `windows/tabledown_windows/conversion.py` 는 `tablemark.converter`(`html_to_md`·`md_to_tsv` 등)를 **import 해서 쓴다**(로직 복제 아님). 따라서 `tablemark/converter/` 를 고치면 **양쪽에 자동 반영**된다.
+- **클립보드 슬롯 결정은 각 플랫폼에 별도로 존재(미러)**: 어느 슬롯을 보강/drop 할지 정하는 오케스트레이션은 macOS `tablemark/app.py` 의 `_converted_clipboard` 와 Windows `conversion.py` 의 `converted_clipboard` **두 곳**에 각각 있다. **이 결정 로직(불변식 0~5)을 한쪽에서 고치면 다른 쪽도 수동 동기화**해야 한다.
+
+### 버전은 플랫폼별 2-트랙 (독립 버저닝)
+- macOS: `tablemark/__init__.py` (`__version__`, 현재 **0.5.x** 트랙).
+- Windows: `windows/tabledown_windows/__init__.py` (`__version__`, 현재 **0.2.x** 트랙). Windows 는 macOS 버전을 일부러 안 따른다(MSIX PackageVersion 소스이므로 공유하면 오기록 — 그 파일 주석 참조).
+- 문서·커밋에서 버전을 말할 땐 **어느 플랫폼인지 반드시 명시**.
+
+### 테스트 지도
+- **전체 매트릭스**(`scripts/run_test_matrix.py`) — 7개 그룹: `run_converter_tests`, `run_i18n_tests`, `run_diagnostics_tests`, `run_login_item_tests`, `run_hotkey_tests`, `run_clipboard_direct_tests`, `run_watcher_tests`.
+  ```bash
+  .venv/bin/python scripts/run_test_matrix.py            # 기본 6개 그룹 (watcher 제외)
+  .venv/bin/python scripts/run_test_matrix.py --watcher  # + watcher (실행 중인 앱 필요)
+  ```
+  ⚠️ `clipboard_direct`(및 `watcher`) 그룹은 **시스템 클립보드를 읽고 쓴다** — 실행 중 클립보드 내용이 잠깐 바뀐다. 산출물(fixture·`report.json`)은 gitignore 된 `outputs/tabledown_test_envs/` 로 나간다.
+- **Windows 포트 테스트**(`.github/workflows/windows-build.yml` 이 CI 에서 쓰는 커맨드) — macOS 에서도 리포 루트 `.venv` 로 실행됨(트레이·`winsdk` 의존 테스트는 자동 skip):
+  ```bash
+  cd windows/tests && ../../.venv/bin/python -m unittest test_windows_port -v   # 38 pass / 12 skip
+  ```
+- converter만 빠르게(클립보드 안 건드림)는 이 파일 **불변식 섹션 끝의 원라이너**(44/44) 참조.
+
+### 자주 쓰는 명령 포인터
+- 로컬 실행: `.venv/bin/python run.py` (Windows 포트는 `windows/run_windows.py`).
+- 빌드·배포(App Store·DMG·Windows MSIX): 아래 **‘빌드 / 실행’** 섹션 참조.
+
+
 ## ⚠️ 클립보드 변환 불변식 (회귀 금지)
 
 아래는 **실제 사용자가 깨진 걸 겪은 회귀**에서 도출한 규칙이다. 변환 로직을 수정할 때
@@ -121,7 +155,7 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   v2 는 세로 그룹도 부모 노드 `<{헤더}그룹 이름="값">` 로 **중첩**한다(인접 행의 동일 그룹값을
   연속 런으로 묶고, 다단계면 다단 중첩). **트레이드오프(의도된 변경)**: 세로 중첩이라 **행이
   자기완결이 아니다** — 직급 값이 부모(`<직급그룹>`)에만 있어 행 하나만 떼면 직급을 모른다. v1 의
-  자기완결성을 포기하고 계층 보존을 택한 **사용자 확정 형식**이다(spec §7). **세로를 다시 매 행
+  자기완결성을 포기하고 계층 보존을 택한 **사용자 확정 형식**이다(spec = `docs/xml-format-spec.md`, §7). **세로를 다시 매 행
   forward-fill 로 평면화하지 말 것.**
 - **자동 XML→표 역변환은 없다 (의도적)**: 워처(`_converted_clipboard`)는 클립보드의 XML 을
   표로 되돌리지 **않는다**. XML 은 오직 메뉴의 `copy_as_xml` 클릭으로만 생성된다. (초기 0.3.0
@@ -351,10 +385,21 @@ fallback 을 지킬 것(`register()`/`start()` 가 False 를 돌려줄 뿐 예�
   둘 다 놓친다. 빠지면 빌드는 통과하지만 **로그인 토글이 패키지 빌드에서 조용히 사라진다**(import 실패 →
   `is_supported()` False). 검증: frozen exe 에서 `winsdk.windows.applicationmodel.StartupTask` import 가 되고
   미패키지 실행 시 `OSError(ERROR_NOT_FOUND, -2147023728)` 로 깨끗이 떨어지면 OK.
+- **Windows MSIX 패키징**: `windows/build_msix.ps1` — **pwsh 7 필수**. PowerShell 5.1(`powershell`)은 파서·
+  UTF-8 인코딩 문제로 실패한다(커밋 `7be5ba5` 참조). 자체서명 테스트 패키지는 `pwsh -File windows/build_msix.ps1 -SelfSign`.
+- **macOS 에서 Windows 테스트 빌드 얻기**: PyInstaller 는 크로스컴파일이 안 된다 → GitHub Actions
+  `.github/workflows/windows-build.yml`(**`workflow_dispatch` 수동 트리거**)을 돌려 windows-latest 러너에서
+  포터블 zip + 자체서명 MSIX(+공개 인증서) 아티팩트를 받는다.
 
 ## 버전 / 릴리스 관례
-- 버전: `tablemark/__init__.py` 의 `__version__`. SemVer.
+- **버전은 플랫폼별 2-트랙 (독립 SemVer)**: macOS = `tablemark/__init__.py` 의 `__version__`(현재 0.5.x 트랙),
+  Windows = `windows/tabledown_windows/__init__.py` 의 `__version__`(현재 0.2.x 트랙). Windows 는 macOS 버전을
+  **따르지 않는다** — MSIX PackageVersion 이 이 값을 읽으므로 공유하면 잘못 찍힌다(그 파일 주석 참조). 버전
+  언급 시 어느 플랫폼인지 명시.
 - CHANGELOG(`CHANGELOG.md`) 와 README 변경 이력(한 `README.md` / 영 `README.en.md`) 둘 다 갱신.
+- **macOS 릴리스는 App Store 와 GitHub Release 에 같은 버전으로 동시 배포**(사용자 확정 2026-07-12):
+  git 태그 `vX.Y.Z` + GitHub Release DMG(Latest) + App Store(.pkg) 업로드가 **한 세트**다. 셋 중 하나만
+  올려 버전이 어긋나지 않게 할 것.
 - git 태그 `vX.Y.Z`, GitHub Release 는 최신 버전을 Latest 로.
 - README 의 DMG 다운로드 링크는 `releases/latest/download/Tabledown.dmg` —
   **Latest 릴리스에 DMG 에셋이 반드시 있어야** 404 가 안 난다.
