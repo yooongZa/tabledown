@@ -4,7 +4,8 @@ Tabledown 은 macOS 메뉴바 앱으로, 클립보드를 감시하며 **Excel/Sh
 양방향 변환한다. 핵심 로직은 `tablemark/app.py` 의 `TabledownApp._converted_clipboard` 와
 `tablemark/converter/` 에 있다.
 
----
+개인프로젝트로 브런치를 새로 만들 필요는 없다. 다만 작업사항 및 히스토리를 커밋단위로 잘 정리하도록 한다. 
+
 
 ## ⚠️ 클립보드 변환 불변식 (회귀 금지)
 
