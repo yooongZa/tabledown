@@ -1,6 +1,6 @@
 # Tabledown — Privacy Policy / 개인정보 처리방침
 
-_Last updated: 2026-06-15_
+_Last updated: 2026-07-12_
 
 Tabledown is a Windows tray utility that converts spreadsheet tables (Excel /
 Google Sheets) to Markdown — and Markdown tables back into a

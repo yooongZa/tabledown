@@ -22,11 +22,13 @@ Tabledown 은 백그라운드에서 클립보드를 **상시 감시**하다가 �
   https://github.com/PowerShell/PowerShell 또는 `winget install Microsoft.PowerShell`
 - **빌드용 venv** — 두 빌드 스크립트는 시스템 `python` 이 아니라 `windows\.venv` 인터프리터를
   강제한다(없으면 `throw` 로 즉시 중단). 시스템 Python 에 Pillow/PyInstaller 가 없어도
-  빌드가 "성공"한 척 STALE onedir 를 패킹하는 사고를 막기 위함이다. 먼저 생성·설치할 것:
+  빌드가 "성공"한 척 STALE onedir 를 패킹하는 사고를 막기 위함이다. **Python 3.10+** 로
+  먼저 생성·설치할 것(공용 변환 코드가 런타임에 PEP 604 `str | None` 애노테이션을 쓰므로
+  3.10 미만은 안 됨 — `setup.py` 의 `python_requires=">=3.10"` 과 동일 요건):
 
   ```powershell
   cd windows
-  py -3 -m venv .venv
+  py -3 -m venv .venv          # Python 3.10+ (py -3 는 설치된 최신 Python 3 선택)
   .\.venv\Scripts\python -m pip install -r requirements.txt
   ```
 
@@ -65,8 +67,8 @@ Add-AppxPackage dist\Tabledown-<버전>.msix
 > `Import-Certificate` 로 신뢰해도 된다(CI `windows-build.yml` 이 쓰는 방식):
 > ```powershell
 > $c = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2Collection
-> $c.Import("dist\Tabledown-dev.pfx", "tabledown", 'DefaultKeySet')
-> [IO.File]::WriteAllBytes("dist\Tabledown-dev.cer", $c[0].Export('Cert'))
+> $c.Import("$PWD\dist\Tabledown-dev.pfx", "tabledown", 'DefaultKeySet')
+> [IO.File]::WriteAllBytes("$PWD\dist\Tabledown-dev.cer", $c[0].Export('Cert'))
 > Import-Certificate -FilePath dist\Tabledown-dev.cer -CertStoreLocation Cert:\LocalMachine\Root
 > ```
 

@@ -32,7 +32,7 @@ Tabledown 은 macOS 메뉴바 앱으로, 클립보드를 감시하며 **Excel/Sh
   ⚠️ `clipboard_direct`(및 `watcher`) 그룹은 **시스템 클립보드를 읽고 쓴다** — 실행 중 클립보드 내용이 잠깐 바뀐다. 산출물(fixture·`report.json`)은 gitignore 된 `outputs/tabledown_test_envs/` 로 나간다.
 - **Windows 포트 테스트**(`.github/workflows/windows-build.yml` 이 CI 에서 쓰는 커맨드) — macOS 에서도 리포 루트 `.venv` 로 실행됨(트레이·`winsdk` 의존 테스트는 자동 skip):
   ```bash
-  cd windows/tests && ../../.venv/bin/python -m unittest test_windows_port -v   # 38 pass / 12 skip
+  cd windows/tests && ../../.venv/bin/python -m unittest test_windows_port -v   # 총 38개 실행 = 26 pass + 12 skip (macOS)
   ```
 - converter만 빠르게(클립보드 안 건드림)는 이 파일 **불변식 섹션 끝의 원라이너**(44/44) 참조.
 

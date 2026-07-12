@@ -32,7 +32,7 @@ python run_windows.py
 
 알림 영역(트레이) 아이콘을 클릭하면 메뉴가 열립니다.
 
-- **자동 변환 토글** — 클립보드 감시를 켜고 끕니다. 전역 핫키 `Ctrl+Alt+T`
+- **Tabledown 사용** (자동 변환 토글) — 클립보드 감시를 켜고 끕니다. 전역 핫키 `Ctrl+Alt+T`
   (Accessibility 권한 불필요, user32 `RegisterHotKey`)로도 토글되며, 꺼지면
   트레이 아이콘에 빨간 사선이 표시됩니다. 토글은 "일시정지"용이라 매 실행 시
   켜진 상태로 시작합니다(영속 안 함).
@@ -43,7 +43,7 @@ python run_windows.py
 - **로그인 시 자동 실행** (0.2.5) — Windows 로그인 시 앱을 자동 시작합니다.
   **MSIX 로 설치했을 때만** 메뉴에 표시됩니다(WinRT StartupTask 는 패키지 identity
   가 필요 — 소스/포터블 실행에는 항목이 숨겨짐).
-- **진단 로그 내보내기** — 개인정보를 지운(scrubbed) 로컬 로그를 만들어 탐색기로
+- **문제 신고용 로그 열기** — 개인정보를 지운(scrubbed) 로컬 로그를 만들어 탐색기로
   폴더를 엽니다. **외부로 전송되지 않습니다**(네트워크·텔레메트리 없음).
 - **도움말 / 종료**
 
@@ -88,6 +88,10 @@ windows/
 ├── build_msix.ps1             # MSIX 패키징(+ -SelfSign 로컬 테스트 서명)
 ├── PACKAGING.md               # MSIX / Microsoft Store 출시 가이드
 ├── PRIVACY.md                 # 개인정보 처리방침(영/한)
+├── STORE_LISTING.md           # Microsoft Store 등록 문구(설명·카테고리·검색 키워드)
+├── packaging/                 # MSIX 매니페스트 템플릿(build_msix.ps1 이 토큰 치환)
+│   ├── AppxManifest.xml       # full-trust MSIX 매니페스트(StartupTask·runFullTrust)
+│   └── Assets/                # Store 타일/로고 PNG
 ├── tabledown_windows/
 │   ├── app.py                 # Windows tray(시스템 트레이) 앱 · 메뉴 · 클립보드 워처
 │   ├── conversion.py          # 플랫폼 독립 변환 흐름
