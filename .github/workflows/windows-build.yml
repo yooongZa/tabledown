@@ -53,6 +53,11 @@ jobs:
       - name: Write install notes
         shell: pwsh
         run: |
+          $v = (windows/.venv/Scripts/python -c "import sys; sys.path.insert(0,'windows'); import tabledown_windows; print(tabledown_windows.__version__)").Trim()
+          # Match build_msix.ps1's 4-part PackageVersion (pad to 3 parts, revision=0).
+          $parts = $v.Split(".")
+          while ($parts.Count -lt 3) { $parts += "0" }
+          $msix = "Tabledown-{0}.{1}.{2}.0.msix" -f $parts[0], $parts[1], $parts[2]
           @"
           Tabledown — Windows test build
           ==============================
@@ -67,10 +72,10 @@ jobs:
           B) Installed (MSIX — tests the packaged app):
              1. Trust the dev cert (admin PowerShell, one time):
                 Import-Certificate -FilePath Tabledown-dev.cer -CertStoreLocation Cert:\LocalMachine\Root
-             2. Add-AppxPackage Tabledown-0.2.7.0.msix
+             2. Add-AppxPackage $msix
              3. Launch Tabledown from the Start menu.
 
-          Testing the 0.5.0 "Auto-fill blank cells" feature:
+          Testing the "Auto-fill blank cells" feature:
              - Tray menu -> toggle "빈칸을 자동 채우기" (Auto-fill blank cells) ON.
              - Copy a merged-cell table from Excel, paste into a Markdown editor:
                the merged header now carries its value instead of a blank.

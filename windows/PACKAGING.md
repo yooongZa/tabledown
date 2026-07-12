@@ -15,7 +15,21 @@ Tabledown 은 백그라운드에서 클립보드를 **상시 감시**하다가 �
 
 ## 사전 준비 (Windows PC)
 
-- Python 3.10+ , `pip install -r windows/requirements.txt`
+- **PowerShell 7 (`pwsh`)** — `powershell` 5.1 이 아니라 반드시 `pwsh`. 빌드 스크립트
+  (`build_msix.ps1` / `build_windows.ps1`)는 BOM 없는 UTF-8 로 저장돼 있고 한글 주석과
+  em-dash(—)를 포함한다. 5.1 은 이를 레거시 ANSI 코드페이지로 디코드해 파서가 깨지고,
+  7 은 UTF-8 로 읽어 정상 동작한다. (CI 도 `pwsh -File` 로 실행 — `windows-build.yml` 참고.)
+  https://github.com/PowerShell/PowerShell 또는 `winget install Microsoft.PowerShell`
+- **빌드용 venv** — 두 빌드 스크립트는 시스템 `python` 이 아니라 `windows\.venv` 인터프리터를
+  강제한다(없으면 `throw` 로 즉시 중단). 시스템 Python 에 Pillow/PyInstaller 가 없어도
+  빌드가 "성공"한 척 STALE onedir 를 패킹하는 사고를 막기 위함이다. 먼저 생성·설치할 것:
+
+  ```powershell
+  cd windows
+  py -3 -m venv .venv
+  .\.venv\Scripts\python -m pip install -r requirements.txt
+  ```
+
 - **Windows 10/11 SDK** (makeappx.exe / signtool.exe 포함) — Visual Studio Installer 또는
   https://developer.microsoft.com/windows/downloads/windows-sdk/
 
@@ -25,19 +39,36 @@ Tabledown 은 백그라운드에서 클립보드를 **상시 감시**하다가 �
 
 ```powershell
 cd windows
-.\build_msix.ps1 -SelfSign
+pwsh -File .\build_msix.ps1 -SelfSign
 ```
 
 이 한 줄이: PyInstaller onedir 빌드 → 타일 PNG 생성 → staging 구성 →
 `dist\Tabledown-<버전>.msix` 생성 → 로컬 테스트용 자체 서명까지 수행한다.
+(파일명의 `<버전>` 은 `tabledown_windows.__version__` 기반 4-part — 빌드 출력에 찍힌
+실제 이름을 그대로 쓸 것.)
 
-설치(자체 서명이라 인증서를 먼저 신뢰해야 함):
+설치(자체 서명이라 인증서를 먼저 신뢰해야 함). `-SelfSign` 은 개인키가 든
+**`dist\Tabledown-dev.pfx`** 만 만든다(공개 `.cer` 는 안 만듦). `.pfx` 는
+`Import-Certificate`(공개 `.cer` 전용)로는 못 넣으므로 **`Import-PfxCertificate`** 로
+신뢰된 루트에 등록한다:
 
 ```powershell
-# 관리자 PowerShell
-Import-Certificate -FilePath (Get-Item dist\Tabledown-dev.pfx) -CertStoreLocation Cert:\LocalMachine\Root
-Add-AppxPackage dist\Tabledown-0.2.4.0.msix
+# 관리자 PowerShell — .pfx(개인키 포함)를 신뢰된 루트에 등록
+$pw = ConvertTo-SecureString "tabledown" -AsPlainText -Force
+Import-PfxCertificate -FilePath dist\Tabledown-dev.pfx -Password $pw -CertStoreLocation Cert:\LocalMachine\Root
+
+# 빌드 출력에 찍힌 실제 파일명 사용 (예: Tabledown-<버전>.msix)
+Add-AppxPackage dist\Tabledown-<버전>.msix
 ```
+
+> 개인키를 루트에 두기 싫으면, `.pfx` 에서 공개 `.cer` 만 추출해
+> `Import-Certificate` 로 신뢰해도 된다(CI `windows-build.yml` 이 쓰는 방식):
+> ```powershell
+> $c = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2Collection
+> $c.Import("dist\Tabledown-dev.pfx", "tabledown", 'DefaultKeySet')
+> [IO.File]::WriteAllBytes("dist\Tabledown-dev.cer", $c[0].Export('Cert'))
+> Import-Certificate -FilePath dist\Tabledown-dev.cer -CertStoreLocation Cert:\LocalMachine\Root
+> ```
 
 설치 후 확인할 것:
 - 알림 영역(트레이)에 Tabledown 아이콘이 뜨는가
@@ -46,6 +77,13 @@ Add-AppxPackage dist\Tabledown-0.2.4.0.msix
 - 로그: `%LOCALAPPDATA%` 아래 Tabledown 로그 (win 포트 logger 경로)
 
 제거: `Get-AppxPackage *Tabledown* | Remove-AppxPackage`
+
+> **macOS 개발자라면**: PyInstaller 는 크로스컴파일이 안 되므로 macOS 에서 이
+> `.msix`(또는 포터블 exe)를 만들 수 없다. 대신 GitHub Actions 워크플로
+> `.github/workflows/windows-build.yml` 을 **수동 트리거**(Actions 탭 → *Windows build
+> (test installer)* → *Run workflow*, `workflow_dispatch`)해 `windows-latest` 러너에서
+> 빌드하고, 산출물(자체 서명 `.msix` + 공개 `.cer` + 포터블 zip + `INSTALL.txt`)을
+> artifact 로 내려받아 Windows PC 에서 테스트한다.
 
 ---
 

@@ -21,8 +21,8 @@ spreadsheet-pasteable format — by watching the system clipboard.
   It records short status messages (e.g. "clipboard formats updated") — **not**
   the full clipboard contents — never leaves your device, and you can delete it
   at any time.
-- User settings (language, first-run flag) are stored locally in
-  `%APPDATA%\Tabledown\settings.json`.
+- User settings (language, first-run flag, auto-fill blank cells preference) are
+  stored locally in `%APPDATA%\Tabledown\settings.json`.
 
 Because clipboard conversion must run in the background, the app uses the
 `runFullTrust` capability and the Win32 clipboard APIs. This is required for
@@ -44,8 +44,8 @@ Contact: <sukmack@gmail.com>
 - 진단 로그는 앱 동작 확인용으로 `%LOCALAPPDATA%\Tabledown\Tabledown.log` 에만
   저장됩니다. 짧은 상태 메시지(예: "clipboard formats updated")만 기록하고 클립보드
   원문 전체는 기록하지 않으며, 외부로 전송되지 않고 사용자가 직접 삭제할 수 있습니다.
-- 사용자 설정(언어, 첫 실행 플래그)은 `%APPDATA%\Tabledown\settings.json` 에 로컬로
-  저장됩니다.
+- 사용자 설정(언어, 첫 실행 플래그, 빈칸 자동 채우기 설정)은
+  `%APPDATA%\Tabledown\settings.json` 에 로컬로 저장됩니다.
 
 클립보드 변환은 백그라운드에서 동작해야 하므로 앱은 `runFullTrust` 권한과 Win32
 클립보드 API를 사용합니다. UWP 클립보드 API는 앱 창이 포커스를 가졌을 때만 접근이

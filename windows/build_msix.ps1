@@ -66,10 +66,9 @@ if (-not (Test-Path $Python)) {
 }
 
 # --- 0. 버전 (tabledown_windows.__version__ -> 4-part, revision=0) ---
-# Windows MSIX 는 Windows 포트 자체 버전으로 배포하므로 Windows 포트가 자기 버전을
-# 소유한다(windows\tabledown_windows\__init__.py, 현재 0.2.6). 공유 tablemark.__version__(현재
-# 0.4.0)은 아직 테스트 중인 다음 macOS 버전이라 일부러 읽지 않는다 — 그걸 읽으면
-# MSIX 가 0.4.0.0 으로 잘못 찍힌다.
+# windows\tabledown_windows\__init__.py 가 Windows 트랙 버전을 소유한다. 공유
+# tablemark.__version__ 은 macOS 트랙(대개 앞서 있음)이라 일부러 읽지 않는다 —
+# 읽으면 MSIX 버전이 macOS 버전으로 잘못 찍힌다.
 Push-Location $ScriptRoot
 try {
   $rawVersion = (& $Python -c "import tabledown_windows; print(tabledown_windows.__version__)").Trim()
@@ -151,10 +150,11 @@ if ($SelfSign) {
   if ($LASTEXITCODE -ne 0) { throw "signtool failed ($LASTEXITCODE)" }
 
   Write-Host ""
-  Write-Host "로컬 설치 방법:" -ForegroundColor Yellow
-  Write-Host "  1) 인증서를 신뢰: 관리자 PowerShell 에서" -ForegroundColor Yellow
-  Write-Host "     Import-Certificate -FilePath (Get-Item '$pfx') -CertStoreLocation Cert:\LocalMachine\Root" -ForegroundColor Yellow
-  Write-Host "     (또는 .pfx 의 공개 인증서를 신뢰된 루트에 추가)" -ForegroundColor Yellow
+  Write-Host "로컬 설치 방법 (관리자 PowerShell):" -ForegroundColor Yellow
+  Write-Host "  1) 자체 서명 인증서를 신뢰: .pfx 는 개인키 포함이라 Import-PfxCertificate 로 등록" -ForegroundColor Yellow
+  Write-Host "     (Import-Certificate 는 공개 .cer 전용이라 .pfx 를 못 받는다):" -ForegroundColor Yellow
+  Write-Host "     `$pw = ConvertTo-SecureString 'tabledown' -AsPlainText -Force" -ForegroundColor Yellow
+  Write-Host "     Import-PfxCertificate -FilePath '$pfx' -Password `$pw -CertStoreLocation Cert:\LocalMachine\Root" -ForegroundColor Yellow
   Write-Host "  2) Add-AppxPackage '$msixPath'" -ForegroundColor Yellow
 }
 
