@@ -22,7 +22,7 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
 
 ### 0-W. Windows CF_HTML — Excel fragment 는 `<table>` 래퍼를 뺀다 (회귀 금지)
 - Windows 의 html 슬롯은 **CF_HTML**("HTML Format") 포맷이다. 헤더에 `StartFragment`/`EndFragment`
-  바이트 오프셋이 있고, `extract_cf_html`(`tabledown_windows/html_clipboard.py`)이 그 구간을 잘라 쓴다.
+  바이트 오프셋이 있고, `extract_cf_html`(`windows/tabledown_windows/html_clipboard.py`)이 그 구간을 잘라 쓴다.
 - **함정**: Excel·Google Sheets 는 `StartFragment`/`EndFragment` 마커를 **`<table>` 엘리먼트 *안쪽*** 에
   둔다. 그래서 잘라낸 fragment 는 표 내부(`<col>`/`<tr>`/`<td>`)뿐이고 **`<table>` 여닫는 태그가 빠진다.**
   표 감지(`has_html_table` = `"<table" in html`)가 실패 → 진짜 Excel 표가 "표 아님"으로 판정 →
@@ -31,7 +31,7 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   영향 없음 — 그래서 일부만 동작해 보임.)
 - **수정/불변식**: `extract_cf_html` 은 행(`<tr>`)이 있는데 `<table>` 래퍼가 없으면 `<table>…</table>` 로
   **감싼다**(`_ensure_table_wrapper`). 비-표 HTML 은 절대 건드리지 말 것(`<tr>` 없으면 그대로). **이 래핑을
-  지우면 Excel→마크다운이 전부 깨진다.** 회귀 테스트: `real_excel_table_converts_to_markdown`,
+  지우면 Excel→마크다운이 전부 깨진다.** 회귀 테스트(windows/tests/test_windows_port.py): `real_excel_table_converts_to_markdown`,
   `excel_cf_html_fragment_without_table_tag_is_wrapped`(Excel 형식 CF_HTML — 마커가 `<table>` 뒤를 가리킴 — 을 재현).
 - **테스트는 실제 클립보드 형식으로**: `<table>` 을 포함한 *이상적* HTML 로만 테스트하면 이 버그를 못 잡는다.
   실제 Excel CF_HTML(또는 그 형식을 흉내낸 fixture)로 검증할 것.
@@ -240,7 +240,7 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
 - **`Local\` 네임스페이스(세션 한정)**, `Global\` 아님 — 빠른 사용자 전환 시 사용자별 1개 허용이 의도다.
 - **이식성**: kernel32 접근은 함수 안으로 미뤄(`_create_mutex`) **비-Windows(테스트 러너)에서 import 가
   안 깨지게** 한다. 거기선 `(None, False)` → "형제 없음, 실행 허용"으로 degrade(가드 없다고 시작 거부 금지).
-  테스트는 `_create_mutex` 를 stub 해 first/second/no-kernel 3경로를 검증(`single_instance_*`).
+  테스트는 `_create_mutex` 를 stub 해 first/second/no-kernel 3경로를 검증(windows/tests/test_windows_port.py `SingleInstanceTests` 3개).
 
 ## UI 관례 (메뉴·피드백)
 
@@ -253,7 +253,7 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
   되살리지 말 것.
 - **‘후원하기’ 외부 링크 없음(2026-06-26 제거 — 출시된 적 없음)**: 0.4.0 개발 중 잠깐 넣었던 ‘후원하기’
   외부 링크 메뉴(`DONATE_URL` 상수 + `open_donate` 핸들러, macOS `NSWorkspace`·Windows `ShellExecuteW`)는
-  **미출시 상태에서 제거**됐다(최신 릴리스 v0.2.4 엔 들어간 적 없고, `DONATE_URL=""` 라 사용자에게 노출된
+  **미출시 상태에서 제거**됐다(당시 2026-06-26 GitHub 최신 릴리스 v0.2.4 엔 들어간 적 없고, `DONATE_URL=""` 라 사용자에게 노출된
   적도 없음). 앱은 완전 무료라 후원·결제·게이팅 UI 를 두지 않는다. 외부 후원 링크(또는 IAP)를 다시 넣자는
   제안이 나오면 [project_distribution_strategy] 의 "무료 배포·예산 0" 방향과 함께 재논의할 것 — 실수로
   되살리지 말 것. (스토어 심사: Mac App Store·Windows Store 는 개발자 후원 외부 링크가 정책상 회색지대일 수
@@ -330,7 +330,7 @@ fallback 을 지킬 것(`register()`/`start()` 가 False 를 돌려줄 뿐 예�
 ### 회귀 방지 테스트
 - macOS(`scripts/run_test_matrix.py` `run_hotkey_tests`): `hotkey_dispatch_routes_by_id`(ID 로 분기),
   `hotkey_single_binding_fallback`(ID 읽기 실패+1개면 그래도 발화), `hotkey_unknown_id_does_not_misfire`
-  (2개+미상 ID 면 추측 금지), `hotkey_keycodes_are_ansi_c_and_t`.
+  (2개+미상 ID 면 추측 금지), `hotkey_keycodes_are_ansi_x_and_t`.
 - Windows(`windows/tests/test_windows_port.py` `HotkeyTests`): `start_degrades_without_user32`,
   `register_calls_registerhotkey_with_combo`, `register_fails_when_combo_busy`,
   `handle_message_fires_on_matching_hotkey`/`ignores_other_messages`, `stop_before_start_is_safe`.
