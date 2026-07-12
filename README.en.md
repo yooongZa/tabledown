@@ -110,6 +110,8 @@ Tabledown does not convert clipboard items that already contain its generated ma
 
 ### 1. Install Dependencies
 
+Requires Python 3.10 or later (the code uses runtime PEP 604 union syntax such as `str | None`).
+
 ```bash
 cd Tabledown
 python3 -m venv .venv
@@ -180,12 +182,13 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 ## Changelog
 
 - 2026-07-01: **“Auto-fill blank cells” now applies to Markdown conversion too (0.5.0).** When converting an Excel/Sheets table to Markdown, the blanks left by merged cells are filled if the “Auto-fill blank cells” setting (off by default) is on — a group-header band (`1분기`) spreads right, a left key column (`부장`) spreads down. Only the **header frame** is filled; blanks in the value (data) region are preserved (same guard as the XML fill). The flattened multi-level header (a leaf header row demoted into the body) is left as-is, since Markdown table syntax can't draw a merge. This toggle now drives **both** the XML and Markdown paths (dropped the “XML:” prefix from the old label). With the toggle off, behavior is unchanged.
-- 2026-06-30: **Renamed the XML menu item “Copy table as XML” → “Convert copied table to XML”.** Same behavior, but the verb “Convert” describes what actually happens, and “copied table” names the precondition (copy a table first), addressing the most common first-time confusion. Help text, tooltip, and usage docs updated to match.
-- 2026-06-29: **Changed the Table→XML global shortcut from ⌘⌃C to ⌘⌃X.** X = **X**ML, a clearer mnemonic. It avoids macOS system and app shortcuts and sits far from the toggle ⌘⌃T to reduce misfires. The conversion behavior is unchanged (table→XML copy, HTML dropped). Help text, menu display, and the regression test were updated.
-- 2026-06-24: **Added a global shortcut to toggle auto-conversion on/off — macOS ⌘⌃T (Windows Ctrl+Alt+T).** Pause or resume clipboard auto-conversion from any app with one key. No permissions required; if registration fails it falls back gracefully to the menu item. macOS generalizes the former single hotkey into a multi-hotkey manager (one Carbon handler dispatches ⌘⌃C/⌘⌃T by the fired hotkey id), so XML (⌘⌃C) and the toggle (⌘⌃T) coexist. Windows uses user32 `RegisterHotKey` + a dedicated message-loop thread. The ⌘⌃ / `Ctrl+Alt` combos were chosen to avoid common system and app shortcuts.
-- 2026-06-19: **Added local diagnostics — crash capture + “Open logs for bug report” (nothing sent off-device).** Surfaces failures that were invisible in direct distribution into the local log — there's no network code at all, so the “no network connections, no telemetry … nothing is sent to any external server” promise still holds. `sys.excepthook` + **`threading.excepthook`** (catches the clipboard-watcher daemon-thread crashes that used to vanish silently) + `faulthandler` (native faults) write only to `Tabledown.log`/`.crash`. The “Open logs for bug report” menu writes a **scrubbed** diagnostics file (home paths, usernames, volume/drive names, and secrets removed) and reveals it in Finder/Explorer for you to attach to a bug report — no clipboard access (so it can't race the watcher). Conversion error messages and logs were also hardened so table data can't leak (macOS + Windows). The DiskOUT-style *remote* collection was deliberately not adopted, since it would conflict with the zero-telemetry promise.
-- 2026-06-19: **Added feedback for auto-conversion.** The Excel↔Markdown auto-conversion used to happen silently in the background, so you couldn't tell it ran (and an unexpected paste gave no hint Tabledown was the cause). Now the menu bar icon **briefly flashes a checkmark (0.5s, shorter than the 1s manual-XML flash)** whenever a table is converted. No popup, sound, or system notification (keeps the zero-permissions design).
-- 2026-06-19: **Removed monetization — the app is now fully free.** Dropped the Pro-subscription gate on XML conversion (menu and ⌘⌃C), and removed the donation IAPs, “Restore Purchases”, the subscription sheet, and the 🔒 lock marker (`store.py` deleted; related code/strings/dependency cleaned out of `settings.py`, `i18n.py`, `setup.py`, `requirements.txt`). The global hotkey and XML conversion logic are unchanged — only the gate is gone, so everyone uses XML for free. No impact on the clipboard invariants or tests (38/38).
+- 2026-07-01: **Windows: ported the 0.5.0 “Auto-fill blank cells” toggle to the tray** (parity with macOS, 0.2.7). The merged-header fill logic already lived in the shared `tablemark.converter.html_to_md` that Windows imports; what was missing was the toggle, the setting, and the wiring (Windows never had the `fill_blanks` option — macOS shipped it only on the XML path, which is macOS-only). Now `conversion.py` passes the `fill_blanks` flag into the Markdown conversion (`html_table_to_markdown`/`convert_document_tables`) — default off, so behavior is unchanged and the HTML slot is still preserved — and the tray gains a checkable “Auto-fill blank cells” menu item (persisted, placed after the toggle and before Language, mirroring the macOS Settings order). No “XML:” prefix, since Windows has no XML path. Regression tests: off keeps blanks, on fills the merged key column (and keeps HTML), label translations, menu inclusion, toggle persistence
+- 2026-06-30: **Renamed the XML menu item “Copy table as XML” → “Convert copied table to XML” (0.4.2).** Same behavior, but the verb “Convert” describes what actually happens, and “copied table” names the precondition (copy a table first), addressing the most common first-time confusion. Help text, tooltip, and usage docs updated to match.
+- 2026-06-29: **Changed the Table→XML global shortcut from ⌘⌃C to ⌘⌃X (0.4.1).** X = **X**ML, a clearer mnemonic. It avoids macOS system and app shortcuts and sits far from the toggle ⌘⌃T to reduce misfires. The conversion behavior is unchanged (table→XML copy, HTML dropped). Help text, menu display, and the regression test were updated.
+- 2026-06-24: **Added a global shortcut to toggle auto-conversion on/off — macOS ⌘⌃T (Windows Ctrl+Alt+T) (0.4.0).** Pause or resume clipboard auto-conversion from any app with one key. No permissions required; if registration fails it falls back gracefully to the menu item. macOS generalizes the former single hotkey into a multi-hotkey manager (one Carbon handler dispatches ⌘⌃C/⌘⌃T by the fired hotkey id), so XML (⌘⌃C) and the toggle (⌘⌃T) coexist. Windows uses user32 `RegisterHotKey` + a dedicated message-loop thread. The ⌘⌃ / `Ctrl+Alt` combos were chosen to avoid common system and app shortcuts.
+- 2026-06-19: **Added local diagnostics — crash capture + “Open logs for bug report” (nothing sent off-device) (0.4.0).** Surfaces failures that were invisible in direct distribution into the local log — there's no network code at all, so the “no network connections, no telemetry … nothing is sent to any external server” promise still holds. `sys.excepthook` + **`threading.excepthook`** (catches the clipboard-watcher daemon-thread crashes that used to vanish silently) + `faulthandler` (native faults) write only to `Tabledown.log`/`.crash`. The “Open logs for bug report” menu writes a **scrubbed** diagnostics file (home paths, usernames, volume/drive names, and secrets removed) and reveals it in Finder/Explorer for you to attach to a bug report — no clipboard access (so it can't race the watcher). Conversion error messages and logs were also hardened so table data can't leak (macOS + Windows). The DiskOUT-style *remote* collection was deliberately not adopted, since it would conflict with the zero-telemetry promise.
+- 2026-06-19: **Added feedback for auto-conversion (0.4.0).** The Excel↔Markdown auto-conversion used to happen silently in the background, so you couldn't tell it ran (and an unexpected paste gave no hint Tabledown was the cause). Now the menu bar icon **briefly flashes a checkmark (0.5s, shorter than the 1s manual-XML flash)** whenever a table is converted. No popup, sound, or system notification (keeps the zero-permissions design).
+- 2026-06-19: **Removed monetization — the app is now fully free (0.4.0).** Dropped the Pro-subscription gate on XML conversion (menu and ⌘⌃C), and removed the donation IAPs, “Restore Purchases”, the subscription sheet, and the 🔒 lock marker (`store.py` deleted; related code/strings/dependency cleaned out of `settings.py`, `i18n.py`, `setup.py`, `requirements.txt`). The global hotkey and XML conversion logic are unchanged — only the gate is gone, so everyone uses XML for free. No impact on the clipboard invariants or tests (38/38).
 - 2026-06-18: **Windows: fixed multiple tray-app instances — added a single-instance guard** (0.2.6). On macOS, LaunchServices blocks a second `.app` launch, so single-instance is free; Windows blocks nothing, so a manual launch plus the login StartupTask, double-click duplicates, and ghost processes left by a crash each spawned another tray icon + clipboard watcher — two watchers can overwrite each other's clipboard and break conversion. `main()` now guards with a named mutex (`CreateMutexW("Local\TabledownSingleInstance")`) before creating the app and quietly exits a second instance (session-scoped, so fast user switching still allows one per user). The kernel32 access is deferred into a function so imports don't break on non-Windows test runners (which run without the guard), with first/second/no-kernel regression tests
 - 2026-06-17: **Windows: fixed the core bug where Excel/Sheets tables didn't convert to Markdown** (0.2.5). Excel places the CF_HTML fragment markers (`StartFragment`/`EndFragment`) *inside* the `<table>` element, so the extracted HTML is missing the `<table>` tag → table detection fails → copying a real Excel table left the raw TSV unconverted. `extract_cf_html` now wraps a bare table-row fragment in `<table>` (root-caused and verified by capturing the real Windows clipboard; added an Excel-format CF_HTML regression test).
 - 2026-06-17: Added an **“Open at Login” toggle to the Windows tray** (parity with macOS, 0.2.5). It flips the MSIX manifest's `windows.startupTask` via the WinRT `StartupTask` API (`winsdk`), and the OS keeps the state in Settings ▸ Apps ▸ Startup (no JSON shadow). The item is hidden on source/dev runs and the bare non-MSIX exe, where there's no package identity (graceful fallback). If the user disabled it in Task Manager (`disabled_by_user`), the checkmark stays off and a hint explains why. Also **fixed the Help window not closing** — the modal `MessageBox` blocked pystray's pump thread and, lacking foreground rights, opened behind the active window, so re-clicking stacked boxes; now it runs on its own thread with a single-instance guard and foreground/topmost flags
@@ -249,20 +252,30 @@ This creates `dist/Tabledown.app` and `dist/Tabledown.zip`. Public distribution 
 
 ```
 Tabledown/
-├── run.py                      # Entry point
+├── run.py                      # Entry point (macOS)
 ├── setup.py                    # py2app build settings
 ├── requirements.txt
 ├── requirements-build.txt      # Release build dependencies
 ├── pyproject.toml              # Build-system settings
 ├── scripts/                    # Test and release scripts
 ├── assets/                     # Menu bar and app icons
-└── tablemark/
-    ├── app.py                  # Menu bar app core (rumps)
-    ├── clipboard.py            # NSPasteboard wrapper and changeCount handling
-    ├── logger.py               # Diagnostic logging
-    └── converter/
-        ├── html_to_md.py       # Excel HTML to Markdown
-        └── md_to_tsv.py        # Markdown to TSV/HTML table
+├── tablemark/                  # macOS app (import path stays tablemark)
+│   ├── app.py                  # Menu bar app core (rumps)
+│   ├── clipboard.py            # NSPasteboard wrapper and changeCount handling
+│   ├── settings.py             # Settings persistence (NSUserDefaults)
+│   ├── i18n.py                 # Korean/English localization
+│   ├── hotkey.py               # Global hotkeys (Carbon)
+│   ├── login_item.py           # Open at Login (SMAppService)
+│   ├── diagnostics.py          # Local crash capture and diagnostics file
+│   ├── logger.py               # Diagnostic logging
+│   └── converter/
+│       ├── html_to_md.py       # Excel HTML to Markdown
+│       ├── md_to_tsv.py        # Markdown to TSV/HTML table
+│       └── table_xml.py        # Table ↔ LLM-friendly XML
+└── windows/                    # Windows tray port (independent version track)
+    ├── run_windows.py          # Windows entry point
+    ├── tabledown_windows/      # Tray app + clipboard conversion (pystray)
+    └── tests/                  # Windows port tests
 ```
 
 The internal Python package path remains `tablemark/` for import compatibility.

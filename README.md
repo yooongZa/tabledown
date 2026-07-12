@@ -110,6 +110,8 @@ Tabledown이 만든 clipboard marker(클립보드 마커)가 있는 항목은 �
 
 ### 1. 의존성 설치
 
+Python 3.10 이상이 필요합니다 (코드가 `str | None` 같은 PEP 604 union 문법을 런타임에 사용).
+
 ```bash
 cd Tabledown
 python3 -m venv .venv
@@ -180,12 +182,13 @@ Tabledown은 계정 생성, analytics(분석), 광고 추적, 위치 정보, 연
 ## 변경 이력
 
 - 2026-07-01: **마크다운 변환에도 ‘빈칸을 자동 채우기’ 적용 (0.5.0).** Excel/Sheets 표를 마크다운으로 변환할 때 병합 셀이 남기던 빈칸을, 설정 ‘빈칸을 자동 채우기’(기본 꺼짐)가 켜져 있으면 채운다 — 그룹 헤더 밴드(`1분기`)를 가로로, 왼쪽 키 열(`부장`)을 세로로 편다. **헤더 프레임만** 채우고 값(데이터) 영역의 빈칸은 그대로 보존(XML 채우기와 동일 가드). 다단 헤더의 평면 구조는 마크다운 표 문법상 그대로 둔다. 이 토글은 이제 XML·마크다운 **두 경로 공통**(옛 ‘XML: 빈칸을 자동 채우기’에서 ‘XML:’ 제거). 토글을 끄면 종전과 동일.
-- 2026-06-30: **XML 메뉴 라벨을 ‘표를 XML로 복사’ → ‘복사한 표를 XML로 변환’ (영: Convert copied table to XML).** 동작은 그대로지만 동사를 ‘변환’으로 바꿔 실제 동작을 정확히 표현하고, ‘복사한 표’로 “먼저 표를 복사해야 한다”는 전제조건을 명시(첫 사용자 혼란 해소). 능동형 ‘복사한’이 ‘복사된’보다 자연스러움. 도움말·툴팁·사용법 문구도 일관 갱신.
-- 2026-06-29: **표→XML 전역 단축키를 ⌘⌃C → ⌘⌃X 로 변경.** X = XML mnemonic 으로 더 직관적. macOS 기본 단축키·앱 단축키와 안 겹치고 토글 ⌘⌃T 와도 멀리 떨어져 오발 위험 낮음. 변환 동작은 그대로(표→XML 복사, HTML drop). 도움말·메뉴 표시·회귀 테스트 갱신.
-- 2026-06-24: **자동변환 켜기/끄기 전역 단축키 추가 — macOS ⌘⌃T (Windows Ctrl+Alt+T).** 클립보드 자동 변환을 어느 앱에서든 키 하나로 일시정지/재개. 권한 불필요·등록 실패 시 메뉴로 graceful fallback. macOS 는 기존 단일 핫키를 다중 핫키 매니저로 일반화해(Carbon 핸들러 하나가 발화 핫키 ID 로 ⌘⌃C/⌘⌃T 분기) XML(⌘⌃C)과 토글(⌘⌃T)을 함께 처리. Windows 는 user32 `RegisterHotKey` + 전용 메시지 루프 스레드. ⌘⌃/`Ctrl+Alt` 조합은 흔한 시스템·앱 단축키와 안 겹치게 고름.
-- 2026-06-19: **로컬 진단 추가 — 크래시 캡처 + ‘문제 신고용 로그’ (외부 전송 0줄).** 직배포라 안 보이던 실패를 로컬 로그로 끌어온다 — 외부로 보내는 코드는 0줄이라 "네트워크 연결·텔레메트리 없음, 외부 서버로 아무것도 안 보냄" 약속은 그대로다. `sys.excepthook` + **`threading.excepthook`**(무음으로 사라지던 클립보드 워처 스레드 크래시 포착) + `faulthandler`(네이티브 폴트) 를 `Tabledown.log`/`.crash` 에만 기록하고, 메뉴 ‘문제 신고용 로그 열기’ 로 **스크럽된**(경로·유저명·볼륨·secret 제거) 진단 파일을 만들어 Finder/탐색기로 연다(사용자가 직접 버그리포트에 첨부, 클립보드 미접촉). 변환 에러 메시지·로그도 표 데이터가 새지 않게 하드닝(mac·Windows 동형). DiskOUT 식 *원격* 수집은 이 약속과 충돌해 일부러 안 넣음.
-- 2026-06-19: **자동 변환에 피드백 추가.** 그동안 Excel↔Markdown 자동 변환이 아무 표시 없이 백그라운드에서 일어나 사용자가 "변환됐다"는 걸 알 수 없었다(붙여넣기 결과가 예상과 달라도 원인이 Tabledown 인지 모름). 이제 표가 변환되면 **메뉴바 아이콘이 0.5초간 체크 표시로 깜빡**인다(수동 XML 의 1초 플래시보다 짧게). 팝업·소리·시스템 알림 없음("권한 0개" 유지).
-- 2026-06-19: **유료화 전면 제거 — 완전 무료 전환.** XML 변환(메뉴·⌘⌃C)을 가로막던 Pro 구독 게이팅을 풀고, 기부(IAP)·‘구매 복원’·구독 시트·잠금(🔒) 표시를 모두 제거했다(`store.py` 삭제, `settings.py`·`i18n.py`·`setup.py`·`requirements.txt` 의 관련 코드/문자열/의존성도 정리). 전역 단축키와 XML 변환 로직 자체는 그대로 — 게이팅만 사라져 누구나 무료로 쓴다. 클립보드 변환 불변식·테스트 영향 없음(38/38).
+- 2026-07-01: **Windows: macOS 0.5.0 의 ‘빈칸을 자동 채우기’ 토글 포팅** (macOS 패리티, 0.2.7). 병합 헤더 빈칸을 채우는 로직은 Windows 가 import 하는 공용 `tablemark.converter.html_to_md` 에 이미 있었고, 빠진 건 토글·설정·배선뿐이었다(Windows 엔 `fill_blanks` 옵션이 아예 없었음 — macOS 는 XML 경로에만 있었고 XML 은 macOS 전용). 이제 `conversion.py` 가 `fill_blanks` 플래그를 마크다운 변환(`html_table_to_markdown`/`convert_document_tables`)에 넘기고(기본 꺼짐 → 동작 무변화, HTML 슬롯 유지), 트레이에 체크 가능한 ‘빈칸을 자동 채우기’ 메뉴 항목을 추가(설정 영속, 토글 뒤·언어 앞 — macOS 설정 순서와 동일). Windows 엔 XML 경로가 없어 ‘XML:’ 접두 없음. 회귀 테스트: OFF 면 빈칸 유지·ON 이면 병합 키 열 채움(+HTML 유지)·라벨 번역·메뉴 포함·토글 영속
+- 2026-06-30: **XML 메뉴 라벨을 ‘표를 XML로 복사’ → ‘복사한 표를 XML로 변환’ (영: Convert copied table to XML) (0.4.2).** 동작은 그대로지만 동사를 ‘변환’으로 바꿔 실제 동작을 정확히 표현하고, ‘복사한 표’로 “먼저 표를 복사해야 한다”는 전제조건을 명시(첫 사용자 혼란 해소). 능동형 ‘복사한’이 ‘복사된’보다 자연스러움. 도움말·툴팁·사용법 문구도 일관 갱신.
+- 2026-06-29: **표→XML 전역 단축키를 ⌘⌃C → ⌘⌃X 로 변경 (0.4.1).** X = XML mnemonic 으로 더 직관적. macOS 기본 단축키·앱 단축키와 안 겹치고 토글 ⌘⌃T 와도 멀리 떨어져 오발 위험 낮음. 변환 동작은 그대로(표→XML 복사, HTML drop). 도움말·메뉴 표시·회귀 테스트 갱신.
+- 2026-06-24: **자동변환 켜기/끄기 전역 단축키 추가 — macOS ⌘⌃T (Windows Ctrl+Alt+T) (0.4.0).** 클립보드 자동 변환을 어느 앱에서든 키 하나로 일시정지/재개. 권한 불필요·등록 실패 시 메뉴로 graceful fallback. macOS 는 기존 단일 핫키를 다중 핫키 매니저로 일반화해(Carbon 핸들러 하나가 발화 핫키 ID 로 ⌘⌃C/⌘⌃T 분기) XML(⌘⌃C)과 토글(⌘⌃T)을 함께 처리. Windows 는 user32 `RegisterHotKey` + 전용 메시지 루프 스레드. ⌘⌃/`Ctrl+Alt` 조합은 흔한 시스템·앱 단축키와 안 겹치게 고름.
+- 2026-06-19: **로컬 진단 추가 — 크래시 캡처 + ‘문제 신고용 로그’ (외부 전송 0줄) (0.4.0).** 직배포라 안 보이던 실패를 로컬 로그로 끌어온다 — 외부로 보내는 코드는 0줄이라 "네트워크 연결·텔레메트리 없음, 외부 서버로 아무것도 안 보냄" 약속은 그대로다. `sys.excepthook` + **`threading.excepthook`**(무음으로 사라지던 클립보드 워처 스레드 크래시 포착) + `faulthandler`(네이티브 폴트) 를 `Tabledown.log`/`.crash` 에만 기록하고, 메뉴 ‘문제 신고용 로그 열기’ 로 **스크럽된**(경로·유저명·볼륨·secret 제거) 진단 파일을 만들어 Finder/탐색기로 연다(사용자가 직접 버그리포트에 첨부, 클립보드 미접촉). 변환 에러 메시지·로그도 표 데이터가 새지 않게 하드닝(mac·Windows 동형). DiskOUT 식 *원격* 수집은 이 약속과 충돌해 일부러 안 넣음.
+- 2026-06-19: **자동 변환에 피드백 추가 (0.4.0).** 그동안 Excel↔Markdown 자동 변환이 아무 표시 없이 백그라운드에서 일어나 사용자가 "변환됐다"는 걸 알 수 없었다(붙여넣기 결과가 예상과 달라도 원인이 Tabledown 인지 모름). 이제 표가 변환되면 **메뉴바 아이콘이 0.5초간 체크 표시로 깜빡**인다(수동 XML 의 1초 플래시보다 짧게). 팝업·소리·시스템 알림 없음("권한 0개" 유지).
+- 2026-06-19: **유료화 전면 제거 — 완전 무료 전환 (0.4.0).** XML 변환(메뉴·⌘⌃C)을 가로막던 Pro 구독 게이팅을 풀고, 기부(IAP)·‘구매 복원’·구독 시트·잠금(🔒) 표시를 모두 제거했다(`store.py` 삭제, `settings.py`·`i18n.py`·`setup.py`·`requirements.txt` 의 관련 코드/문자열/의존성도 정리). 전역 단축키와 XML 변환 로직 자체는 그대로 — 게이팅만 사라져 누구나 무료로 쓴다. 클립보드 변환 불변식·테스트 영향 없음(38/38).
 - 2026-06-18: **Windows: 트레이 앱이 여러 개 실행되던 문제 수정 — 단일 인스턴스 가드 추가** (0.2.6). macOS 는 LaunchServices 가 `.app` 두 번째 실행을 막아 단일 인스턴스가 공짜지만, Windows 는 아무것도 막지 않아 수동 실행 + 로그인 자동 실행(StartupTask)·더블클릭 중복·크래시가 남긴 유령 프로세스가 각각 트레이 아이콘 + 클립보드 워처를 하나씩 더 띄웠다 — 워처가 둘이면 클립보드를 서로 덮어써 변환 동작이 깨질 수 있다. `main()` 이 앱을 만들기 전 named mutex(`CreateMutexW("Local\TabledownSingleInstance")`)로 가드해 두 번째 인스턴스를 조용히 종료(세션 한정이라 빠른 사용자 전환 시 사용자별 1개 허용). kernel32 접근은 함수 안으로 미뤄 비-Windows 테스트 러너에서 import 가 안 깨지게 했고(거기선 가드 없이 실행 허용), first/second/no-kernel 3경로 회귀 테스트 추가
 - 2026-06-17: **Windows: Excel/Sheets 표가 마크다운으로 변환 안 되던 핵심 버그 수정** (0.2.5). Excel 은 CF_HTML 의 fragment 마커(`StartFragment`/`EndFragment`)를 `<table>` *안쪽* 에 둬서, 잘라낸 HTML 에 `<table>` 태그가 빠진다 → 표 감지 실패 → 실제 Excel 표를 복사하면 변환 없이 원본 TSV 가 그대로 남았다. `extract_cf_html` 이 표 행만 있고 래퍼가 없으면 `<table>` 로 감싸도록 수정(실제 Windows 클립보드를 떠서 원인 규명·검증, Excel 형식 CF_HTML 회귀 테스트 추가).
 - 2026-06-17: Windows 트레이에 **‘로그인 시 자동 실행’ 토글 추가** (macOS 패리티, 0.2.5). MSIX 매니페스트의 `windows.startupTask` 를 WinRT `StartupTask` API(`winsdk`)로 켜고 끄며, 상태는 OS 의 설정 ▸ 앱 ▸ 시작 프로그램 에 저장(별도 JSON 그림자 없음). 패키지 ID 가 없는 소스/개발 실행과 비-MSIX exe 에서는 항목을 숨김(graceful fallback). 작업 관리자에서 사용자가 꺼둔 경우(`disabled_by_user`)엔 체크가 켜지지 않고 안내 알림을 띄움. 함께 **도움말 창이 안 닫히던 문제 수정** — 모달 `MessageBox` 가 pystray 펌프 스레드를 막고 foreground 권한이 없어 뒤로 떠서 다시 클릭하면 박스가 쌓이던 것을, 전용 스레드 + 단일 인스턴스 가드 + foreground/topmost 플래그로 해결
@@ -249,20 +252,30 @@ scripts/build_release.sh
 
 ```
 Tabledown/
-├── run.py                      # 진입점
+├── run.py                      # 진입점 (macOS)
 ├── setup.py                    # py2app 빌드 설정
 ├── requirements.txt
 ├── requirements-build.txt      # 배포 빌드 의존성
 ├── pyproject.toml              # build-system 설정
 ├── scripts/                    # 테스트/배포 스크립트
 ├── assets/                     # 메뉴바/앱 아이콘
-└── tablemark/
-    ├── app.py                  # 메뉴바 메인 (rumps)
-    ├── clipboard.py            # NSPasteboard 래퍼 + changeCount 확인
-    ├── logger.py               # 진단 로그 기록
-    └── converter/
-        ├── html_to_md.py       # Excel HTML → 마크다운
-        └── md_to_tsv.py        # 마크다운 → TSV/HTML table
+├── tablemark/                  # macOS 앱 (import 경로는 tablemark 유지)
+│   ├── app.py                  # 메뉴바 메인 (rumps)
+│   ├── clipboard.py            # NSPasteboard 래퍼 + changeCount 확인
+│   ├── settings.py             # 설정 영속 (NSUserDefaults)
+│   ├── i18n.py                 # 한국어/영어 로컬라이제이션
+│   ├── hotkey.py               # 전역 단축키 (Carbon)
+│   ├── login_item.py           # 로그인 시 자동 실행 (SMAppService)
+│   ├── diagnostics.py          # 로컬 크래시 캡처 + 진단 파일
+│   ├── logger.py               # 진단 로그 기록
+│   └── converter/
+│       ├── html_to_md.py       # Excel HTML → 마크다운
+│       ├── md_to_tsv.py        # 마크다운 → TSV/HTML table
+│       └── table_xml.py        # 표 ↔ LLM 친화 XML
+└── windows/                    # Windows 트레이 포트 (독립 버전 트랙)
+    ├── run_windows.py          # Windows 진입점
+    ├── tabledown_windows/      # 트레이 앱 + 클립보드 변환 (pystray)
+    └── tests/                  # Windows 포트 테스트
 ```
 
 내부 Python package path(패키지 경로)는 기존 import compatibility(임포트 호환성)를 위해 `tablemark/`로 유지합니다.
