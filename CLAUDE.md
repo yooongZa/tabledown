@@ -7,6 +7,20 @@ Tabledown 은 macOS 메뉴바 앱으로, 클립보드를 감시하며 **Excel/Sh
 개인프로젝트로 브런치를 새로 만들 필요는 없다. 다만 작업사항 및 히스토리를 커밋단위로 잘 정리하도록 한다. 
 
 
+## 막 진입했다면 (30초 오리엔테이션)
+
+1. `CHANGELOG.md` 맨 위(`[Unreleased]`·최신 버전) → 지금 어디까지 왔고 뭐가 검증됐나
+2. vault 백로그 `~/Documents/wiki-yongza/wiki/projects/tabledown.md` § 📥 → 다음 할 일
+3. 아래 리포 지도 (신규 세션 필독) → 코드 어디부터 볼지
+
+## 규칙
+
+- 계획·백로그는 vault 노트가 단일 진실 — 이 repo 에 TODO 파일을 두지 않는다
+- **새 .md 문서는 만들기 전에 사용자 컨펌** — 기본은 이 파일·CHANGELOG·기존 docs 갱신
+- 변경마다 검증 방법을 CHANGELOG 에 남긴다 (테스트/실제 Windows 검증 구분)
+
+(표준: vault `wiki/meta/project-kickoff.md`)
+
 ## 리포 지도 (신규 세션 필독)
 
 ### 두 플랫폼 구조
