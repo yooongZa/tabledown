@@ -11,6 +11,10 @@
 #
 # Usage:
 #   NOTARY_PROFILE=tabledown-notary bash scripts/build_dmg.sh
+# 또는 keychain 프로파일 없이 ASC API 키로 직접 (헤드리스 환경 — keychain 이
+# GUI 잠금해제를 요구해 store-credentials 가 안 되는 경우):
+#   NOTARY_KEY=~/.appstoreconnect/private_keys/AuthKey_XXXX.p8 \
+#   NOTARY_KEY_ID=XXXX NOTARY_ISSUER=<ISSUER_ID> bash scripts/build_dmg.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,6 +24,12 @@ APP="$DIST/$APP_NAME.app"
 DMG="$DIST/$APP_NAME.dmg"
 ZIP="$DIST/$APP_NAME-notarized.zip"
 NOTARY_PROFILE="${NOTARY_PROFILE:-tabledown-notary}"
+# ASC API 키 3종이 모두 주어지면 keychain 프로파일 대신 키 직접 인증.
+if [[ -n "${NOTARY_KEY:-}" && -n "${NOTARY_KEY_ID:-}" && -n "${NOTARY_ISSUER:-}" ]]; then
+  NOTARY_AUTH=(--key "$NOTARY_KEY" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER")
+else
+  NOTARY_AUTH=(--keychain-profile "$NOTARY_PROFILE")
+fi
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -56,7 +66,7 @@ done < <(find "$APP_STAGE/Contents" -type f -print0)
 # 4. Notarize the app: submit the zipped app and wait for Apple's verdict.
 NOTARIZE_ZIP="$STAGE/notarize.zip"
 ditto -c -k --keepParent --norsrc --noextattr --noqtn "$APP_STAGE" "$NOTARIZE_ZIP"
-xcrun notarytool submit "$NOTARIZE_ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+xcrun notarytool submit "$NOTARIZE_ZIP" "${NOTARY_AUTH[@]}" --wait
 
 # 5. Staple the ticket to the app, then copy the stapled app back to dist and
 #    build the distribution zip from it (zips can't be stapled — the app
@@ -69,7 +79,7 @@ ditto -c -k --keepParent --norsrc --noextattr --noqtn "$APP_STAGE" "$ZIP"
 #    itself. The DMG is a separate artifact: notarizing the app alone is not
 #    enough — `stapler staple <dmg>` needs a ticket issued for the DMG.
 hdiutil create -volname "$APP_NAME" -srcfolder "$APP_STAGE" -ov -format UDZO "$DMG"
-xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+xcrun notarytool submit "$DMG" "${NOTARY_AUTH[@]}" --wait
 xcrun stapler staple "$DMG"
 
 # 6. Verify Gatekeeper acceptance and emit checksums for the release notes.
