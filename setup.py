@@ -70,5 +70,9 @@ setup(
     name="Tabledown",
     version=VERSION,
     packages=find_packages(),
+    # The code uses PEP 604 union annotations (e.g. `str | None`) evaluated at
+    # runtime without `from __future__ import annotations`, which requires
+    # Python 3.10+. Matches the Windows port requirement (windows/PACKAGING.md).
+    python_requires=">=3.10",
     options={"py2app": OPTIONS},
 )
