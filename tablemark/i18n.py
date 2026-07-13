@@ -14,7 +14,20 @@ DEFAULT_LANGUAGE = "en"
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "ko": {
         "menu.toggle": "Tabledown 사용",
-        "menu.copy_xml": "복사한 표를 XML로 변환",
+        "menu.copy_xml": "표를 XML로 변환해 복사",
+        "menu.copy_excel_formulas": "표의 수식을 포함해 XML로 복사",
+        "formula.error_title": "Tabledown",
+        "formula.error.excel_not_running": "Microsoft Excel이 실행 중이 아닙니다.",
+        "formula.error.no_selection": "Excel 워크시트에서 셀 범위를 선택한 뒤 다시 시도하세요.",
+        "formula.error.multiple_areas": "서로 떨어진 여러 범위는 복사할 수 없습니다. 하나의 직사각형 범위를 선택하세요.",
+        "formula.error.too_many_cells": "선택 범위가 너무 큽니다. 10,000개 이하의 셀을 선택하세요.",
+        "formula.error.too_fragmented": "수식 셀이 너무 많이 흩어져 있습니다. 더 작거나 연속된 범위를 선택하세요.",
+        "formula.error.too_much_text": "셀 값과 수식 내용이 너무 큽니다. 더 작은 범위를 선택하세요.",
+        "formula.error.no_formulas": "선택한 범위에 수식이 없습니다.",
+        "formula.error.selection_changed": "표 값과 수식을 읽는 동안 Excel 선택 영역이 변경되었습니다. 범위를 다시 선택해 재시도하세요.",
+        "formula.error.automation_denied": "Excel Automation(자동화) 권한이 필요합니다. 시스템 설정 > 개인정보 보호 및 보안 > 자동화에서 Tabledown의 Microsoft Excel 접근을 허용하세요.",
+        "formula.error.execution_failed": "Excel에서 표 값과 수식을 읽지 못했습니다. 셀 범위를 다시 선택한 뒤 재시도하세요.",
+        "formula.error.invalid_response": "Excel에서 표 값과 수식을 읽지 못했습니다. 셀 범위를 다시 선택한 뒤 재시도하세요.",
         "menu.fill_blanks": "빈칸을 자동 채우기",
         "menu.fill_blanks_tooltip": "표를 변환할 때(마크다운·XML) 병합·빈 칸을 바로 위/좌측의 칸 값으로 자동 채웁니다. 헤더 영역만 채우고 데이터(값) 영역의 빈 칸은 그대로 둡니다.",
         "xml.no_table_title": "Tabledown",
@@ -40,9 +53,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Markdown 표를 복사하면 Excel에서 셀에 분리되어 붙습니다.\n"
             "표가 변환되면 메뉴바 아이콘이 잠깐 체크 표시로 바뀝니다.\n\n"
             "XML:\n"
-            "• 메뉴의 ‘복사한 표를 XML로 변환’ 을 누르면 현재 클립보드의 표가 LLM 친화적 XML로 변환됩니다.\n"
+            "• 표를 복사한 뒤 ‘표를 XML로 변환해 복사’ 를 누르면 LLM 친화적 XML로 변환해 다시 복사합니다.\n"
             "• 단축키 ⌘⌃X 로도 바로 변환할 수 있습니다. 성공하면 메뉴바 아이콘이 잠시 체크 표시로 바뀝니다.\n"
             "• ‘빈칸을 자동 채우기’ 를 켜면 병합 없이 비워둔 그룹 열(직급 등)의 빈칸을 바로 위 값으로 채웁니다.\n\n"
+            "Excel 수식:\n"
+            "• Excel에서 수식이 포함된 한 영역을 선택한 뒤 ‘표의 수식을 포함해 XML로 복사’ 를 누르거나 ⌘⌃E 를 누릅니다.\n"
+            "• Cmd+C 없이 모든 셀의 주소·값·빈칸과 A1/R1C1 수식을 함께 LLM용 XML로 복사합니다.\n\n"
             "메뉴의 ‘Tabledown 사용’ 항목 왼쪽 체크 표시가 현재 상태입니다.\n"
             "체크가 켜져 있으면 변환이 동작하고, 꺼져 있으면 변환이 멈춥니다.\n"
             "메뉴바 아이콘에 사선이 그어져 있으면 변환이 꺼져 있는 상태입니다.\n"
@@ -51,7 +67,20 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "en": {
         "menu.toggle": "Use Tabledown",
-        "menu.copy_xml": "Convert copied table to XML",
+        "menu.copy_xml": "Convert table to XML and copy",
+        "menu.copy_excel_formulas": "Copy table with formulas as XML",
+        "formula.error_title": "Tabledown",
+        "formula.error.excel_not_running": "Microsoft Excel isn't running.",
+        "formula.error.no_selection": "Select a cell range in an Excel worksheet, then try again.",
+        "formula.error.multiple_areas": "Disjoint ranges aren't supported. Select one rectangular range.",
+        "formula.error.too_many_cells": "The selection is too large. Select 10,000 cells or fewer.",
+        "formula.error.too_fragmented": "The formula cells are too fragmented. Select a smaller or more contiguous range.",
+        "formula.error.too_much_text": "The cell values and formulas are too large. Select a smaller range.",
+        "formula.error.no_formulas": "The selected range contains no formulas.",
+        "formula.error.selection_changed": "The Excel selection changed while table values and formulas were being read. Select the range again and retry.",
+        "formula.error.automation_denied": "Excel Automation permission is required. In System Settings > Privacy & Security > Automation, allow Tabledown to access Microsoft Excel.",
+        "formula.error.execution_failed": "Couldn't read table values and formulas from Excel. Select the cell range again and retry.",
+        "formula.error.invalid_response": "Couldn't read table values and formulas from Excel. Select the cell range again and retry.",
         "menu.fill_blanks": "Auto-fill blank cells",
         "menu.fill_blanks_tooltip": "When converting a table (Markdown or XML), merged/blank cells are auto-filled from the cell directly above or to the left. Only header areas are filled; data (value) cells are left as-is.",
         "xml.no_table_title": "Tabledown",
@@ -77,9 +106,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "and Markdown tables paste into separate cells in Excel.\n"
             "When a table is converted, the menu bar icon briefly shows a checkmark.\n\n"
             "XML:\n"
-            "• Click ‘Convert copied table to XML’ to turn the clipboard table into LLM-friendly XML.\n"
+            "• Copy a table, then click ‘Convert table to XML and copy’ to convert it to LLM-friendly XML and copy the result.\n"
             "• The global shortcut ⌘⌃X does the same — on success the menu bar icon briefly shows a checkmark.\n"
             "• ‘Auto-fill blank cells’ fills blanks in left grouping columns (e.g. rank) from the value above.\n\n"
+            "Excel formulas:\n"
+            "• Select one formula range in Excel, then click ‘Copy table with formulas as XML’ or press ⌘⌃E.\n"
+            "• Without Cmd+C, it copies every cell address, value, blank, and A1/R1C1 formula together as XML for an LLM.\n\n"
             "The checkmark next to ‘Use Tabledown’ shows the current state.\n"
             "When checked, conversion is on. When unchecked, conversion pauses.\n"
             "A slash through the menu bar icon means conversion is off.\n"

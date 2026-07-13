@@ -12,7 +12,9 @@ from .clipboard import (
     clipboard_change_count,
     read_clipboard,
     write_clipboard,
+    write_text_only_clipboard,
 )
+from .converter.formula_export import formula_selection_to_xml
 from .converter.html_to_md import (
     convert_document_tables,
     forward_fill_key_columns,
@@ -36,9 +38,10 @@ from .i18n import (
     save_preferred_language,
     t,
 )
+from .excel_formula import ExcelFormulaError, read_selected_excel_formulas
 from . import diagnostics
 from . import login_item
-from .hotkey import CMD, CONTROL, KEY_T, KEY_X, GlobalHotkeys
+from .hotkey import CMD, CONTROL, KEY_E, KEY_T, KEY_X, GlobalHotkeys
 from .logger import log
 from . import __version__
 from .settings import (
@@ -79,6 +82,9 @@ class TabledownApp(rumps.App):
         self.lang = resolve_language()
         log(f"language resolved to {self.lang}")
         self._flash_timer = None  # icon flash in progress (success feedback)
+        # Serializes read/convert/write with explicit clipboard exports so a
+        # slow watcher conversion can never overwrite a newer manual result.
+        self._clipboard_operation_lock = threading.Lock()
 
         self.toggle_item = rumps.MenuItem(
             t("menu.toggle", self.lang),
@@ -93,6 +99,12 @@ class TabledownApp(rumps.App):
             key="x",
         )
         self._show_cmd_ctrl_shortcut(self.copy_xml_item)
+        self.copy_excel_formulas_item = rumps.MenuItem(
+            t("menu.copy_excel_formulas", self.lang),
+            callback=self.copy_selected_excel_formulas,
+            key="e",
+        )
+        self._show_cmd_ctrl_shortcut(self.copy_excel_formulas_item)
         self.fill_blanks_item = rumps.MenuItem(
             t("menu.fill_blanks", self.lang),
             callback=self.toggle_fill_blanks,
@@ -139,6 +151,7 @@ class TabledownApp(rumps.App):
         menu_items = [
             self.toggle_item,
             self.copy_xml_item,
+            self.copy_excel_formulas_item,
             None,  # separator
             self.settings_item,
             None,  # separator
@@ -148,13 +161,16 @@ class TabledownApp(rumps.App):
         menu_items.append(self.quit_item)
         self.menu = menu_items
 
-        # --- Global hotkeys: ⌘⌃X -> copy_as_xml, ⌘⌃T -> toggle ---
+        # --- Global hotkeys: ⌘⌃X -> XML, ⌘⌃T -> toggle, ⌘⌃E -> formulas ---
         # Strong-ref on self so the Carbon callback trampoline survives GC. One
-        # handler dispatches both by id (see hotkey.py). Graceful: if a hotkey
+        # handler dispatches all by id (see hotkey.py). Graceful: if a hotkey
         # fails to register, its menu item still works.
         self.hotkeys = GlobalHotkeys()
         self.hotkeys.add(KEY_X, CMD | CONTROL, self.copy_as_xml)
         self.hotkeys.add(KEY_T, CMD | CONTROL, self.toggle)
+        self.hotkeys.add(
+            KEY_E, CMD | CONTROL, self.copy_selected_excel_formulas
+        )
         self.hotkeys.register()
 
         self._stop_watcher = threading.Event()
@@ -233,7 +249,7 @@ class TabledownApp(rumps.App):
         """Display "⌘⌃<key>" next to a menu item to advertise its global hotkey.
 
         rumps' ``key=`` gives a Command-only equivalent; we OR in Control so the
-        text matches the Carbon hotkey (⌘⌃X / ⌘⌃T). Purely cosmetic
+        text matches the Carbon hotkey (⌘⌃X / ⌘⌃T / ⌘⌃E). Purely cosmetic
         discoverability — for a status-bar app the key equivalent only fires
         while the menu is open; the real global trigger is the Carbon hotkey. So
         never let this crash startup.
@@ -255,6 +271,9 @@ class TabledownApp(rumps.App):
         """Refresh every menu title for the current language."""
         self.toggle_item.title = t("menu.toggle", self.lang)
         self.copy_xml_item.title = t("menu.copy_xml", self.lang)
+        self.copy_excel_formulas_item.title = t(
+            "menu.copy_excel_formulas", self.lang
+        )
         self.fill_blanks_item.title = t("menu.fill_blanks", self.lang)
         self.fill_blanks_item._menuitem.setToolTip_(t("menu.fill_blanks_tooltip", self.lang))
         self.settings_item.title = t("menu.settings", self.lang)
@@ -310,19 +329,21 @@ class TabledownApp(rumps.App):
         menu click, never inferred from clipboard contents by the watcher.
         """
         try:
-            model = self._clipboard_table_model(read_clipboard(), self.fill_blanks)
+            with self._clipboard_operation_lock:
+                model = self._clipboard_table_model(read_clipboard(), self.fill_blanks)
+                if model is not None:
+                    header_levels, data_rows = model
+                    write_clipboard(
+                        text=model_to_xml(header_levels, data_rows),
+                        mark_generated=True,
+                        drop_types=RENDERED_TABLE_TYPES | HTML_TYPES,
+                    )
             if model is None:
                 rumps.alert(
                     title=t("xml.no_table_title", self.lang),
                     message=t("xml.no_table_message", self.lang),
                 )
                 return
-            header_levels, data_rows = model
-            write_clipboard(
-                text=model_to_xml(header_levels, data_rows),
-                mark_generated=True,
-                drop_types=RENDERED_TABLE_TYPES | HTML_TYPES,
-            )
             log("copied clipboard table as XML")
             # Only permission-free feedback channel we have: a system
             # notification would prompt for permission (breaking the
@@ -337,6 +358,30 @@ class TabledownApp(rumps.App):
             rumps.alert(
                 title=t("xml.no_table_title", self.lang),
                 message=t("xml.no_table_message", self.lang),
+            )
+
+    def copy_selected_excel_formulas(self, _sender):
+        """Copy every selected Excel value, blank, and formula as text-only XML."""
+        try:
+            selection = read_selected_excel_formulas()
+            xml = formula_selection_to_xml(selection)
+            with self._clipboard_operation_lock:
+                write_text_only_clipboard(xml, mark_generated=True)
+            log("copied selected Excel table with formulas as XML")
+            self._flash_icon_success()
+        except ExcelFormulaError as exc:
+            # Error codes are stable and content-free. Formula text and native
+            # AppleScript messages must never enter the shareable log.
+            log(f"copy Excel table with formulas failed: {exc.code}")
+            self._safe_alert(
+                t("formula.error_title", self.lang),
+                t(f"formula.error.{exc.code}", self.lang),
+            )
+        except Exception:  # noqa: BLE001 - keep content out of logs
+            log("copy Excel table with formulas failed: execution_failed")
+            self._safe_alert(
+                t("formula.error_title", self.lang),
+                t("formula.error.execution_failed", self.lang),
             )
 
     def _safe_alert(self, title: str, message: str):
@@ -504,12 +549,13 @@ class TabledownApp(rumps.App):
 
     def _augment_clipboard(self):
         try:
-            content = read_clipboard()
-            updated = self._converted_clipboard(content)
-            if updated is None:
-                return
+            with self._clipboard_operation_lock:
+                content = read_clipboard()
+                updated = self._converted_clipboard(content)
+                if updated is None:
+                    return
 
-            write_clipboard(**updated, mark_generated=True)
+                write_clipboard(**updated, mark_generated=True)
             log("clipboard formats updated")
             # Make the otherwise-invisible background rewrite observable: a brief
             # icon checkmark so the user knows a table they copied was converted

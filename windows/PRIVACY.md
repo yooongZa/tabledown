@@ -14,6 +14,10 @@ spreadsheet-pasteable format — by watching the system clipboard.
   it detects a table, writes the converted text/HTML formats back to the **same
   clipboard**. All conversion happens **on your PC**; nothing is sent to any
   external server.
+- When you explicitly choose **Copy table with formulas as XML**, the app locally
+  reads cell values, blanks, formula text, and addresses from the current
+  Microsoft Excel selection and writes XML to the same clipboard. Cell values
+  and formulas are never written to the diagnostic log or sent to any server.
 - Tabledown has **no network connections, no telemetry, no analytics, no ads, no
   account sign-in, and no access** to your location, contacts, photos, or files.
 - A local diagnostic log is written only to
@@ -39,6 +43,9 @@ Contact: <sukmack@gmail.com>
 - 앱은 Windows 클립보드의 현재 내용을 로컬에서 읽고, 표를 감지하면 변환한
   text/HTML 형식을 **같은 클립보드**에 다시 기록합니다. 모든 변환은 **사용자의 PC
   안에서만** 처리되며 외부 서버로 전송되지 않습니다.
+- 사용자가 **‘표의 수식을 포함해 XML로 복사’** 를 명시적으로 실행한 경우에만 현재 Microsoft
+  Excel 선택 영역의 셀 값·빈칸·수식·주소를 로컬에서 읽어 같은 클립보드에 XML을
+  기록합니다. 셀 값과 수식 내용은 진단 로그에 기록되거나 외부 서버로 전송되지 않습니다.
 - Tabledown은 **네트워크 연결, 텔레메트리, 분석, 광고, 계정 로그인이 전혀 없으며**,
   위치·연락처·사진·파일에 접근하지 않습니다.
 - 진단 로그는 앱 동작 확인용으로 `%LOCALAPPDATA%\Tabledown\Tabledown.log` 에만

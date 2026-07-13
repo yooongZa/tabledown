@@ -126,6 +126,23 @@ def write_clipboard(
             win32clipboard.SetClipboardData(GENERATED_FORMAT_ID, GENERATED_MARKER_VALUE.encode("utf-8"))
 
 
+def write_text_only_clipboard(text: str) -> None:
+    """Replace the clipboard with generated Unicode text and its marker only.
+
+    This deliberately does not preserve Excel's native formats.  It is used
+    only by the explicit formula-export command, whose output is an XML text
+    document.  The normal watcher continues to use :func:`write_clipboard` and
+    therefore keeps its existing preservation semantics unchanged.
+    """
+
+    with _open_clipboard():
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardData(win32con.CF_UNICODETEXT, text)
+        win32clipboard.SetClipboardData(
+            GENERATED_FORMAT_ID, GENERATED_MARKER_VALUE.encode("utf-8")
+        )
+
+
 @contextmanager
 def _open_clipboard():
     opened = False

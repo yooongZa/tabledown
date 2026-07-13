@@ -10,13 +10,21 @@ import time
 from PIL import Image, ImageChops, ImageDraw
 import pystray
 
+from tablemark.converter.formula_export import formula_selection_to_xml
+
 from . import diagnostics, single_instance, startup_task
 from .conversion import converted_clipboard
-from .hotkey import MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, VK_T, GlobalHotkey
+from .excel_formula import read_selected_excel_formulas
+from .hotkey import MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, VK_E, VK_T, GlobalHotkey
 from .i18n import SUPPORTED_LANGUAGES, resolve_language, save_preferred_language, t
 from .logger import log
 from .settings import load_settings, save_setting
-from .win_clipboard import clipboard_change_count, read_clipboard, write_clipboard
+from .win_clipboard import (
+    clipboard_change_count,
+    read_clipboard,
+    write_clipboard,
+    write_text_only_clipboard,
+)
 
 WELCOME_SHOWN_KEY = "welcome_shown"
 # Persisted "빈칸을 자동 채우기" preference (0.5.0, parity with macOS fill_blanks).
@@ -52,6 +60,11 @@ class TabledownWindowsApp:
         # Held while a help/welcome dialog is open so repeat clicks collapse
         # onto the one window instead of stacking modal boxes.
         self._dialog_lock = threading.Lock()
+        # Keep watcher read/convert/write atomic relative to explicit exports.
+        self._clipboard_operation_lock = threading.Lock()
+        # Only one explicit formula read may be in flight.  Without this, a
+        # slower worker for an older selection can overwrite a newer export.
+        self._formula_export_lock = threading.Lock()
         # Launch-at-login via the MSIX StartupTask (parity with macOS). One read
         # seeds both flags; the state is None on source/dev runs and the bare
         # non-MSIX exe (no package identity), where the menu omits the toggle.
@@ -71,6 +84,14 @@ class TabledownWindowsApp:
         self._hotkey = GlobalHotkey(
             MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_T, self._toggle_from_hotkey
         )
+        # Ctrl+Alt+E runs the Excel table-with-formulas export action. It uses a
+        # separate registration thread, so the fixed NULL-hwnd hotkey id remains
+        # unique in each thread's message queue.
+        self._formula_hotkey = GlobalHotkey(
+            MOD_CONTROL | MOD_ALT | MOD_NOREPEAT,
+            VK_E,
+            self._copy_selected_excel_formulas_from_hotkey,
+        )
 
     def run(self) -> None:
         watcher = threading.Thread(
@@ -84,6 +105,10 @@ class TabledownWindowsApp:
             log("windows global hotkey registered")
         else:
             log("windows global hotkey not registered")
+        if self._formula_hotkey.start():
+            log("windows Excel formula hotkey registered")
+        else:
+            log("windows Excel formula hotkey not registered")
         # setup runs on a pystray thread once the icon is ready; the first-run
         # welcome goes through _show_message_box_async, so it never blocks.
         self.icon.run(setup=self._on_ready)
@@ -106,6 +131,10 @@ class TabledownWindowsApp:
                 t("menu.toggle", self.lang),
                 self.toggle,
                 checked=lambda _item: self.enabled,
+            ),
+            pystray.MenuItem(
+                t("menu.copy_excel_formulas", self.lang),
+                self.copy_selected_excel_formulas,
             ),
             pystray.Menu.SEPARATOR,
             # Preference: fill merged-header blanks in the Markdown conversion
@@ -229,6 +258,72 @@ class TabledownWindowsApp:
             t("help.message", self.lang), t("help.title", self.lang)
         )
 
+    def copy_selected_excel_formulas(self, _icon, _item) -> None:
+        """Export the active Excel table values and formulas without blocking."""
+
+        if not self._formula_export_lock.acquire(blocking=False):
+            return
+
+        def worker() -> None:
+            try:
+                try:
+                    result = read_selected_excel_formulas()
+                except Exception as exc:  # noqa: BLE001 - guard daemon worker
+                    log(f"excel formula read failed: {type(exc).__name__}")
+                    self._show_message_box_async(
+                        t("formula_export.error.export_failed", self.lang),
+                        t("help.title", self.lang),
+                    )
+                    return
+                if not result.ok:
+                    key = f"formula_export.error.{result.code}"
+                    message = t(key, self.lang)
+                    if message == key:
+                        safe_code = "unknown"
+                        message = t("formula_export.error.export_failed", self.lang)
+                    else:
+                        safe_code = result.code
+                    # Only a localized, known code reaches the shareable log.
+                    # An unexpected adapter payload is reduced to "unknown".
+                    log(f"excel formula export failed: {safe_code}")
+                    self._show_message_box_async(message, t("help.title", self.lang))
+                    return
+
+                try:
+                    xml = formula_selection_to_xml(result.selection)
+                    with self._clipboard_operation_lock:
+                        write_text_only_clipboard(xml)
+                except Exception as exc:  # noqa: BLE001 - omit formula-bearing details
+                    log(f"excel formula clipboard write failed: {type(exc).__name__}")
+                    self._show_message_box_async(
+                        t("formula_export.error.export_failed", self.lang),
+                        t("help.title", self.lang),
+                    )
+                    return
+
+                log("excel table-with-formulas export succeeded")
+                self._show_message_box_async(
+                    t("formula_export.success", self.lang), t("help.title", self.lang)
+                )
+            finally:
+                self._formula_export_lock.release()
+
+        try:
+            threading.Thread(
+                target=worker, name="TabledownWindowsExcelFormulaExport", daemon=True
+            ).start()
+        except Exception as exc:  # noqa: BLE001 - constructor/start failure must unlock
+            self._formula_export_lock.release()
+            log(f"excel formula worker failed to start: {type(exc).__name__}")
+            self._show_message_box_async(
+                t("formula_export.error.export_failed", self.lang),
+                t("help.title", self.lang),
+            )
+
+    def _copy_selected_excel_formulas_from_hotkey(self) -> None:
+        """Route Ctrl+Alt+E through the same action as the tray menu item."""
+        self.copy_selected_excel_formulas(None, None)
+
     def share_diagnostics(self, _icon, _item) -> None:
         """Write a scrubbed local log and open its folder in Explorer.
 
@@ -260,6 +355,7 @@ class TabledownWindowsApp:
     def quit_app(self, _icon, _item) -> None:
         self._stop_watcher.set()
         self._hotkey.stop()
+        self._formula_hotkey.stop()
         self.icon.stop()
 
     def _set_language(self, code: str) -> None:
@@ -337,17 +433,18 @@ class TabledownWindowsApp:
 
     def _augment_clipboard(self) -> None:
         try:
-            content = read_clipboard()
-            updated = converted_clipboard(content, self.fill_blanks)
-            if updated is None:
-                return
+            with self._clipboard_operation_lock:
+                content = read_clipboard()
+                updated = converted_clipboard(content, self.fill_blanks)
+                if updated is None:
+                    return
 
-            write_clipboard(
-                text=updated.get("text"),
-                html=updated.get("html"),
-                mark_generated=True,
-                drop_formats=updated.get("drop_formats"),
-            )
+                write_clipboard(
+                    text=updated.get("text"),
+                    html=updated.get("html"),
+                    mark_generated=True,
+                    drop_formats=updated.get("drop_formats"),
+                )
             log("clipboard formats updated")
         except Exception as exc:  # noqa: BLE001 - tray app should keep watching
             # Type only — this processes clipboard content and exc messages can

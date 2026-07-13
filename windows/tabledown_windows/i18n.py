@@ -15,12 +15,23 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "ko": {
         "menu.toggle": "Tabledown 사용",
         "menu.fill_blanks": "빈칸을 자동 채우기",
+        "menu.copy_excel_formulas": "표의 수식을 포함해 XML로 복사",
         "menu.language": "언어",
         "menu.language.ko": "한국어",
         "menu.language.en": "English",
         "menu.login_item": "로그인 시 자동 실행",
         "menu.diagnostics": "문제 신고용 로그 열기",
         "diagnostics.export_failed": "진단 로그를 준비하지 못했습니다. 디스크 여유 공간을 확인하고 다시 시도해 주세요.",
+        "formula_export.success": "표의 값과 수식을 XML로 복사했습니다.",
+        "formula_export.error.excel_not_running": "실행 중인 Excel을 찾을 수 없습니다.",
+        "formula_export.error.selection_not_range": "Excel에서 셀 범위를 선택한 뒤 다시 시도해 주세요.",
+        "formula_export.error.multiple_areas": "서로 떨어진 여러 범위는 지원하지 않습니다. 하나의 연속된 범위를 선택해 주세요.",
+        "formula_export.error.no_formulas": "선택한 범위에 수식이 없습니다.",
+        "formula_export.error.too_large": "선택 범위가 너무 큽니다. 10,000개 이하의 셀을 선택해 주세요.",
+        "formula_export.error.multiple_instances": "여러 Excel 프로세스가 실행 중입니다. 다른 Excel 창을 닫고 다시 시도해 주세요.",
+        "formula_export.error.too_much_text": "선택한 셀 값과 수식 내용이 너무 큽니다. 더 작은 범위를 선택해 주세요.",
+        "formula_export.error.com_failure": "Excel 표 값과 수식을 읽지 못했습니다. 셀 범위를 다시 선택한 뒤 시도해 주세요.",
+        "formula_export.error.export_failed": "Excel 표 값과 수식을 클립보드에 복사하지 못했습니다.",
         "menu.help": "도움말",
         "menu.quit": "종료",
         "help.title": "Tabledown",
@@ -41,6 +52,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "2. 원하는 앱에서 그대로 붙여넣기 (Ctrl+V)\n\n"
             "Excel 표를 복사하면 마크다운 에디터에서 Markdown 표로 붙고,\n"
             "Markdown 표를 복사하면 Excel에서 셀에 분리되어 붙습니다.\n\n"
+            "Excel 수식이 포함된 한 영역을 선택한 뒤 트레이 메뉴의\n"
+            "‘표의 수식을 포함해 XML로 복사’ 를 누르거나 Ctrl+Alt+E 를 누르면 모든 셀의 주소·값·빈칸과 A1/R1C1 수식이 함께 XML로 복사됩니다.\n\n"
             "트레이 메뉴의 ‘Tabledown 사용’ 체크 표시가 현재 상태입니다.\n"
             "아이콘에 사선이 그어져 있으면 변환이 꺼져 있는 상태입니다.\n"
             "단축키 Ctrl+Alt+T 로 변환을 켜고 끌 수 있습니다."
@@ -49,12 +62,23 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "en": {
         "menu.toggle": "Use Tabledown",
         "menu.fill_blanks": "Auto-fill blank cells",
+        "menu.copy_excel_formulas": "Copy table with formulas as XML",
         "menu.language": "Language",
         "menu.language.ko": "한국어",
         "menu.language.en": "English",
         "menu.login_item": "Open at Login",
         "menu.diagnostics": "Open logs for bug report",
         "diagnostics.export_failed": "Couldn't prepare the diagnostics log. Check free disk space and try again.",
+        "formula_export.success": "Copied the table values and formulas as XML.",
+        "formula_export.error.excel_not_running": "Couldn't find a running Excel application.",
+        "formula_export.error.selection_not_range": "Select a cell range in Excel, then try again.",
+        "formula_export.error.multiple_areas": "Separate ranges aren't supported. Select one contiguous range.",
+        "formula_export.error.no_formulas": "The selected range doesn't contain formulas.",
+        "formula_export.error.too_large": "The selected range is too large. Select 10,000 cells or fewer.",
+        "formula_export.error.multiple_instances": "Multiple Excel processes are running. Close the other Excel windows and try again.",
+        "formula_export.error.too_much_text": "The selected cell values and formulas contain too much text. Select a smaller range.",
+        "formula_export.error.com_failure": "Couldn't read the Excel table values and formulas. Select the cell range again, then retry.",
+        "formula_export.error.export_failed": "Couldn't copy the Excel table values and formulas to the clipboard.",
         "menu.help": "Help",
         "menu.quit": "Quit",
         "help.title": "Tabledown",
@@ -77,6 +101,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "2. Paste in any app (Ctrl+V)\n\n"
             "Excel tables paste as Markdown in a Markdown editor,\n"
             "and Markdown tables paste into separate cells in Excel.\n\n"
+            "Select one formula range in Excel, then click ‘Copy table with formulas as XML’\n"
+            "in the tray menu or press Ctrl+Alt+E to copy every cell address, value, blank, and A1/R1C1 formula together as XML.\n\n"
             "The checkmark next to 'Use Tabledown' in the tray menu shows the current state.\n"
             "A slash through the tray icon means conversion is off.\n"
             "The global shortcut Ctrl+Alt+T toggles conversion on and off."

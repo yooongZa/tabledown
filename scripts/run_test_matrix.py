@@ -47,7 +47,7 @@ from tablemark.converter.table_xml import (
     table_xml_to_model,
 )
 from tablemark import login_item
-from tablemark.hotkey import CMD, CONTROL, KEY_T, KEY_X, GlobalHotkeys
+from tablemark.hotkey import CMD, CONTROL, KEY_E, KEY_T, KEY_X, GlobalHotkeys
 from tablemark.i18n import SUPPORTED_LANGUAGES, detect_system_language, t
 from tablemark.app import TabledownApp
 
@@ -683,7 +683,7 @@ def run_hotkey_tests() -> list[TestResult]:
         except Exception as exc:  # noqa: BLE001
             tests.append(TestResult(name, False, "hotkey", str(exc), _elapsed(started)))
 
-    check("hotkey_keycodes_are_ansi_x_and_t", _hotkey_keycodes)
+    check("hotkey_keycodes_are_ansi_x_t_and_e", _hotkey_keycodes)
     check("hotkey_dispatch_routes_by_id", _hotkey_dispatch_routes_by_id)
     check("hotkey_single_binding_fallback", _hotkey_single_binding_fallback)
     check("hotkey_unknown_id_does_not_misfire", _hotkey_unknown_id_no_misfire)
@@ -691,20 +691,28 @@ def run_hotkey_tests() -> list[TestResult]:
 
 
 def _hotkey_keycodes() -> str:
-    # The constants app.py composes the ⌘⌃X / ⌘⌃T combos from must stay correct.
-    return _assert_equal((KEY_X, KEY_T, CMD, CONTROL), (7, 17, 0x0100, 0x1000))
+    # The constants app.py composes the ⌘⌃X / ⌘⌃T / ⌘⌃E combos from
+    # must stay correct.
+    return _assert_equal(
+        (KEY_X, KEY_T, KEY_E, CMD, CONTROL),
+        (7, 17, 14, 0x0100, 0x1000),
+    )
 
 
 def _hotkey_dispatch_routes_by_id() -> str:
-    # One Carbon handler serves both hotkeys; it must call the callback for the
+    # One Carbon handler serves all hotkeys; it must call the callback for the
     # id that actually fired, not just the first/last bound (the two-handler bug
     # this design replaces). No real Carbon: we drive _on_hotkey directly.
     hk = GlobalHotkeys()
     fired = []
-    hk._bindings = {1: lambda _s: fired.append("c"), 2: lambda _s: fired.append("t")}
-    hk._fired_hotkey_id = lambda _event: 2
+    hk._bindings = {
+        1: lambda _s: fired.append("x"),
+        2: lambda _s: fired.append("t"),
+        3: lambda _s: fired.append("e"),
+    }
+    hk._fired_hotkey_id = lambda _event: 3
     hk._on_hotkey(None, object(), None)
-    return _assert_equal(fired, ["t"])
+    return _assert_equal(fired, ["e"])
 
 
 def _hotkey_single_binding_fallback() -> str:

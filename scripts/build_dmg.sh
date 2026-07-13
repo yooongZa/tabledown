@@ -23,6 +23,7 @@ DIST="$ROOT/dist"
 APP="$DIST/$APP_NAME.app"
 DMG="$DIST/$APP_NAME.dmg"
 ZIP="$DIST/$APP_NAME-notarized.zip"
+ENTITLEMENTS="$ROOT/entitlements/developer-id.plist"
 NOTARY_PROFILE="${NOTARY_PROFILE:-tabledown-notary}"
 # ASC API 키 3종이 모두 주어지면 keychain 프로파일 대신 키 직접 인증.
 if [[ -n "${NOTARY_KEY:-}" && -n "${NOTARY_KEY_ID:-}" && -n "${NOTARY_ISSUER:-}" ]]; then
@@ -60,7 +61,8 @@ while IFS= read -r -d '' file_path; do
     /usr/bin/codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$file_path"
   fi
 done < <(find "$APP_STAGE/Contents" -type f -print0)
-/usr/bin/codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP_STAGE"
+/usr/bin/codesign --force --options runtime --timestamp --sign "$SIGN_ID" \
+  --entitlements "$ENTITLEMENTS" "$APP_STAGE"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_STAGE"
 
 # 4. Notarize the app: submit the zipped app and wait for Apple's verdict.

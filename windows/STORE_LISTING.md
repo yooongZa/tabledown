@@ -33,6 +33,8 @@ Tabledown lives in your system tray and quietly converts tables on your clipboar
 • Copy a table from Excel or Google Sheets, paste into a Markdown editor (Obsidian,
   GitHub, Notion, a chat box) — it arrives as a clean Markdown table.
 • Copy a Markdown table, paste into Excel — it lands in separate cells.
+• Select a formula range in Excel and choose “Copy table with formulas as XML” —
+  every value, blank, cell address, and A1/R1C1 formula is copied together.
 • One copy serves every destination: spreadsheets and Word still paste a real
   table, Markdown editors get Markdown. Nothing to click — it just works on Ctrl+C.
 
@@ -50,6 +52,8 @@ Tabledown은 시스템 트레이에 상주하며 클립보드의 표를 조용�
 • Excel·구글 시트에서 표를 복사해 마크다운 에디터(Obsidian, GitHub, Notion, 채팅창)에
   붙여넣으면 깔끔한 마크다운 표로 들어갑니다.
 • 마크다운 표를 복사해 Excel에 붙여넣으면 셀 단위로 분리되어 들어갑니다.
+• Excel 수식 영역을 선택하고 ‘표의 수식을 포함해 XML로 복사’를 누르면
+  모든 셀 값·빈칸·주소와 A1/R1C1 수식이 함께 복사됩니다.
 • 한 번 복사로 모든 곳에 대응: 스프레드시트·Word는 진짜 표로, 마크다운 에디터는
   마크다운으로 붙습니다. 누를 것 없이 Ctrl+C 만으로 동작합니다.
 
@@ -87,8 +91,10 @@ system tray, English/Korean UI, on/off toggle.
 > How to test: launch the app (a table icon appears in the notification area).
 > Copy a cell range in Excel, then paste into Notepad — the paste is a Markdown
 > table. Copy a Markdown table (e.g. `| a | b |` / `| --- | --- |` / `| 1 | 2 |`)
-> and paste into Excel — it splits into cells. Right-click the tray icon for the
-> on/off toggle and language menu.
+> and paste into Excel — it splits into cells. To test formula export, select a
+> single range containing formulas in Excel, right-click the tray icon, choose
+> “Copy table with formulas as XML,” and paste the resulting XML into Notepad.
+> Right-click the tray icon for the on/off toggle and language menu.
 
 ## restricted capability 사유 (runFullTrust)
 위 Notes 의 첫 문단을 그대로 사용. `runFullTrust` 는 거절 사유가 아니지만 심사가

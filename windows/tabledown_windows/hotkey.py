@@ -1,4 +1,4 @@
-"""Windows global hotkey (Ctrl+Alt+T) via Win32 ``RegisterHotKey``.
+"""Windows global hotkeys (Ctrl+Alt+T / Ctrl+Alt+E) via Win32 ``RegisterHotKey``.
 
 macOS binds global hotkeys through Carbon (see ``tablemark/hotkey.py``); the
 Windows analog is user32 ``RegisterHotKey``. A hotkey registered with a NULL
@@ -31,7 +31,8 @@ MOD_SHIFT = 0x0004
 MOD_WIN = 0x0008
 MOD_NOREPEAT = 0x4000  # one WM_HOTKEY per press, not autorepeat-spammed
 
-# Virtual-key code for 'T' (VK is the uppercase ASCII for letters/digits).
+# Virtual-key codes (VK is the uppercase ASCII for letters/digits).
+VK_E = 0x45
 VK_T = 0x54
 
 # Window messages.

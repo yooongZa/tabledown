@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### Added
+- **표의 값과 수식을 함께 LLM 친화 XML로 복사하는 수동 메뉴·전역 단축키 추가 (macOS·Windows).** Excel desktop app에서 단일 사각형 영역을 선택한 뒤 ‘표의 수식을 포함해 XML로 복사’를 실행하거나 macOS **⌘⌃E** / Windows **Ctrl+Alt+E** 를 누르면, 모든 셀의 값·빈칸·주소와 수식 셀의 현재 결과·A1/Formula2·R1C1 표현을 행·열 구조 그대로 XML text에 기록한다. Tabledown은 수식을 실행하지 않고 Excel의 현재 값을 읽으며, 자동 clipboard watcher의 기존 Excel↔Markdown 동작은 변경하지 않는다. macOS는 Excel Apple Events Automation, Windows는 실행 중인 Excel COM을 사용하고, 결과 clipboard는 명시적 text-only export로 교체한다.
+
+### Distribution
+- **2026-07-13: macOS 0.6.0을 TestFlight build 0.6.1로 업로드.** App Store Connect 처리와 Mac App Store signing(서명)·sandbox entitlement(샌드박스 권한) 검증을 통과했으며, 내부 테스트 그룹 `22`에 연결되어 ‘제출 준비 완료’ 상태다. 기능 단위 테스트 39건과 전체 test matrix(테스트 매트릭스) 75건을 통과했다.
+
 ## [0.5.0] - 2026-07-01
 
 ### Added

@@ -26,7 +26,9 @@ try {
   # through winsdk, whose namespace modules load lazily and whose code lives in
   # a native _winrt.pyd — PyInstaller's static analysis misses both, so collect
   # the whole package (submodules + binaries) or the toggle silently vanishes
-  # from the packaged build.
+  # from the packaged build. The Excel formula action also imports COM lazily
+  # on its worker thread; list pythoncom/win32com.client explicitly so that
+  # deferred path is present in the frozen app.
   & $Python -m PyInstaller `
     --noconfirm `
     --clean `
@@ -36,6 +38,8 @@ try {
     --paths $ScriptRoot `
     --add-data $AssetData `
     --collect-all winsdk `
+    --hidden-import pythoncom `
+    --hidden-import win32com.client `
     --icon $IconPath `
     $EntryPoint
 }

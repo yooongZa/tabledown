@@ -123,3 +123,23 @@ def write_clipboard(
     if mark_generated:
         for pb_type, value in GENERATED_MARKER_TYPES.items():
             pb.setString_forType_(value, pb_type)
+
+
+def write_text_only_clipboard(text: str, mark_generated: bool = True) -> None:
+    """Replace the clipboard with plain text and Tabledown's marker only.
+
+    Unlike :func:`write_clipboard`, this intentionally preserves no native,
+    HTML, image, or rich-text formats.  It is reserved for explicit exports
+    where the requested result is text, and is never used by the watcher.
+    """
+    pb = NSPasteboard.generalPasteboard()
+    text_types = [str(NSPasteboardTypeString), LEGACY_STRING_TYPE]
+    marker_types = list(GENERATED_MARKER_TYPES) if mark_generated else []
+
+    pb.clearContents()
+    pb.declareTypes_owner_(text_types + marker_types, None)
+    for pb_type in text_types:
+        pb.setString_forType_(text, pb_type)
+    if mark_generated:
+        for pb_type, value in GENERATED_MARKER_TYPES.items():
+            pb.setString_forType_(value, pb_type)

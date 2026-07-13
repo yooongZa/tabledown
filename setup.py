@@ -48,6 +48,10 @@ OPTIONS = {
         "LSApplicationCategoryType": "public.app-category.productivity",
         "LSMinimumSystemVersion": "12.0",
         "NSHumanReadableCopyright": "© 2026 Tabledown",
+        "NSAppleEventsUsageDescription": (
+            "Tabledown accesses Microsoft Excel only when you choose "
+            "Copy table with formulas as XML."
+        ),
         # The app makes no network connections and uses only exempt encryption
         # (none of its own). Declaring this here answers TestFlight's export-
         # compliance question at build time, so each upload no longer shows
@@ -69,7 +73,9 @@ setup(
     app=APP,
     name="Tabledown",
     version=VERSION,
-    packages=find_packages(),
+    # Unit tests are a package only so unittest discovery/imports are stable;
+    # they must not be copied into the shipped application bundle.
+    packages=find_packages(exclude=("tests", "tests.*")),
     # The code uses PEP 604 union annotations (e.g. `str | None`) evaluated at
     # runtime without `from __future__ import annotations`, which requires
     # Python 3.10+. Matches the Windows port requirement (windows/PACKAGING.md).

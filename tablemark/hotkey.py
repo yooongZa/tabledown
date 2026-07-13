@@ -6,13 +6,15 @@ permission (unlike a CGEventTap or a pynput keyboard hook), which preserves
 Tabledown's "권한 0개" (zero-permissions) selling point. It is also the standard
 API many sandboxed Mac App Store apps use for global shortcuts.
 
-Tabledown binds two hotkeys: ⌘⌃X → copy-as-XML and ⌘⌃T → toggle conversion.
+Tabledown binds three hotkeys: ⌘⌃X → convert table to XML and copy,
+⌘⌃T → toggle conversion, and ⌘⌃E → copy an Excel table with
+values and formulas as XML.
 
 ⚠️ One handler, dispatch by id (회귀 금지). Carbon delivers EVERY
 ``kEventHotKeyPressed`` to the handlers installed on the application event
 target. A handler that always returns ``noErr`` *consumes* the event, so
 installing one such handler per hotkey is wrong: only the most-recently-installed
-handler ever runs — for *both* hotkeys, firing the wrong callback. So we install
+handler ever runs — for *all* hotkeys, firing the wrong callback. So we install
 exactly ONE handler and read the fired hotkey's id from the event
 (``GetEventParameter`` → ``EventHotKeyID``) to pick the right callback. Do not
 "simplify" this into per-hotkey handlers.
@@ -50,9 +52,10 @@ CONTROL = 0x1000  # controlKey
 SHIFT = 0x0200  # shiftKey
 OPTION = 0x0800  # optionKey
 
-# ANSI virtual keycodes (Events.h, kVK_ANSI_*). X == 7, T == 17.
+# ANSI virtual keycodes (Events.h, kVK_ANSI_*). X == 7, T == 17, E == 14.
 KEY_X = 7  # kVK_ANSI_X (mnemonic for XML)
 KEY_T = 17  # kVK_ANSI_T
+KEY_E = 14  # kVK_ANSI_E (mnemonic for Excel formulas)
 
 # Carbon event constants.
 _EVENT_CLASS_KEYBOARD = (
@@ -145,6 +148,7 @@ class GlobalHotkeys:
         hk = GlobalHotkeys()
         hk.add(KEY_X, CMD | CONTROL, self.copy_as_xml)
         hk.add(KEY_T, CMD | CONTROL, self.toggle)
+        hk.add(KEY_E, CMD | CONTROL, self.copy_selected_excel_formulas)
         hk.register()
         ...
         hk.unregister()   # optional; on quit
