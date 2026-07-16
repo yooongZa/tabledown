@@ -18,6 +18,7 @@
 ### Verification
 - **2026-07-16 자동 검증:** converter 49/49, macOS XML action(동작)+formula 단위 테스트 49/49, 기본 test matrix 80/80, Windows 포트 85건 중 64 pass + 21 skip(macOS에서 Windows 전용 tray·WinRT 테스트 제외), Python `compileall` 통과.
 - **2026-07-16 실제 macOS Excel 사용자 흐름:** 원본 `A1:F5` 표 복사 시 HTML·OLE·DataObject가 공존하는 실제 clipboard를 재현했다. 일반 XML 변환 후에는 plain text+marker만 남았고, 새 Excel 문서 붙여넣기는 원본 표가 아닌 XML text `A1:A34`로 들어갔다. 자동 변환 직후 HTML slot이 유지되는 것도 함께 확인했다. 실제 Windows Excel/COM 수동 검증은 이번 환경에서 실행하지 못했다.
+- **2026-07-16 수정 commit `ad9742f` 재검증:** macOS XML action+formula 49/49, 기본 test matrix 80/80, Windows 포트 64 pass + 21 skip, Python `compileall`을 다시 통과했다. 실제 macOS Excel에서도 native clipboard format(네이티브 클립보드 형식)이 text+marker로 교체되고, 새 문서에 원본 표 대신 XML `A1:A34`가 붙는 것을 두 번째로 확인했다. 테스트 중 코드 변경은 없었다.
 
 ### Distribution
 - **2026-07-13: macOS 0.6.0을 TestFlight build 0.6.1로 업로드.** App Store Connect 처리와 Mac App Store signing(서명)·sandbox entitlement(샌드박스 권한) 검증을 통과했으며, 내부 테스트 그룹 `22`에 연결되어 ‘제출 준비 완료’ 상태다. 기능 단위 테스트 39건과 전체 test matrix(테스트 매트릭스) 75건을 통과했다.
