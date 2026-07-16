@@ -324,8 +324,10 @@ class TabledownApp(rumps.App):
     def copy_as_xml(self, _sender):
         """Convert the table currently on the clipboard to LLM-friendly XML.
 
-        This is a deliberate user action: it puts XML in the text slot and drops
-        the HTML <table> so a paste anywhere yields the XML the user asked for.
+        This is a deliberate user action: it replaces the clipboard with
+        text-only XML so every destination receives the XML the user asked for.
+        Keeping Excel/OLE native formats would let Excel prefer the original
+        table over the XML even after the HTML slot was removed.
         There is no automatic XML→table direction — XML is produced only by this
         menu click, never inferred from clipboard contents by the watcher.
         """
@@ -334,10 +336,9 @@ class TabledownApp(rumps.App):
                 model = self._clipboard_table_model(read_clipboard(), self.fill_blanks)
                 if model is not None:
                     header_levels, data_rows = model
-                    write_clipboard(
-                        text=model_to_xml(header_levels, data_rows),
+                    write_text_only_clipboard(
+                        model_to_xml(header_levels, data_rows),
                         mark_generated=True,
-                        drop_types=RENDERED_TABLE_TYPES | HTML_TYPES,
                     )
             if model is None:
                 rumps.alert(
