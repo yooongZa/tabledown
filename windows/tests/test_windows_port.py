@@ -236,6 +236,7 @@ class WindowsPortTests(unittest.TestCase):
                 excel_formula.TOO_LARGE,
                 excel_formula.MULTIPLE_INSTANCES,
                 excel_formula.TOO_MUCH_TEXT,
+                excel_formula.SELECTION_CHANGED,
                 excel_formula.COM_FAILURE,
                 "export_failed",
             ):
@@ -583,7 +584,7 @@ class ExcelFormulaAdapterTests(unittest.TestCase):
 
         result, _client = self._read(selection)
 
-        self.assertEqual(result.code, excel_formula.COM_FAILURE)
+        self.assertEqual(result.code, excel_formula.SELECTION_CHANGED)
         self.assertIsNone(result.selection)
         self.assertEqual(selection.value2_reads, 1)
 
@@ -685,7 +686,7 @@ class ExcelFormulaAdapterTests(unittest.TestCase):
 
         # Prefix inspection would accept this value; the post-read COM state
         # check rejects it because the cell is no longer a formula.
-        self.assertEqual(result.code, excel_formula.COM_FAILURE)
+        self.assertEqual(result.code, excel_formula.SELECTION_CHANGED)
         self.assertIsNone(result.selection)
 
     def test_formula_to_constant_race_fails_after_r1c1_read(self):
@@ -706,7 +707,7 @@ class ExcelFormulaAdapterTests(unittest.TestCase):
 
         result, _client = self._read(selection)
 
-        self.assertEqual(result.code, excel_formula.COM_FAILURE)
+        self.assertEqual(result.code, excel_formula.SELECTION_CHANGED)
         self.assertIsNone(result.selection)
 
     def test_reads_formula_cells_from_every_specialcells_area(self):
@@ -770,7 +771,7 @@ class ExcelFormulaAdapterTests(unittest.TestCase):
 
         result, _client = self._read(selection)
 
-        self.assertEqual(result.code, excel_formula.COM_FAILURE)
+        self.assertEqual(result.code, excel_formula.SELECTION_CHANGED)
         self.assertIsNone(result.selection)
         self.assertEqual(selection.SpecialCells.call_count, 2)
 
@@ -782,7 +783,7 @@ class ExcelFormulaAdapterTests(unittest.TestCase):
 
         result, _client = self._read(initial, final_selection=final)
 
-        self.assertEqual(result.code, excel_formula.COM_FAILURE)
+        self.assertEqual(result.code, excel_formula.SELECTION_CHANGED)
         self.assertIsNone(result.selection)
 
     def test_no_specialcells_intersection_is_no_formulas(self):
@@ -937,6 +938,122 @@ class ExcelFormulaAdapterTests(unittest.TestCase):
                 self.assertEqual(result.code, expected)
                 self.assertFalse(result.ok)
                 self.assertIsNone(result.selection)
+
+
+class StableExcelFormulaReaderTests(unittest.TestCase):
+    @staticmethod
+    def _selection(value: str, formula: str):
+        return excel_formula.ExcelFormulaSelection(
+            "Book.xlsx",
+            "Sheet1",
+            "$A$1",
+            1,
+            1,
+            (excel_formula.ExcelSelectionCell("$A$1", value, formula, formula),),
+        )
+
+    @staticmethod
+    def _success(selection):
+        return excel_formula.ExcelFormulaResult(excel_formula.SUCCESS, selection)
+
+    def test_two_equal_reads_return_a_stable_snapshot(self):
+        stable = self._selection("2", "=1+1")
+        with mock.patch.object(
+            excel_formula,
+            "read_selected_excel_formulas",
+            side_effect=[self._success(stable), self._success(stable)],
+        ) as reader:
+            result = excel_formula.read_stable_selected_excel_formulas()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.selection, stable)
+        self.assertEqual(reader.call_count, 2)
+
+    def test_value_only_recalculation_retries_and_accepts_new_stable_value(self):
+        old = self._selection("2", "=1+1")
+        new = self._selection("3", "=1+1")
+        with mock.patch.object(
+            excel_formula,
+            "read_selected_excel_formulas",
+            side_effect=[self._success(old), self._success(new), self._success(new)],
+        ) as reader:
+            result = excel_formula.read_stable_selected_excel_formulas()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.selection, new)
+        self.assertEqual(reader.call_count, 3)
+
+    def test_formula_only_edit_retries_and_accepts_new_stable_formula(self):
+        old = self._selection("2", "=1+1")
+        new = self._selection("2", "=2*1")
+        with mock.patch.object(
+            excel_formula,
+            "read_selected_excel_formulas",
+            side_effect=[self._success(old), self._success(new), self._success(new)],
+        ) as reader:
+            result = excel_formula.read_stable_selected_excel_formulas()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.selection, new)
+        self.assertEqual(reader.call_count, 3)
+
+    def test_three_different_snapshots_fail_after_bounded_retry(self):
+        snapshots = [
+            self._selection("2", "=1+1"),
+            self._selection("3", "=1+2"),
+            self._selection("4", "=2+2"),
+        ]
+        with mock.patch.object(
+            excel_formula,
+            "read_selected_excel_formulas",
+            side_effect=[self._success(value) for value in snapshots],
+        ) as reader:
+            result = excel_formula.read_stable_selected_excel_formulas()
+
+        self.assertEqual(result.code, excel_formula.SELECTION_CHANGED)
+        self.assertIsNone(result.selection)
+        self.assertEqual(reader.call_count, 3)
+
+    def test_transient_selection_change_retries_but_fatal_error_does_not(self):
+        stable = self._selection("2", "=1+1")
+        with mock.patch.object(
+            excel_formula,
+            "read_selected_excel_formulas",
+            side_effect=[
+                excel_formula.ExcelFormulaResult(excel_formula.SELECTION_CHANGED),
+                self._success(stable),
+                self._success(stable),
+            ],
+        ) as retrying_reader:
+            result = excel_formula.read_stable_selected_excel_formulas()
+        self.assertTrue(result.ok)
+        self.assertEqual(retrying_reader.call_count, 3)
+
+        with mock.patch.object(
+            excel_formula,
+            "read_selected_excel_formulas",
+            return_value=excel_formula.ExcelFormulaResult(excel_formula.COM_FAILURE),
+        ) as fatal_reader:
+            result = excel_formula.read_stable_selected_excel_formulas()
+        self.assertEqual(result.code, excel_formula.COM_FAILURE)
+        self.assertEqual(fatal_reader.call_count, 1)
+
+    def test_transient_error_resets_the_previous_snapshot(self):
+        stable = self._selection("2", "=1+1")
+        with mock.patch.object(
+            excel_formula,
+            "read_selected_excel_formulas",
+            side_effect=[
+                self._success(stable),
+                excel_formula.ExcelFormulaResult(excel_formula.SELECTION_CHANGED),
+                self._success(stable),
+            ],
+        ) as reader:
+            result = excel_formula.read_stable_selected_excel_formulas()
+
+        self.assertEqual(result.code, excel_formula.SELECTION_CHANGED)
+        self.assertIsNone(result.selection)
+        self.assertEqual(reader.call_count, 3)
 
 
 class FormulaTextClipboardTests(unittest.TestCase):
@@ -1222,7 +1339,7 @@ class LoginMenuTests(unittest.TestCase):
 
         with mock.patch.object(app_module.threading, "Thread", HeldThread), \
              mock.patch.object(
-                 app_module, "read_selected_excel_formulas", return_value=result
+                 app_module, "read_stable_selected_excel_formulas", return_value=result
              ), \
              mock.patch.object(app, "_show_message_box_async"):
             app.copy_selected_excel_formulas(None, None)
@@ -1270,7 +1387,7 @@ class LoginMenuTests(unittest.TestCase):
                 self.target()
 
         with mock.patch.object(app_module.threading, "Thread", ImmediateThread), \
-             mock.patch.object(app_module, "read_selected_excel_formulas", return_value=result), \
+             mock.patch.object(app_module, "read_stable_selected_excel_formulas", return_value=result), \
              mock.patch.object(app_module, "formula_selection_to_xml", return_value="<수식범위 />") as serialize, \
              mock.patch.object(app_module, "write_text_only_clipboard") as write, \
              mock.patch.object(
@@ -1299,7 +1416,7 @@ class LoginMenuTests(unittest.TestCase):
                 self.target()
 
         with mock.patch.object(app_module.threading, "Thread", ImmediateThread), \
-             mock.patch.object(app_module, "read_selected_excel_formulas", return_value=result), \
+             mock.patch.object(app_module, "read_stable_selected_excel_formulas", return_value=result), \
              mock.patch.object(app_module, "write_text_only_clipboard") as write, \
              mock.patch.object(
                  app,

@@ -34,6 +34,7 @@ from tablemark.clipboard import (
     write_clipboard,
 )
 from tablemark.converter.html_to_md import (
+    MultipleTablesError,
     forward_fill_key_columns,
     html_table_to_markdown,
     html_table_to_model,
@@ -60,6 +61,17 @@ HTML_BASIC = "<table><tr><th>Name</th><th>Score</th></tr><tr><td>Alice</td><td>9
 HTML_COLSPAN = "<table><tr><th colspan='2'>Group</th><th>Total</th></tr><tr><td>A</td><td>B</td><td>2</td></tr></table>"
 HTML_ROWSPAN = "<table><tr><th rowspan='2'>Name</th><th>Q1</th></tr><tr><td>10</td></tr></table>"
 HTML_TRAILING_EMPTY = "<table><tr><th>Step</th><th>Source</th><th></th></tr><tr><td>1</td><td>Copy_Basic</td><td></td></tr></table>"
+HTML_ONE_COLUMN = (
+    "<table><tr><th>항목</th></tr><tr><td>A</td></tr><tr><td>B</td></tr></table>"
+)
+HTML_FULL_WIDTH_BODY = (
+    "<table><tr><th>항목</th><th>값</th></tr>"
+    "<tr><td>A</td><td>1</td></tr>"
+    "<tr><td colspan='2'>중간 합계</td></tr>"
+    "<tr><td>B</td><td>2</td></tr></table>"
+)
+HTML_MULTIPLE_TABLES = HTML_BASIC + HTML_BASIC
+MARKDOWN_DASH_VALUE = "| 기호 | 값 |\n| --- | --- |\n| - | -- |\n| x | y |"
 HTML_NOISE = """
 <html><body>
 <p>Before</p>
@@ -223,6 +235,13 @@ def run_converter_tests() -> list[TestResult]:
         lambda: _assert_equal(
             markdown_table_to_rows(MARKDOWN_KOREAN)[1],
             ["사과", "1200", "A|B"],
+        ),
+    )
+    check(
+        "markdown_dash_only_value_row_preserved",
+        lambda: _assert_equal(
+            markdown_table_to_rows(MARKDOWN_DASH_VALUE)[1],
+            ["-", "--"],
         ),
     )
     check(
@@ -420,6 +439,36 @@ def run_converter_tests() -> list[TestResult]:
         lambda: _assert_equal(
             TabledownApp._clipboard_table_model({"html": HTML_BASIC}),
             ([["Name", "Score"]], [["Alice", "95"]]),
+        ),
+    )
+    check(
+        "xml_model_preserves_one_column_table",
+        lambda: _assert_equal(
+            TabledownApp._clipboard_table_model({"html": HTML_ONE_COLUMN}),
+            ([["항목"]], [["A"], ["B"]]),
+        ),
+    )
+    check(
+        "xml_model_preserves_full_width_body_row",
+        lambda: _assert_equal(
+            TabledownApp._clipboard_table_model({"html": HTML_FULL_WIDTH_BODY})[1],
+            [["A", "1"], ["중간 합계", "중간 합계"], ["B", "2"]],
+        ),
+    )
+    check(
+        "xml_model_preserves_explicit_trailing_blank_column",
+        lambda: _assert_equal(
+            TabledownApp._clipboard_table_model({"html": HTML_TRAILING_EMPTY}),
+            ([["Step", "Source", ""]], [["1", "Copy_Basic", ""]]),
+        ),
+    )
+    check(
+        "xml_model_rejects_multiple_html_tables",
+        lambda: _assert_raises(
+            MultipleTablesError,
+            lambda: TabledownApp._clipboard_table_model(
+                {"html": HTML_MULTIPLE_TABLES}
+            ),
         ),
     )
     check(
@@ -1064,6 +1113,18 @@ def _assert_isinstance(value, expected_type) -> str:
     if not isinstance(value, expected_type):
         raise AssertionError(f"expected {expected_type!r}, got {type(value).__name__}: {value!r}")
     return "ok"
+
+
+def _assert_raises(expected_type, fn) -> str:
+    try:
+        fn()
+    except expected_type:
+        return "ok"
+    except Exception as exc:  # noqa: BLE001 - report the exact unexpected type
+        raise AssertionError(
+            f"expected {expected_type.__name__}, got {type(exc).__name__}"
+        ) from exc
+    raise AssertionError(f"expected {expected_type.__name__}")
 
 
 def _elapsed(started: float) -> int:

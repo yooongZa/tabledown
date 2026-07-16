@@ -9,6 +9,10 @@ _BLOCK_TAGS = {
 }
 
 
+class MultipleTablesError(ValueError):
+    """The clipboard HTML contains more than one table and is ambiguous."""
+
+
 def html_table_to_markdown(html: str, fill_merged_headers: bool = False) -> str:
     """Parse HTML and return a markdown table string.
 
@@ -80,9 +84,15 @@ def html_table_to_model(html: str) -> tuple[list[list[str]], list[list[str]]]:
         ValueError: if no table is found or it's empty.
     """
     soup = BeautifulSoup(html, "html.parser")
-    table = soup.find("table")
-    if not table:
+    tables = soup.find_all("table")
+    if not tables:
         raise ValueError("HTML에 <table>이 없습니다")
+    if len(tables) != 1:
+        # The v2 output has one <표> root. Silently choosing the first table
+        # would discard the rest; nested tables are equally ambiguous because
+        # their rows would otherwise be counted twice by find_all("tr").
+        raise MultipleTablesError("HTML에 표가 여러 개 있습니다")
+    table = tables[0]
 
     grid, row_meta = _table_to_filled_grid(table)
     if not grid:
@@ -91,12 +101,24 @@ def html_table_to_model(html: str) -> tuple[list[list[str]], list[list[str]]]:
     ncols = max(len(row) for row in grid)
     grid = [row + [""] * (ncols - len(row)) for row in grid]
 
-    # A row whose single origin cell spans the whole width is a title, not data.
-    title_rows = {
-        index
-        for index, origins in enumerate(row_meta)
-        if len(origins) == 1 and origins[0][0] >= ncols
-    }
+    # Only a leading run of all-<td>, multi-column full-width rows is a title.
+    # The old all-row test erased legitimate full-width body/subtotal rows and
+    # classified every row of a one-column table as a title. Explicit <th> rows
+    # remain headers, and if every row is full-width we preserve them all rather
+    # than guessing that the complete table is a title block.
+    leading_titles: list[int] = []
+    if ncols > 1:
+        for index, origins in enumerate(row_meta):
+            is_title = (
+                len(origins) == 1
+                and origins[0][0] >= ncols
+                and origins[0][0] > 1
+                and not origins[0][1]
+            )
+            if not is_title:
+                break
+            leading_titles.append(index)
+    title_rows = set(leading_titles) if len(leading_titles) < len(grid) else set()
     kept = [index for index in range(len(grid)) if index not in title_rows]
     if not kept:
         raise ValueError("표가 비어있습니다")
@@ -106,7 +128,10 @@ def html_table_to_model(html: str) -> tuple[list[list[str]], list[list[str]]]:
 
     header_levels = [grid[index] for index in header_indices]
     data_rows = [grid[index] for index in data_indices]
-    return _trim_model_columns(header_levels, data_rows)
+    # Preserve explicit right-edge blank cells. The XML action is an export,
+    # and an empty selected column is still part of the user's table. Rows were
+    # already padded to the real maximum source width above.
+    return header_levels, data_rows
 
 
 def html_table_to_rows(html: str) -> list[list[str]]:
@@ -406,26 +431,6 @@ def _trim_trailing_empty_columns(rows: list[list[str]]) -> list[list[str]]:
 
 def _has_content(cell: str) -> bool:
     return bool(cell.strip())
-
-
-def _trim_model_columns(
-    header_levels: list[list[str]], data_rows: list[list[str]]
-) -> tuple[list[list[str]], list[list[str]]]:
-    """Drop right-edge columns empty across every header level and data row."""
-    all_rows = header_levels + data_rows
-    if not all_rows:
-        return header_levels, data_rows
-    max_cols = max(len(row) for row in all_rows)
-    keep_cols = max_cols
-    while keep_cols > 1:
-        col_index = keep_cols - 1
-        if any(_has_content(row[col_index]) for row in all_rows if col_index < len(row)):
-            break
-        keep_cols -= 1
-    return (
-        [row[:keep_cols] for row in header_levels],
-        [row[:keep_cols] for row in data_rows],
-    )
 
 
 def _combine_header_levels(header_levels: list[list[str]]) -> list[str]:

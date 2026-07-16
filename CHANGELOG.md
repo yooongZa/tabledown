@@ -10,6 +10,13 @@
 ### Added
 - **표의 값과 수식을 함께 LLM 친화 XML로 복사하는 수동 메뉴·전역 단축키 추가 (macOS·Windows).** Excel desktop app에서 단일 사각형 영역을 선택한 뒤 ‘표의 수식을 포함해 XML로 복사’를 실행하거나 macOS **⌘⌃E** / Windows **Ctrl+Alt+E** 를 누르면, 모든 셀의 값·빈칸·주소와 수식 셀의 현재 결과·A1/Formula2·R1C1 표현을 행·열 구조 그대로 XML text에 기록한다. Tabledown은 수식을 실행하지 않고 Excel의 현재 값을 읽으며, 자동 clipboard watcher의 기존 Excel↔Markdown 동작은 변경하지 않는다. macOS는 Excel Apple Events Automation, Windows는 실행 중인 Excel COM을 사용하고, 결과 clipboard는 명시적 text-only export로 교체한다.
 
+### Fixed
+- **일반 표→XML 변환의 조용한 데이터 손실 방지.** 1열 표의 모든 행을 전체폭 제목으로 오인해 비우던 문제, 본문의 `colspan` 전체폭 행을 삭제하던 문제, 명시적으로 존재하는 오른쪽 끝 빈 열을 잘라내던 문제를 수정했다. HTML에 표가 여러 개이거나 중첩 표가 있으면 첫 표만 조용히 내보내지 않고 한 표만 복사하도록 안내한다. Markdown 입력은 둘째 줄의 header separator(헤더 구분선)만 제거해, 뒤쪽의 `-`·`--` 값 행을 데이터로 보존한다. XML v2 계층·다단 헤더·선두 전체폭 제목 제거·빈칸 채우기 기본 OFF·자동 변환 clipboard 불변식은 유지한다.
+- **수식 XML export의 일관된 snapshot(스냅샷) 보장 (macOS·Windows).** Excel에는 값과 A1/R1C1 수식을 한 transaction(트랜잭션)으로 읽는 API가 없으므로, 선택 범위 전체의 immutable snapshot(불변 스냅샷)을 두 번 연속 비교하고 불일치나 일시적 selection 변경 때 한 번만 재시도한다(최대 3회 읽기). 같은 주소에서 수식·계산 결과만 바뀌는 경우도 감지하며, 안정된 두 snapshot을 얻지 못하면 내용 없는 오류만 표시하고 clipboard는 쓰지 않는다. 권한·Excel 미실행·COM/Automation 실패는 재시도하지 않는다.
+
+### Verification
+- **2026-07-16 자동 검증:** converter 49/49, macOS formula 단위 테스트 45/45, 기본 test matrix 80/80, Windows 포트 85건 중 64 pass + 21 skip(macOS에서 Windows 전용 tray·WinRT 테스트 제외), Python `compileall` 통과. 실제 Windows Excel/COM 수동 검증은 이번 환경에서 실행하지 못했다.
+
 ### Distribution
 - **2026-07-13: macOS 0.6.0을 TestFlight build 0.6.1로 업로드.** App Store Connect 처리와 Mac App Store signing(서명)·sandbox entitlement(샌드박스 권한) 검증을 통과했으며, 내부 테스트 그룹 `22`에 연결되어 ‘제출 준비 완료’ 상태다. 기능 단위 테스트 39건과 전체 test matrix(테스트 매트릭스) 75건을 통과했다.
 

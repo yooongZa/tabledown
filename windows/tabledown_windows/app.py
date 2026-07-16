@@ -14,7 +14,7 @@ from tablemark.converter.formula_export import formula_selection_to_xml
 
 from . import diagnostics, single_instance, startup_task
 from .conversion import converted_clipboard
-from .excel_formula import read_selected_excel_formulas
+from .excel_formula import read_stable_selected_excel_formulas
 from .hotkey import MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, VK_E, VK_T, GlobalHotkey
 from .i18n import SUPPORTED_LANGUAGES, resolve_language, save_preferred_language, t
 from .logger import log
@@ -267,7 +267,7 @@ class TabledownWindowsApp:
         def worker() -> None:
             try:
                 try:
-                    result = read_selected_excel_formulas()
+                    result = read_stable_selected_excel_formulas()
                 except Exception as exc:  # noqa: BLE001 - guard daemon worker
                     log(f"excel formula read failed: {type(exc).__name__}")
                     self._show_message_box_async(

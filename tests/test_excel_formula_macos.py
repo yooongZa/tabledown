@@ -34,6 +34,7 @@ from tablemark.excel_formula import (
     _rectangle_bounds,
     parse_excel_formula_result,
     read_selected_excel_formulas,
+    read_stable_selected_excel_formulas,
 )
 from tablemark.i18n import t
 
@@ -337,6 +338,7 @@ class ExcelFormulaReaderTests(unittest.TestCase):
                     )
                 self.assertEqual(caught.exception.code, INVALID_RESPONSE)
 
+
     def test_excel_not_running_short_circuits_before_automation(self):
         executor = FakeExecutor(running=False)
 
@@ -616,6 +618,101 @@ class ExcelFormulaReaderTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_FORMULA", str(caught.exception))
 
 
+class StableExcelFormulaReaderTests(unittest.TestCase):
+    @staticmethod
+    def _selection(value: str, formula: str) -> ExcelFormulaSelection:
+        return ExcelFormulaSelection(
+            "Book.xlsx",
+            "Sheet1",
+            "$A$1",
+            1,
+            1,
+            (ExcelSelectionCell("$A$1", value, formula, formula),),
+        )
+
+    def test_two_equal_reads_return_a_stable_snapshot(self):
+        stable = self._selection("2", "=1+1")
+        with patch(
+            "tablemark.excel_formula.read_selected_excel_formulas",
+            side_effect=[stable, stable],
+        ) as reader:
+            result = read_stable_selected_excel_formulas()
+
+        self.assertEqual(result, stable)
+        self.assertEqual(reader.call_count, 2)
+
+    def test_value_only_recalculation_retries_and_accepts_new_stable_value(self):
+        old = self._selection("2", "=1+1")
+        new = self._selection("3", "=1+1")
+        with patch(
+            "tablemark.excel_formula.read_selected_excel_formulas",
+            side_effect=[old, new, new],
+        ) as reader:
+            result = read_stable_selected_excel_formulas()
+
+        self.assertEqual(result, new)
+        self.assertEqual(reader.call_count, 3)
+
+    def test_formula_only_edit_retries_and_accepts_new_stable_formula(self):
+        old = self._selection("2", "=1+1")
+        new = self._selection("2", "=2*1")
+        with patch(
+            "tablemark.excel_formula.read_selected_excel_formulas",
+            side_effect=[old, new, new],
+        ) as reader:
+            result = read_stable_selected_excel_formulas()
+
+        self.assertEqual(result, new)
+        self.assertEqual(reader.call_count, 3)
+
+    def test_three_different_snapshots_fail_after_bounded_retry(self):
+        snapshots = [
+            self._selection("2", "=1+1"),
+            self._selection("3", "=1+2"),
+            self._selection("4", "=2+2"),
+        ]
+        with patch(
+            "tablemark.excel_formula.read_selected_excel_formulas",
+            side_effect=snapshots,
+        ) as reader, self.assertRaises(ExcelFormulaError) as caught:
+            read_stable_selected_excel_formulas()
+
+        self.assertEqual(caught.exception.code, SELECTION_CHANGED)
+        self.assertEqual(reader.call_count, 3)
+
+    def test_transient_selection_change_retries_but_fatal_error_does_not(self):
+        stable = self._selection("2", "=1+1")
+        with patch(
+            "tablemark.excel_formula.read_selected_excel_formulas",
+            side_effect=[ExcelFormulaError(SELECTION_CHANGED), stable, stable],
+        ) as retrying_reader:
+            self.assertEqual(read_stable_selected_excel_formulas(), stable)
+        self.assertEqual(retrying_reader.call_count, 3)
+
+        with patch(
+            "tablemark.excel_formula.read_selected_excel_formulas",
+            side_effect=ExcelFormulaError(AUTOMATION_DENIED),
+        ) as fatal_reader, self.assertRaises(ExcelFormulaError) as caught:
+            read_stable_selected_excel_formulas()
+        self.assertEqual(caught.exception.code, AUTOMATION_DENIED)
+        self.assertEqual(fatal_reader.call_count, 1)
+
+    def test_transient_error_resets_the_previous_snapshot(self):
+        stable = self._selection("2", "=1+1")
+        with patch(
+            "tablemark.excel_formula.read_selected_excel_formulas",
+            side_effect=[
+                stable,
+                ExcelFormulaError(SELECTION_CHANGED),
+                stable,
+            ],
+        ) as reader, self.assertRaises(ExcelFormulaError) as caught:
+            read_stable_selected_excel_formulas()
+
+        self.assertEqual(caught.exception.code, SELECTION_CHANGED)
+        self.assertEqual(reader.call_count, 3)
+
+
 class FakePasteboard:
     def __init__(self):
         self.declared_types = None
@@ -748,7 +845,7 @@ class AppFormulaActionTests(unittest.TestCase):
             _clipboard_operation_lock=threading.Lock(),
         )
         with (
-            patch("tablemark.app.read_selected_excel_formulas", return_value=selection),
+            patch("tablemark.app.read_stable_selected_excel_formulas", return_value=selection),
             patch("tablemark.app.write_text_only_clipboard") as writer,
             patch("tablemark.app.log"),
         ):
@@ -773,7 +870,7 @@ class AppFormulaActionTests(unittest.TestCase):
         )
         with (
             patch(
-                "tablemark.app.read_selected_excel_formulas",
+                "tablemark.app.read_stable_selected_excel_formulas",
                 side_effect=ExcelFormulaError(TOO_FRAGMENTED),
             ),
             patch("tablemark.app.write_text_only_clipboard") as writer,

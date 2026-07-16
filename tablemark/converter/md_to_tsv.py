@@ -62,8 +62,11 @@ def markdown_table_to_rows(md: str) -> list[list[str]]:
     if not lines:
         raise ValueError("빈 마크다운입니다")
 
-    # Drop separator lines like |---|---|
-    data_lines = [line for line in lines if not _is_separator_line(line)]
+    # Only the second line is the Markdown header separator. A later row made
+    # entirely of values such as "-" / "--" is data and must be preserved.
+    data_lines = list(lines)
+    if len(data_lines) > 1 and _is_separator_line(data_lines[1]):
+        del data_lines[1]
 
     rows = []
     for line in data_lines:

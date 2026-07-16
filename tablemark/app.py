@@ -16,6 +16,7 @@ from .clipboard import (
 )
 from .converter.formula_export import formula_selection_to_xml
 from .converter.html_to_md import (
+    MultipleTablesError,
     convert_document_tables,
     forward_fill_key_columns,
     html_has_content_outside_table,
@@ -38,7 +39,7 @@ from .i18n import (
     save_preferred_language,
     t,
 )
-from .excel_formula import ExcelFormulaError, read_selected_excel_formulas
+from .excel_formula import ExcelFormulaError, read_stable_selected_excel_formulas
 from . import diagnostics
 from . import login_item
 from .hotkey import CMD, CONTROL, KEY_E, KEY_T, KEY_X, GlobalHotkeys
@@ -351,6 +352,14 @@ class TabledownApp(rumps.App):
             # the conversion — essential for the global hotkey, which otherwise
             # gives no visible sign of success.
             self._flash_icon_success()
+        except MultipleTablesError:
+            # The v2 format has one table root. Never silently copy only the
+            # first table from a document and discard the others.
+            log("copy as xml failed: multiple_tables")
+            rumps.alert(
+                title=t("xml.no_table_title", self.lang),
+                message=t("xml.multiple_tables_message", self.lang),
+            )
         except Exception as exc:  # noqa: BLE001 - surface failure to the user
             # Log the exception TYPE only: this path handles clipboard content,
             # and exc messages can embed table data (kept out of the shared log).
@@ -363,7 +372,7 @@ class TabledownApp(rumps.App):
     def copy_selected_excel_formulas(self, _sender):
         """Copy every selected Excel value, blank, and formula as text-only XML."""
         try:
-            selection = read_selected_excel_formulas()
+            selection = read_stable_selected_excel_formulas()
             xml = formula_selection_to_xml(selection)
             with self._clipboard_operation_lock:
                 write_text_only_clipboard(xml, mark_generated=True)
@@ -438,6 +447,8 @@ class TabledownApp(rumps.App):
                 # Merge-aware: forward-fills rowspan, skips a full-width title
                 # row, and keeps multi-level headers — see html_table_to_model.
                 model = html_table_to_model(html)
+            except MultipleTablesError:
+                raise
             except ValueError:
                 model = None
         if model is None and text and is_table_xml(text):

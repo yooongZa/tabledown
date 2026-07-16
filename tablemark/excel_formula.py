@@ -15,6 +15,7 @@ from Foundation import NSAppleScript
 
 from .converter.formula_export import (
     MAX_FORMULA_CHARACTERS,
+    MAX_SNAPSHOT_READS,
     MAX_VALUE_CHARACTERS,
     ExcelFormulaSelection,
     ExcelSelectionCell,
@@ -1108,3 +1109,40 @@ def read_selected_excel_formulas(
     except Exception:
         # Do not carry an exception message: it may contain formula content.
         raise ExcelFormulaError(EXECUTION_FAILED) from None
+
+
+def read_stable_selected_excel_formulas(
+    executor: ExcelFormulaExecutor | None = None,
+    *,
+    max_reads: int = MAX_SNAPSHOT_READS,
+) -> ExcelFormulaSelection:
+    """Return two matching snapshots, with at most one bounded retry.
+
+    Excel does not expose a transaction around values plus Formula2/R1C1.
+    Comparing complete immutable selections catches same-address formula edits
+    and recalculation-only value changes that topology checks cannot see. A
+    transient ``selection_changed`` consumes one read but remains retryable;
+    permission, availability, and execution failures return immediately.
+    """
+    if max_reads < 2:
+        raise ValueError("max_reads must be at least 2")
+
+    previous: ExcelFormulaSelection | None = None
+    for attempt in range(max_reads):
+        try:
+            current = read_selected_excel_formulas(executor)
+        except ExcelFormulaError as exc:
+            if exc.code == SELECTION_CHANGED and attempt + 1 < max_reads:
+                # A failed read breaks consecutiveness. Do not accept the next
+                # snapshot merely because it matches one from before the race.
+                previous = None
+                continue
+            raise
+
+        if previous is not None and current == previous:
+            return current
+        previous = current
+
+    # Content changed on every completed read. Keep formula/value payload out of
+    # the exception and let the caller leave the clipboard untouched.
+    raise ExcelFormulaError(SELECTION_CHANGED)

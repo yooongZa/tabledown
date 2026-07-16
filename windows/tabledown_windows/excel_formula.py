@@ -13,6 +13,7 @@ from typing import Any, Iterator
 
 from tablemark.converter.formula_export import (
     MAX_FORMULA_CHARACTERS,
+    MAX_SNAPSHOT_READS,
     MAX_VALUE_CHARACTERS,
     ExcelFormulaSelection,
     ExcelSelectionCell,
@@ -31,6 +32,7 @@ TOO_LARGE = "too_large"
 COM_FAILURE = "com_failure"
 MULTIPLE_INSTANCES = "multiple_instances"
 TOO_MUCH_TEXT = "too_much_text"
+SELECTION_CHANGED = "selection_changed"
 
 _EXCEL_WINDOW_CLASS = "XLMAIN"
 _WINDOW_CLASS_BUFFER_SIZE = 256
@@ -125,6 +127,41 @@ def read_selected_excel_formulas(
                 # There is no useful recovery at process/thread teardown, and
                 # retaining the COM exception would violate the payload rule.
                 pass
+
+
+def read_stable_selected_excel_formulas(
+    *,
+    max_cells: int = MAX_SELECTION_CELLS,
+    max_formula_characters: int = MAX_FORMULA_CHARACTERS,
+    max_value_characters: int = MAX_VALUE_CHARACTERS,
+    max_reads: int = MAX_SNAPSHOT_READS,
+) -> ExcelFormulaResult:
+    """Return two matching snapshots, with at most one bounded retry."""
+    if max_reads < 2:
+        raise ValueError("max_reads must be at least 2")
+
+    previous: ExcelFormulaSelection | None = None
+    for attempt in range(max_reads):
+        result = read_selected_excel_formulas(
+            max_cells=max_cells,
+            max_formula_characters=max_formula_characters,
+            max_value_characters=max_value_characters,
+        )
+        if not result.ok:
+            if result.code == SELECTION_CHANGED and attempt + 1 < max_reads:
+                # A transient race breaks the consecutive comparison window.
+                previous = None
+                continue
+            return result
+
+        current = result.selection
+        if previous is not None and current == previous:
+            return result
+        previous = current
+
+    # Exact formula/value payloads changed on every read. Return only a stable,
+    # content-free code so logs and dialogs cannot disclose workbook data.
+    return _error(SELECTION_CHANGED)
 
 
 def _read_initialized(
@@ -264,6 +301,8 @@ def _read_initialized(
         )
     except _FormulaTextTooLarge:
         return _error(TOO_MUCH_TEXT)
+    except _FormulaSnapshotChanged:
+        return _error(SELECTION_CHANGED)
     except Exception:  # noqa: BLE001 - do not expose formula-bearing COM exceptions
         return _error(COM_FAILURE)
     if not formula_cells:
@@ -289,6 +328,8 @@ def _read_initialized(
         )
     except _FormulaTextTooLarge:
         return _error(TOO_MUCH_TEXT)
+    except _FormulaSnapshotChanged:
+        return _error(SELECTION_CHANGED)
     except Exception:  # noqa: BLE001 - never retain value-bearing exceptions
         return _error(COM_FAILURE)
 
@@ -303,11 +344,13 @@ def _read_initialized(
         final_topology = _formula_topology(
             excel, current_selection, selection_count=selection_count
         )
+    except _FormulaSnapshotChanged:
+        return _error(SELECTION_CHANGED)
     except Exception:  # noqa: BLE001 - every inconsistency is content-free failure
         return _error(COM_FAILURE)
     initial_topology = tuple(sorted(cell.address for cell in formula_cells))
     if final_topology != initial_topology:
-        return _error(COM_FAILURE)
+        return _error(SELECTION_CHANGED)
 
     selection_payload = ExcelFormulaSelection(
         workbook=workbook_name,

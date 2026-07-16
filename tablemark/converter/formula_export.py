@@ -8,6 +8,9 @@ import xml.etree.ElementTree as ET
 MAX_FORMULA_CHARACTERS = 1_000_000
 MAX_VALUE_CHARACTERS = 5_000_000
 MAX_XML_BYTES = 10_000_000
+# Two equal reads validate a snapshot; a third is the one bounded retry when
+# the first pair differs or Excel reports a transient selection change.
+MAX_SNAPSHOT_READS = 3
 
 
 @dataclass(frozen=True)
