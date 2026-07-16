@@ -21,6 +21,7 @@
 - **2026-07-16 수정 commit `ad9742f` 재검증:** macOS XML action+formula 49/49, 기본 test matrix 80/80, Windows 포트 64 pass + 21 skip, Python `compileall`을 다시 통과했다. 실제 macOS Excel에서도 native clipboard format(네이티브 클립보드 형식)이 text+marker로 교체되고, 새 문서에 원본 표 대신 XML `A1:A34`가 붙는 것을 두 번째로 확인했다. 테스트 중 코드 변경은 없었다.
 
 ### Distribution
+- **2026-07-16: macOS 0.6.0을 TestFlight build 0.6.2로 업로드.** Apple Transporter가 `6768205551` delivery를 16:53에 수신했으며 현재 App Store Connect processing(처리 중) 상태다. macOS XML action+formula 49/49와 기본 test matrix 80/80을 통과했고, 16MB App Store package의 deep codesign(심층 코드 서명)·installer signature(설치 프로그램 서명)·sandbox/Excel Automation entitlement·nested Python sandbox inheritance·테스트 package 제외·export compliance 선언을 검증했다. build number만 `TABLEDOWN_BUILD=0.6.2`로 재정의했으며 macOS marketing version 0.6.0과 Windows version은 변경하지 않았다.
 - **2026-07-13: macOS 0.6.0을 TestFlight build 0.6.1로 업로드.** App Store Connect 처리와 Mac App Store signing(서명)·sandbox entitlement(샌드박스 권한) 검증을 통과했으며, 내부 테스트 그룹 `22`에 연결되어 ‘제출 준비 완료’ 상태다. 기능 단위 테스트 39건과 전체 test matrix(테스트 매트릭스) 75건을 통과했다.
 
 ## [0.5.0] - 2026-07-01
