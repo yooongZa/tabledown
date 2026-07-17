@@ -47,7 +47,7 @@ The release DMG is built with Developer ID signing and Apple notarization. The M
 |------|--------------|--------|
 | Excel/Google Sheets table (`Cmd+C`) | Obsidian/GitHub/Markdown editor (`Cmd+V`) | Markdown source table |
 | Markdown table (`Cmd+C`) | Excel (`Cmd+V`) | Spreadsheet cells |
-| Table (`Cmd+C`, then menu “Convert table to XML and copy”) | LLM prompt (`Cmd+V`) | LLM-friendly XML |
+| Select an Excel table range, then “Copy selected table as XML” or `⌘⌃X` | LLM prompt (`Cmd+V`) | Merge-aware LLM-friendly XML |
 | Select an Excel formula range, then “Copy table with formulas as XML” or `⌘⌃E` | LLM prompt (`Cmd+V`) | Cell values, blanks, addresses, and A1/R1C1 formulas as XML |
 
 When Tabledown is on, spreadsheet tables paste as Markdown source in Markdown editors such as Obsidian.
@@ -86,7 +86,8 @@ Example: a cross-table of two vertical levels (Rank ▸ Manager/Deputy, Title) �
 </표>
 ```
 
-- **Table → XML (menu or ⌘⌃X)**: Copy a table, then click **“Convert table to XML and copy”** in the menu bar or press the global shortcut **⌘⌃X** to turn the clipboard table (Excel table, Markdown table, or XML) into LLM-friendly XML and copy the result. On success the menu bar icon briefly shows a checkmark. This is a deliberate action, so the HTML table is dropped and XML pastes everywhere. There is no automatic XML→table direction (to avoid the watcher touching ordinary config/document XML).
+- **Selected Excel table → XML (menu or ⌘⌃X)**: Select one rectangular table range in the Excel desktop app, then click **“Copy selected table as XML”** or press **⌘⌃X**. Without first pressing `Cmd+C`, Tabledown reads Excel's displayed number, date, percentage, currency, and custom-formatted values, error values, significant data-cell text whitespace, blanks, and merge structure. In data cells, literal `<br>` text remains distinct from an actual in-cell line break. It never falls back to an older clipboard table. On success the menu bar icon briefly shows a checkmark and the previous clipboard formats are replaced with plain-text XML so every destination receives XML. Google Sheets, LibreOffice, and clipboard Markdown/XML are not inputs to this manual command. There is no automatic XML→table direction.
+- **Only a stable selection is exported**: Tabledown requires two consecutive matching snapshots of the selection, values, and merge structure (at most three reads) before writing the clipboard. Disjoint ranges, selections over **10,000 cells**, partially selected merged cells, and tables that change while being read are rejected while preserving the existing clipboard. If Excel shows a value as `##` because a column is too narrow or a date/time cannot be displayed, Tabledown asks you to make the full value visible instead of exporting damaged text (literal `##` text is preserved). Merge areas are read from Excel in a batch, preserving their exact structure; the general and formula XML commands share the same selection limit.
 - **Both horizontal and vertical groups nest**: horizontal multi-level headers nest as `<열그룹>`, and vertical groups (Rank: Manager/Deputy) nest as `<{header}그룹>`, keeping the table's hierarchy. Horizontal headers live in `n=`/`이름=` attributes (not tag names), so spaces, symbols, or leading digits never mangle a tag and stay safe in any standard XML parser. The Korean `<표>` root (not `<table>`) means the content survives even where the text is rendered as HTML (a browser, an Obsidian preview).
 - **Vertical groups nest as parent nodes (changed from the previous version)**: the previous version repeated each vertical key column (Rank) on every row, so each row was a self-contained record. Now vertical groups nest as parent nodes (`<직급그룹>`) — the hierarchy is preserved, but the group value lives only on the parent, so **a single row on its own no longer carries its Rank** (a deliberate trade: hierarchy preservation over self-contained rows).
 - **“Auto-fill blank cells” (Settings ▸, off by default)**: When converting a table, this one toggle drives **both the Markdown and XML paths**, filling blank cells in the left grouping (key) columns and the header frame from the value above (vertical), then to the left (horizontal). Blanks in the data (value) region are left as-is.
@@ -117,7 +118,7 @@ Select one rectangular range containing formulas in the Excel desktop app, then 
 - On macOS, formula cells split across more than 64 separate rectangular blocks must be copied in smaller selections.
 - Combined A1 and R1C1 formula text is limited to 1,000,000 characters per export.
 - Cell values are limited to 5,000,000 characters in total, and the final UTF-8 XML is limited to 10 MB.
-- On macOS, first use may request Automation permission to read the selected range from Excel. Existing automatic table conversion does not need that permission.
+- On macOS, first use of either XML command may request Automation permission to read the selected range from Excel. Existing automatic table conversion does not need that permission.
 
 ## How It Works
 
@@ -158,7 +159,7 @@ A 3x2 table icon appears in the macOS menu bar.
 
 ### 3. macOS Permissions
 
-Basic table conversion does not require Accessibility or Input Monitoring permissions. Only “Copy table with formulas as XML” may request Microsoft Excel Automation permission on first use.
+Basic table conversion does not require Accessibility or Input Monitoring permissions. “Copy selected table as XML” and “Copy table with formulas as XML” read the current Excel selection directly, so they may request Microsoft Excel Automation permission on first use.
 
 ## Usage
 
@@ -202,7 +203,7 @@ When the diagnostic log exceeds 1 MB, it is rotated to `Tabledown.log.1` and a n
 
 Tabledown does not collect, store, sell, or share personal information.
 
-When you explicitly choose “Copy table with formulas as XML,” Tabledown locally reads cell values, blanks, formulas, and addresses from the current Excel selection and writes XML to the same clipboard. Cell values and formulas are never written to the diagnostic log or sent to an external server.
+When you explicitly choose “Copy selected table as XML,” Tabledown locally reads values, blanks, and merge structure from the current Excel selection. “Copy table with formulas as XML” reads values, blanks, formulas, and addresses. Both commands write XML to the same clipboard; cell values and formulas are never written to the diagnostic log or sent to an external server.
 
 The app reads the current macOS clipboard locally and writes the text/html formats needed for table conversion back to the same clipboard. Conversion happens only on the user's Mac and is not sent to an external server.
 
@@ -212,6 +213,7 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 
 ## Changelog
 
+- 2026-07-17: **Changed general Table→XML to direct Excel selection.** Select a table range in Excel and invoke “Copy selected table as XML” or `⌘⌃X`; Tabledown now reads formatted values, error values, significant whitespace, blanks, and merge structure without `Cmd+C`. Clipboard fallback was removed to prevent exporting a stale copy, and only two matching snapshots are exported.
 - 2026-07-13: **Added full Excel table export with values, blanks, and formulas as XML (macOS 0.6.0).** Select one rectangular range containing formulas in the Excel desktop app, then use “Copy table with formulas as XML,” `⌘⌃E` on macOS, or `Ctrl+Alt+E` on Windows. Tabledown copies every cell address and current value, preserves blanks, and adds A1/R1C1 formulas to formula cells in a `<표범위>` XML document. True blanks, `=""` results, and Excel error values remain distinct; selection changes, discontiguous ranges, and size-limit failures are rejected fail-closed. macOS 0.6.0 was uploaded as **TestFlight build 0.6.1** and reached “Ready to Submit” in internal group `22`. All 39 focused tests and 75/75 test-matrix cases passed.
 - 2026-07-01: **“Auto-fill blank cells” now applies to Markdown conversion too (0.5.0).** When converting an Excel/Sheets table to Markdown, the blanks left by merged cells are filled if the “Auto-fill blank cells” setting (off by default) is on — a group-header band (`1분기`) spreads right, a left key column (`부장`) spreads down. Only the **header frame** is filled; blanks in the value (data) region are preserved (same guard as the XML fill). The flattened multi-level header (a leaf header row demoted into the body) is left as-is, since Markdown table syntax can't draw a merge. This toggle now drives **both** the XML and Markdown paths (dropped the “XML:” prefix from the old label). With the toggle off, behavior is unchanged.
 - 2026-07-01: **Windows: ported the 0.5.0 “Auto-fill blank cells” toggle to the tray** (parity with macOS, 0.2.7). The merged-header fill logic already lived in the shared `tablemark.converter.html_to_md` that Windows imports; what was missing was the toggle, the setting, and the wiring (Windows never had the `fill_blanks` option — macOS shipped it only on the XML path, which is macOS-only). Now `conversion.py` passes the `fill_blanks` flag into the Markdown conversion (`html_table_to_markdown`/`convert_document_tables`) — default off, so behavior is unchanged and the HTML slot is still preserved — and the tray gains a checkable “Auto-fill blank cells” menu item (persisted, placed after the toggle and before Language, mirroring the macOS Settings order). No “XML:” prefix, since Windows has no XML path. Regression tests: off keeps blanks, on fills the merged key column (and keeps HTML), label translations, menu inclusion, toggle persistence

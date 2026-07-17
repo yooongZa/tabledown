@@ -40,6 +40,10 @@ from .i18n import (
     t,
 )
 from .excel_formula import ExcelFormulaError, read_stable_selected_excel_formulas
+from .excel_table import (
+    excel_table_selection_to_model,
+    read_stable_selected_excel_table,
+)
 from . import diagnostics
 from . import login_item
 from .hotkey import CMD, CONTROL, KEY_E, KEY_T, KEY_X, GlobalHotkeys
@@ -322,52 +326,59 @@ class TabledownApp(rumps.App):
         log(f"fill blanks {'enabled' if self.fill_blanks else 'disabled'}")
 
     def copy_as_xml(self, _sender):
-        """Convert the table currently on the clipboard to LLM-friendly XML.
+        """Copy the current Excel selection as merge-aware LLM-friendly XML.
 
-        This is a deliberate user action: it replaces the clipboard with
-        text-only XML so every destination receives the XML the user asked for.
-        Keeping Excel/OLE native formats would let Excel prefer the original
-        table over the XML even after the HTML slot was removed.
+        Like the formula action, this reads one rectangular Excel selection
+        directly — the user does not copy first.  Values plus merge rectangles
+        are checked as a stable snapshot before the clipboard is touched.  On
+        success it replaces every clipboard format with text-only XML so Excel
+        cannot prefer an old OLE/native table over the requested XML.
         There is no automatic XML→table direction — XML is produced only by this
         menu click, never inferred from clipboard contents by the watcher.
         """
         try:
-            with self._clipboard_operation_lock:
-                model = self._clipboard_table_model(read_clipboard(), self.fill_blanks)
-                if model is not None:
-                    header_levels, data_rows = model
-                    write_text_only_clipboard(
-                        model_to_xml(header_levels, data_rows),
-                        mark_generated=True,
-                    )
-            if model is None:
-                rumps.alert(
-                    title=t("xml.no_table_title", self.lang),
-                    message=t("xml.no_table_message", self.lang),
+            selection = read_stable_selected_excel_table()
+            header_levels, data_rows = excel_table_selection_to_model(selection)
+            if not data_rows:
+                log("copy selected Excel table as XML failed: no_table")
+                self._safe_alert(
+                    t("table.error_title", self.lang),
+                    t("table.error.no_table", self.lang),
                 )
                 return
-            log("copied clipboard table as XML")
+            if self.fill_blanks:
+                data_rows = forward_fill_key_columns(
+                    [header_levels[-1]] + data_rows
+                )[1:]
+            xml = model_to_xml(header_levels, data_rows)
+            with self._clipboard_operation_lock:
+                write_text_only_clipboard(xml, mark_generated=True)
+            log("copied selected Excel table as XML")
             # Only permission-free feedback channel we have: a system
             # notification would prompt for permission (breaking the
             # zero-permissions design), so the menu bar icon itself confirms
             # the conversion — essential for the global hotkey, which otherwise
             # gives no visible sign of success.
             self._flash_icon_success()
-        except MultipleTablesError:
-            # The v2 format has one table root. Never silently copy only the
-            # first table from a document and discard the others.
-            log("copy as xml failed: multiple_tables")
-            rumps.alert(
-                title=t("xml.no_table_title", self.lang),
-                message=t("xml.multiple_tables_message", self.lang),
+        except ExcelFormulaError as exc:
+            # Shared Excel selection errors contain stable codes only; cell
+            # values and native AppleScript messages never enter the log.
+            log(f"copy selected Excel table as XML failed: {exc.code}")
+            key = f"table.error.{exc.code}"
+            message = t(key, self.lang)
+            if message == key:
+                message = t("table.error.execution_failed", self.lang)
+            self._safe_alert(
+                t("table.error_title", self.lang),
+                message,
             )
         except Exception as exc:  # noqa: BLE001 - surface failure to the user
-            # Log the exception TYPE only: this path handles clipboard content,
-            # and exc messages can embed table data (kept out of the shared log).
-            log(f"copy as xml failed: {type(exc).__name__}")
-            rumps.alert(
-                title=t("xml.no_table_title", self.lang),
-                message=t("xml.no_table_message", self.lang),
+            # Type only: conversion exceptions may include workbook-derived
+            # values, which must stay out of the shareable diagnostics log.
+            log(f"copy selected Excel table as XML failed: {type(exc).__name__}")
+            self._safe_alert(
+                t("table.error_title", self.lang),
+                t("table.error.execution_failed", self.lang),
             )
 
     def copy_selected_excel_formulas(self, _sender):
@@ -430,15 +441,15 @@ class TabledownApp(rumps.App):
 
     @staticmethod
     def _clipboard_table_model(content, fill_blanks=False):
-        """Extract a ``(header_levels, data_rows)`` table model from clipboard, or None.
+        """Extract a ``(header_levels, data_rows)`` model from text/HTML content.
 
-        Accepts an HTML <table> (Excel/Sheets), table XML, or a Markdown table,
-        in that priority order. ``header_levels`` is one list per header level so
-        multi-level group headers survive (a Markdown/plain table has a single
-        level). When ``fill_blanks`` is set, blank cells in the left grouping
-        columns are forward-filled (see forward_fill_key_columns) — the
-        user-controlled "빈칸을 자동 채우기" option, off by default. (The same
-        toggle drives the Markdown path's _fill_header_frame.)
+        The explicit Excel-selection action supplies synthesized merge-aware
+        HTML.  The XML and Markdown branches remain as conservative converter
+        helpers and regression fixtures; the action deliberately does not fall
+        back to stale clipboard content. ``header_levels`` is one list per
+        header level so multi-level group headers survive. When ``fill_blanks``
+        is set, blank cells in the left grouping columns are forward-filled (see
+        forward_fill_key_columns) — the user-controlled option, off by default.
         """
         html = content.get("html", "")
         text = content.get("text", "")
@@ -504,7 +515,7 @@ class TabledownApp(rumps.App):
         path = diagnostics.export_diagnostics()
         if path is None:
             self._safe_alert(
-                t("xml.no_table_title", self.lang),
+                t("table.error_title", self.lang),
                 t("diagnostics.export_failed", self.lang),
             )
             return

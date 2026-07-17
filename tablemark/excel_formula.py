@@ -42,6 +42,8 @@ SELECTION_CHANGED = "selection_changed"
 AUTOMATION_DENIED = "automation_denied"
 EXECUTION_FAILED = "execution_failed"
 INVALID_RESPONSE = "invalid_response"
+PARTIAL_MERGE = "partial_merge"
+DISPLAY_OVERFLOW = "display_overflow"
 
 KNOWN_ERROR_CODES = frozenset(
     {
@@ -56,6 +58,8 @@ KNOWN_ERROR_CODES = frozenset(
         AUTOMATION_DENIED,
         EXECUTION_FAILED,
         INVALID_RESPONSE,
+        PARTIAL_MERGE,
+        DISPLAY_OVERFLOW,
     }
 )
 
@@ -217,6 +221,9 @@ end using terms from
 EXCEL_FORMULA_SCRIPT = EXCEL_MASK_SCRIPT
 
 
+_AE_LIST_DESCRIPTOR_TYPE = int.from_bytes(b"list", "big")
+
+
 def _descriptor_to_python(descriptor):
     """Convert a nested Apple Event list into strings/lists only."""
     item_count = int(descriptor.numberOfItems())
@@ -225,6 +232,13 @@ def _descriptor_to_python(descriptor):
             _descriptor_to_python(descriptor.descriptorAtIndex_(index))
             for index in range(1, item_count + 1)
         ]
+    # An empty AppleScript list has no items *and* no stringValue.  The formula
+    # reader always returns at least one formula area, so this native case first
+    # surfaced when an unmerged Excel table returned ``mergedAddresses = {}``.
+    # Check the descriptor type before treating an itemless descriptor as a
+    # scalar; arbitrary null/missing descriptors must remain invalid.
+    if int(descriptor.descriptorType()) == _AE_LIST_DESCRIPTOR_TYPE:
+        return []
     value = descriptor.stringValue()
     if value is None:
         raise ExcelFormulaError(INVALID_RESPONSE)

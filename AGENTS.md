@@ -4,7 +4,7 @@ Tabledown 은 macOS 메뉴바 앱으로, 클립보드를 감시하며 **Excel/Sh
 양방향 변환한다. 핵심 로직은 `tablemark/app.py` 의 `TabledownApp._converted_clipboard` 와
 `tablemark/converter/` 에 있다.
 
-개인프로젝트로 브런치를 새로 만들 필요는 없다. 다만 작업사항 및 히스토리를 커밋단위로 잘 정리하도록 한다. 
+개인프로젝트로 브런치를 새로 만들 필요는 없다. 다만 작업사항 및 히스토리를 커밋단위로 잘 정리하도록 한다.
 
 
 ## 막 진입했다면 (30초 오리엔테이션)
@@ -85,7 +85,7 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   실제 Excel CF_HTML(또는 그 형식을 흉내낸 fixture)로 검증할 것.
 
 ### 1. text 에 마크다운 표 + html 에 `<table>` → 원본 유지 (셀개수 검사 금지)
-- 웹·채팅(Claude 등)에서 복사한 표는 clipboard 에 **마크다운 text 와 html `<table>` 을 함께** 싣는다.
+- 웹·채팅(Codex 등)에서 복사한 표는 clipboard 에 **마크다운 text 와 html `<table>` 을 함께** 싣는다.
 - 이때는 **칸수(셀 개수)를 따지지 말고 원본 clipboard 를 그대로 둔다.**
   html `<table>` 의 존재 자체가 "진짜 표"라는 독립적 증거다.
 - 구현: `is_markdown_table(text, strict=...)` 호출 시 html `<table>` 이 동반되면

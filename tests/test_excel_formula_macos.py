@@ -781,6 +781,12 @@ class AppFormulaActionTests(unittest.TestCase):
             app = TabledownApp()
 
         self.assertEqual(app.copy_excel_formulas_item._menuitem.keyEquivalent(), "e")
+        self.assertEqual(app.copy_xml_item.title, "Copy selected table as XML")
+        self.assertEqual(app.copy_xml_item._menuitem.keyEquivalent(), "x")
+        self.assertEqual(
+            app.copy_xml_item._menuitem.keyEquivalentModifierMask(),
+            NSCommandKeyMask | NSControlKeyMask,
+        )
         self.assertEqual(
             app.copy_excel_formulas_item._menuitem.keyEquivalentModifierMask(),
             NSCommandKeyMask | NSControlKeyMask,

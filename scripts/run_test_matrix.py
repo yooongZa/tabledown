@@ -389,6 +389,23 @@ def run_converter_tests() -> list[TestResult]:
         ),
     )
     check(
+        "model_to_xml_preserves_literal_br_and_whitespace",
+        lambda: _assert_contains(
+            model_to_xml(
+                [["name", "value"]],
+                [["A", "  literal <br> text  "]],
+            ),
+            "  literal &lt;br&gt; text  ",
+        ),
+    )
+    check(
+        "model_to_xml_rejects_forbidden_xml_text",
+        lambda: _assert_raises(
+            ValueError,
+            lambda: model_to_xml([["name"]], [["bad\x01value"]]),
+        ),
+    )
+    check(
         "is_table_xml_accepts_table",
         lambda: _assert_equal(is_table_xml(XML_TABLE), True),
     )

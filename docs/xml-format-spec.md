@@ -24,6 +24,8 @@
 
 입력: `model = (header_rows, data_rows)` — `header_rows`는 가로 헤더의 각 단(병합 채움 완료), `data_rows`는 세로 rowspan forward-fill된 데이터(좌측 키 열 포함). `_build_columns`로 컬럼 트리를 만든다(기존 함수 재사용).
 
+macOS 수동 명령의 입력은 clipboard가 아니라 **현재 Excel 단일 사각형 선택 영역**이다. `excel_table.py`가 서식 적용값·오류값·데이터 셀의 유의미한 공백·빈칸·병합 영역을 두 번 같은 snapshot으로 읽는다. 값은 opaque token(불투명 토큰)으로 치환한 병합 구조 HTML을 기존 `html_table_to_model`에 넣은 뒤 정확한 원문으로 복원해 위 model을 만든다. `Cmd+C`나 오래된 clipboard 표로 fallback하지 않는다.
+
 1. **세로 키 열 식별** = 컬럼 트리 top-level에서 **왼쪽부터 연속된 leaf** 중, **첫 `group`(가로 계층) 앞**까지, **헤더가 유효 XML 이름인 것**.
    - 가로 `group`이 하나도 없으면(= 단순 표) **세로 키 = 0개** → 모든 열이 데이터.
    - 헤더가 XML 이름 규칙 위반(공백·기호·숫자시작·`xml` 접두)인 열을 만나면 거기서 세로 키 종료(그 열부터 데이터). → **정규화 불필요, 무손실 roundtrip 유지.**
@@ -33,7 +35,7 @@
    - `K == 0`: `<행>` (행 식별 키 없음).
 3. **각 행 내부 = 데이터 열의 가로 컬럼 트리**:
    - `group` → `<열그룹 이름="값">` (다단계 중첩)
-   - `leaf` → `<열 n="leaf헤더값">셀값</열>`  (값은 `<br>`→줄바꿈, XML escape)
+   - `leaf` → `<열 n="leaf헤더값">셀값</열>` (XML escape; 문자 그대로의 `<br>`는 text로, 실제 셀 줄바꿈은 newline으로 구분 보존)
 4. 전체를 `<표>…</표>`로 감싼다.
 
 ## 4. 예시

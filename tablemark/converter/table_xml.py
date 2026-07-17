@@ -63,6 +63,8 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape, quoteattr
 
+from .formula_export import validate_xml_text
+
 # Root/row tag names that, on their own, are strong evidence of a table. They
 # let a single-row table through; otherwise at least two rows are required so a
 # one-off nested record (e.g. a config block) is not mistaken for a table.
@@ -111,6 +113,13 @@ def model_to_xml(
         raise ValueError("헤더가 없습니다")
     if not data_rows:
         raise ValueError("데이터 행이 없습니다")
+
+    # quoteattr()/escape() encode markup characters but do not reject control
+    # code points forbidden by XML 1.0. Validate every source field before
+    # emitting anything so callers never receive malformed XML.
+    for row in [*header_rows, *data_rows]:
+        for value in row:
+            validate_xml_text(value)
 
     ncols = max(len(level) for level in header_rows)
     header_rows = [level + [""] * (ncols - len(level)) for level in header_rows]
@@ -396,7 +405,6 @@ def _emit_columns(
         if node[0] == "leaf":
             _, col, name = node
             value = row[col] if col < len(row) else ""
-            value = value.replace("<br/>", "\n").replace("<br>", "\n")
             lines.append(
                 f"{indent * depth}<{_COL_TAG} {_LEAF_ATTR}={quoteattr(name)}>"
                 f"{escape(value)}</{_COL_TAG}>"

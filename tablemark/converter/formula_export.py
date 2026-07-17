@@ -80,9 +80,9 @@ def formula_selection_to_xml(selection: ExcelFormulaSelection) -> str:
     if value_characters > MAX_VALUE_CHARACTERS:
         raise ValueError("표 값 내용이 너무 큽니다")
 
-    _validate_xml_text(selection.workbook)
-    _validate_xml_text(selection.sheet)
-    _validate_xml_text(selection.address)
+    validate_xml_text(selection.workbook)
+    validate_xml_text(selection.sheet)
+    validate_xml_text(selection.address)
 
     root = ET.Element(
         "표범위",
@@ -99,16 +99,16 @@ def formula_selection_to_xml(selection: ExcelFormulaSelection) -> str:
         row = ET.SubElement(root, "행", {"인덱스": str(row_index + 1)})
         start = row_index * selection.column_count
         for cell in selection.cells[start : start + selection.column_count]:
-            _validate_xml_text(cell.address)
+            validate_xml_text(cell.address)
             attributes = {"주소": cell.address}
             if cell.value is not None:
-                _validate_xml_text(cell.value)
+                validate_xml_text(cell.value)
                 attributes["값"] = cell.value
             if cell.formula_a1 is not None:
-                _validate_xml_text(cell.formula_a1)
+                validate_xml_text(cell.formula_a1)
                 attributes["수식"] = cell.formula_a1
             if cell.formula_r1c1 is not None:
-                _validate_xml_text(cell.formula_r1c1)
+                validate_xml_text(cell.formula_r1c1)
                 attributes["수식R1C1"] = cell.formula_r1c1
             ET.SubElement(row, "셀", attributes)
 
@@ -119,7 +119,7 @@ def formula_selection_to_xml(selection: ExcelFormulaSelection) -> str:
     return xml
 
 
-def _validate_xml_text(value: str) -> None:
+def validate_xml_text(value: str) -> None:
     """Reject characters XML 1.0 cannot represent instead of emitting bad XML."""
 
     for character in value:
