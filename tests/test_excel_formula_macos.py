@@ -10,7 +10,12 @@ from unittest.mock import Mock, call, patch
 from Foundation import NSAppleScript
 
 from tablemark import clipboard
-from tablemark.converter.formula_export import ExcelFormulaSelection, ExcelSelectionCell
+from tablemark.converter.formula_export import (
+    ExcelFormulaReference,
+    ExcelFormulaSelection,
+    ExcelReferenceCell,
+    ExcelSelectionCell,
+)
 from tablemark.excel_formula import (
     AREA_RESULT_STATUS,
     AUTOMATION_DENIED,
@@ -23,6 +28,7 @@ from tablemark.excel_formula import (
     MULTIPLE_AREAS,
     NO_FORMULAS,
     NO_SELECTION,
+    REFERENCE_RESULT_STATUS,
     SELECTION_CHANGED,
     TOO_FRAGMENTED,
     TOO_MANY_CELLS,
@@ -30,8 +36,11 @@ from tablemark.excel_formula import (
     ExcelFormulaError,
     NSAppleScriptExecutor,
     _build_formula_read_script,
+    _build_reference_read_script,
     _parse_mask_result,
+    _parse_reference_result,
     _rectangle_bounds,
+    _reference_requests,
     parse_excel_formula_result,
     read_selected_excel_formulas,
     read_stable_selected_excel_formulas,
@@ -123,6 +132,45 @@ def single_area(
     ]
 
 
+def reference_payload(
+    references,
+    *,
+    workbook="Book.xlsx",
+    sheet="Sheet1",
+    address="$A$1",
+):
+    return [
+        REFERENCE_RESULT_STATUS,
+        workbook,
+        sheet,
+        address,
+        references,
+    ]
+
+
+def reference_area(
+    owner,
+    sheet,
+    address,
+    values,
+    *,
+    rows=1,
+    columns=1,
+):
+    return [
+        "ok",
+        owner,
+        sheet,
+        address,
+        str(rows),
+        str(columns),
+        [
+            ["blank", ""] if value is None else ["value", value]
+            for value in values
+        ],
+    ]
+
+
 class FakeExecutor:
     def __init__(self, payloads=(), *, running=True, error=None):
         self.payloads = list(payloads)
@@ -157,7 +205,23 @@ class ExcelFormulaReaderTests(unittest.TestCase):
             )
         )
 
-        for source in (EXCEL_MASK_SCRIPT, _build_formula_read_script(plan)):
+        reference_selection = ExcelFormulaSelection(
+            "Book.xlsx",
+            "Sheet1",
+            "$A$1",
+            1,
+            1,
+            (ExcelSelectionCell("$A$1", "2", "=Sheet2!B1+A2"),),
+        )
+        requests, _completeness = _reference_requests(reference_selection)
+
+        for source in (
+            EXCEL_MASK_SCRIPT,
+            _build_formula_read_script(plan),
+            _build_reference_read_script(
+                _parse_mask_result(mask_payload()), requests
+            ),
+        ):
             with self.subTest(source_length=len(source)):
                 script = NSAppleScript.alloc().initWithSource_(source)
                 compiled, error_info = script.compileAndReturnError_(None)
@@ -188,7 +252,16 @@ class ExcelFormulaReaderTests(unittest.TestCase):
             sheet=sheet,
             address="$B$2:$C$3",
         )
-        executor = FakeExecutor([first, second])
+        third = reference_payload(
+            [
+                reference_area("$B$2", sheet, "$A$1", ["source-a1"]),
+                reference_area("$C$3", sheet, "$B$2", ["value-1"]),
+            ],
+            workbook=workbook,
+            sheet=sheet,
+            address="$B$2:$C$3",
+        )
+        executor = FakeExecutor([first, second, third])
 
         selection = read_selected_excel_formulas(executor)
 
@@ -201,10 +274,13 @@ class ExcelFormulaReaderTests(unittest.TestCase):
             ["value-1", "value-2", "value-3", "value-4"],
         )
         self.assertEqual(selection.cells[0].formula_a1, formula)
+        self.assertEqual(selection.cells[0].references[0].cells[0].value, "source-a1")
+        self.assertFalse(selection.cells[0].references_complete)
         self.assertIsNone(selection.cells[1].formula_a1)
         self.assertEqual(selection.cells[3].formula_a1, "=B2*2")
+        self.assertEqual(selection.cells[3].references[0].cells[0].value, "value-1")
         self.assertEqual((selection.row_count, selection.column_count), (2, 2))
-        self.assertEqual(len(executor.sources), 2)
+        self.assertEqual(len(executor.sources), 3)
         self.assertEqual(executor.sources[0], EXCEL_MASK_SCRIPT)
         self.assertIn("get has formula of every cell of selectedRange", executor.sources[0])
         self.assertNotIn("formula2", executor.sources[0].lower())
@@ -240,6 +316,108 @@ class ExcelFormulaReaderTests(unittest.TestCase):
         self.assertEqual(formula_source.count("my formulaTopologyMatches("), 2)
         self.assertNotIn(workbook, formula_source)
         self.assertNotIn(sheet, formula_source)
+        reference_source = executor.sources[2]
+        self.assertIn('"$B$2"', reference_source)
+        self.assertIn('"$A$1"', reference_source)
+        self.assertIn("taggedReferenceValues", reference_source)
+        self.assertIn("on excelReferenceErrorText", reference_source)
+        self.assertIn(
+            'evaluate name ("ERROR.TYPE(" & targetAddress & ")")',
+            reference_source,
+        )
+        self.assertIn("reference style A1 external true", reference_source)
+        self.assertNotIn(workbook, reference_source)
+        self.assertNotIn(sheet, reference_source)
+
+    def test_same_and_cross_sheet_reference_values_are_attached(self):
+        first = mask_payload(
+            address="$E$6",
+            mask="1",
+            workbook="Budget.xlsx",
+            sheet="기본_표",
+        )
+        second = area_payload(
+            [single_area("=C6*'단가 표'!D6", "=RC[-2]*'단가 표'!R6C4", address="$E$6")],
+            address="$E$6",
+            workbook="Budget.xlsx",
+            sheet="기본_표",
+            value_areas=[value_area(["120"], address="$E$6")],
+        )
+        third = reference_payload(
+            [
+                reference_area("$E$6", "기본_표", "$C$6", ["10"]),
+                reference_area("$E$6", "단가 표", "$D$6", ["12"]),
+            ],
+            address="$E$6",
+            workbook="Budget.xlsx",
+            sheet="기본_표",
+        )
+
+        selection = read_selected_excel_formulas(FakeExecutor([first, second, third]))
+
+        formula_cell = selection.cells[0]
+        self.assertEqual(formula_cell.value, "120")
+        self.assertTrue(formula_cell.references_complete)
+        self.assertEqual(
+            [
+                (reference.sheet, reference.address, reference.cells[0].value)
+                for reference in formula_cell.references
+            ],
+            [
+                ("기본_표", "$C$6", "10"),
+                ("단가 표", "$D$6", "12"),
+            ],
+        )
+
+    def test_unresolved_dynamic_reference_keeps_formula_and_marks_partial(self):
+        first = mask_payload(address="$A$1", mask="1")
+        second = area_payload(
+            [single_area('=INDIRECT("Sheet2!A1")')],
+            value_areas=[value_area(["10"])],
+        )
+        executor = FakeExecutor([first, second])
+
+        selection = read_selected_excel_formulas(executor)
+
+        self.assertEqual(selection.cells[0].formula_a1, '=INDIRECT("Sheet2!A1")')
+        self.assertEqual(selection.cells[0].references, ())
+        self.assertFalse(selection.cells[0].references_complete)
+        self.assertEqual(len(executor.sources), 2)
+
+    def test_unavailable_static_reference_keeps_formula_and_marks_partial(self):
+        first = mask_payload(address="$A$1", mask="1")
+        second = area_payload(
+            [single_area("=Sheet2!A1")],
+            value_areas=[value_area(["10"])],
+        )
+        third = reference_payload(
+            [["unresolved", "$A$1", "Sheet2", "$A$1"]]
+        )
+
+        selection = read_selected_excel_formulas(FakeExecutor([first, second, third]))
+
+        self.assertEqual(selection.cells[0].formula_a1, "=Sheet2!A1")
+        self.assertEqual(selection.cells[0].references, ())
+        self.assertFalse(selection.cells[0].references_complete)
+
+    def test_reference_limits_keep_bounded_prefix_and_mark_partial(self):
+        selection = ExcelFormulaSelection(
+            "Book.xlsx",
+            "Sheet1",
+            "$C$1",
+            1,
+            1,
+            (ExcelSelectionCell("$C$1", "3", "=A1+B1"),),
+        )
+
+        with patch("tablemark.excel_formula.MAX_REFERENCE_RANGES", 1):
+            requests, completeness = _reference_requests(selection)
+
+        self.assertEqual(
+            [(request.target.sheet, request.target.address) for request in requests],
+            [("Sheet1", "$A$1")],
+        )
+        self.assertFalse(completeness["$C$1"])
 
     def test_missing_r1c1_is_mapped_to_none(self):
         plan = _parse_mask_result(mask_payload())
@@ -620,14 +798,29 @@ class ExcelFormulaReaderTests(unittest.TestCase):
 
 class StableExcelFormulaReaderTests(unittest.TestCase):
     @staticmethod
-    def _selection(value: str, formula: str) -> ExcelFormulaSelection:
+    def _selection(
+        value: str, formula: str, *, reference_value: str | None = None
+    ) -> ExcelFormulaSelection:
+        references = ()
+        if reference_value is not None:
+            references = (
+                ExcelFormulaReference(
+                    "Sheet2",
+                    "$B$2",
+                    (ExcelReferenceCell("$B$2", reference_value),),
+                ),
+            )
         return ExcelFormulaSelection(
             "Book.xlsx",
             "Sheet1",
             "$A$1",
             1,
             1,
-            (ExcelSelectionCell("$A$1", value, formula, formula),),
+            (
+                ExcelSelectionCell(
+                    "$A$1", value, formula, formula, references=references
+                ),
+            ),
         )
 
     def test_two_equal_reads_return_a_stable_snapshot(self):
@@ -656,6 +849,18 @@ class StableExcelFormulaReaderTests(unittest.TestCase):
     def test_formula_only_edit_retries_and_accepts_new_stable_formula(self):
         old = self._selection("2", "=1+1")
         new = self._selection("2", "=2*1")
+        with patch(
+            "tablemark.excel_formula.read_selected_excel_formulas",
+            side_effect=[old, new, new],
+        ) as reader:
+            result = read_stable_selected_excel_formulas()
+
+        self.assertEqual(result, new)
+        self.assertEqual(reader.call_count, 3)
+
+    def test_reference_value_change_retries_and_accepts_new_stable_snapshot(self):
+        old = self._selection("2", "=Sheet2!B2", reference_value="1")
+        new = self._selection("2", "=Sheet2!B2", reference_value="2")
         with patch(
             "tablemark.excel_formula.read_selected_excel_formulas",
             side_effect=[old, new, new],

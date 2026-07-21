@@ -6,7 +6,7 @@ menu command; normal clipboard conversion remains permission-free.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import re
 from typing import Protocol
 
@@ -15,10 +15,16 @@ from Foundation import NSAppleScript
 
 from .converter.formula_export import (
     MAX_FORMULA_CHARACTERS,
+    MAX_REFERENCE_CELLS,
+    MAX_REFERENCE_RANGES,
     MAX_SNAPSHOT_READS,
     MAX_VALUE_CHARACTERS,
+    ExcelFormulaReference,
     ExcelFormulaSelection,
+    ExcelReferenceCell,
     ExcelSelectionCell,
+    FormulaReferenceTarget,
+    extract_formula_reference_targets,
 )
 
 
@@ -30,6 +36,7 @@ MAX_FORMULA_RECTANGLES = 64
 MAX_FORMULA_CHUNK_CELLS = 2_048
 MASK_RESULT_STATUS = "ok_mask_v2"
 AREA_RESULT_STATUS = "ok_areas_v2"
+REFERENCE_RESULT_STATUS = "ok_references_v1"
 
 EXCEL_NOT_RUNNING = "excel_not_running"
 NO_SELECTION = "no_selection"
@@ -309,6 +316,12 @@ class _FormulaReadPlan:
     mask: tuple[bool, ...]
     value_chunks: tuple[_FormulaChunk, ...]
     chunks: tuple[_FormulaChunk, ...]
+
+
+@dataclass(frozen=True)
+class _ReferenceRequest:
+    owner_address: str
+    target: FormulaReferenceTarget
 
 
 def _positive_int(value: object) -> int:
@@ -832,6 +845,305 @@ end using terms from
 '''
 
 
+def _reference_requests(
+    selection: ExcelFormulaSelection,
+) -> tuple[tuple[_ReferenceRequest, ...], dict[str, bool]]:
+    """Plan bounded direct A1 reference reads for every formula cell."""
+
+    requests: list[_ReferenceRequest] = []
+    completeness: dict[str, bool] = {}
+    reference_cell_count = 0
+    for cell in selection.cells:
+        if cell.formula_a1 is None:
+            continue
+        targets, complete = extract_formula_reference_targets(
+            cell.formula_a1, selection.sheet
+        )
+        completeness[cell.address] = complete
+        for target in targets:
+            target_cell_count = target.row_count * target.column_count
+            if (
+                len(requests) >= MAX_REFERENCE_RANGES
+                or target_cell_count > MAX_FORMULA_CHUNK_CELLS
+                or reference_cell_count + target_cell_count > MAX_REFERENCE_CELLS
+            ):
+                completeness[cell.address] = False
+                continue
+            requests.append(_ReferenceRequest(cell.address, target))
+            reference_cell_count += target_cell_count
+    return tuple(requests), completeness
+
+
+def _reference_request_literal(request: _ReferenceRequest) -> str:
+    target = request.target
+    return (
+        f'{{"{request.owner_address}", {_codepoint_expression(target.sheet)}, '
+        f'"{target.address}", "{target.row_count}", "{target.column_count}"}}'
+    )
+
+
+def _build_reference_read_script(
+    plan: _FormulaReadPlan, requests: tuple[_ReferenceRequest, ...]
+) -> str:
+    """Build one non-UI Apple Event that reads all bounded reference ranges."""
+
+    request_literals = ", ".join(
+        _reference_request_literal(request) for request in requests
+    )
+    return f'''
+on appendFlattenedItems(rawItem, flattenedItems)
+    if (class of rawItem) is list then
+        repeat with childItemReference in rawItem
+            my appendFlattenedItems(contents of childItemReference, flattenedItems)
+        end repeat
+    else
+        set end of flattenedItems to rawItem
+    end if
+end appendFlattenedItems
+
+on excelReferenceErrorText(targetRange, cellIndex)
+    using terms from application "Microsoft Excel"
+        tell application id "{EXCEL_BUNDLE_ID}"
+            try
+                set targetCell to get cell cellIndex of targetRange
+                set targetAddress to get address targetCell row absolute true column absolute true reference style A1 external true
+                set errorCode to (evaluate name ("ERROR.TYPE(" & targetAddress & ")")) as integer
+            on error
+                return "#ERROR"
+            end try
+        end tell
+    end using terms from
+    if errorCode is 1 then return "#NULL!"
+    if errorCode is 2 then return "#DIV/0!"
+    if errorCode is 3 then return "#VALUE!"
+    if errorCode is 4 then return "#REF!"
+    if errorCode is 5 then return "#NAME?"
+    if errorCode is 6 then return "#NUM!"
+    if errorCode is 7 then return "#N/A"
+    if errorCode is 8 then return "#GETTING_DATA"
+    return "#ERROR"
+end excelReferenceErrorText
+
+on taggedReferenceValues(targetRange, expectedCellCount)
+    set rawValues to {{}}
+    set rawFormulaFlags to {{}}
+    using terms from application "Microsoft Excel"
+        tell application id "{EXCEL_BUNDLE_ID}"
+            set rawValues to get value of every cell of targetRange
+            set rawFormulaFlags to get has formula of every cell of targetRange
+        end tell
+    end using terms from
+    set flatRawValues to {{}}
+    set flatFormulaFlags to {{}}
+    my appendFlattenedItems(rawValues, flatRawValues)
+    my appendFlattenedItems(rawFormulaFlags, flatFormulaFlags)
+    if (count of flatRawValues) is not expectedCellCount then error number -2700
+    if (count of flatFormulaFlags) is not expectedCellCount then error number -2700
+
+    set taggedValues to {{}}
+    repeat with valueIndex from 1 to expectedCellCount
+        set rawValue to contents of item valueIndex of flatRawValues
+        set isFormulaCell to contents of item valueIndex of flatFormulaFlags
+        if isFormulaCell is not true and isFormulaCell is not false then error number -2700
+        if isFormulaCell is false and (rawValue is missing value or ((class of rawValue) is text and rawValue is "")) then
+            set end of taggedValues to {{"blank", ""}}
+        else
+            if rawValue is missing value then
+                set valueText to my excelReferenceErrorText(targetRange, valueIndex)
+            else
+                try
+                    set valueText to rawValue as text
+                on error
+                    set valueText to my excelReferenceErrorText(targetRange, valueIndex)
+                end try
+            end if
+            set end of taggedValues to {{"value", valueText}}
+        end if
+    end repeat
+    return taggedValues
+end taggedReferenceValues
+
+set expectedWorkbookName to {_codepoint_expression(plan.workbook)}
+set expectedSheetName to {_codepoint_expression(plan.sheet)}
+set expectedSelectionAddress to "{plan.address}"
+set referenceSpecs to {{{request_literals}}}
+
+using terms from application "Microsoft Excel"
+    tell application id "{EXCEL_BUNDLE_ID}"
+        try
+            set selectedWorkbook to active workbook
+            set selectedSheet to active sheet
+            set selectedRange to selection
+            if (name of selectedWorkbook as text) is not expectedWorkbookName then return {{"error", "{SELECTION_CHANGED}"}}
+            if (name of selectedSheet as text) is not expectedSheetName then return {{"error", "{SELECTION_CHANGED}"}}
+            set currentSelectionAddress to get address selectedRange row absolute true column absolute true reference style A1
+            if currentSelectionAddress is not expectedSelectionAddress then return {{"error", "{SELECTION_CHANGED}"}}
+        on error errorMessage number errorNumber
+            if errorNumber is -1743 then error number errorNumber
+            return {{"error", "{SELECTION_CHANGED}"}}
+        end try
+
+        set referencePayloads to {{}}
+        set referenceValueCharacters to 0
+        repeat with referenceSpecReference in referenceSpecs
+            set referenceSpec to contents of referenceSpecReference
+            set ownerAddress to (item 1 of referenceSpec) as text
+            set referenceSheetName to (item 2 of referenceSpec) as text
+            set referenceAddress to (item 3 of referenceSpec) as text
+            set expectedReferenceRows to (item 4 of referenceSpec) as integer
+            set expectedReferenceColumns to (item 5 of referenceSpec) as integer
+            try
+                set referenceSheet to get worksheet referenceSheetName of selectedWorkbook
+                set referenceRange to range referenceAddress of referenceSheet
+                if (count of rows of referenceRange) is not expectedReferenceRows then error number -2700
+                if (count of columns of referenceRange) is not expectedReferenceColumns then error number -2700
+                set taggedValues to my taggedReferenceValues(referenceRange, expectedReferenceRows * expectedReferenceColumns)
+                set candidateCharacterCount to referenceValueCharacters
+                repeat with taggedValueReference in taggedValues
+                    set taggedValue to contents of taggedValueReference
+                    set candidateCharacterCount to candidateCharacterCount + (length of ((item 2 of taggedValue) as text))
+                end repeat
+                if candidateCharacterCount > {MAX_VALUE_CHARACTERS} then error number -2700
+                set referenceValueCharacters to candidateCharacterCount
+                set actualReferenceAddress to get address referenceRange row absolute true column absolute true reference style A1
+                set end of referencePayloads to {{"ok", ownerAddress, referenceSheetName, actualReferenceAddress, expectedReferenceRows as text, expectedReferenceColumns as text, taggedValues}}
+            on error errorMessage number errorNumber
+                if errorNumber is -1743 then error number errorNumber
+                set end of referencePayloads to {{"unresolved", ownerAddress, referenceSheetName, referenceAddress}}
+            end try
+        end repeat
+
+        try
+            set currentWorkbookName to name of active workbook as text
+            set currentSheetName to name of active sheet as text
+            set currentSelectionAddress to get address selection row absolute true column absolute true reference style A1
+            if currentWorkbookName is not expectedWorkbookName then return {{"error", "{SELECTION_CHANGED}"}}
+            if currentSheetName is not expectedSheetName then return {{"error", "{SELECTION_CHANGED}"}}
+            if currentSelectionAddress is not expectedSelectionAddress then return {{"error", "{SELECTION_CHANGED}"}}
+        on error errorMessage number errorNumber
+            if errorNumber is -1743 then error number errorNumber
+            return {{"error", "{SELECTION_CHANGED}"}}
+        end try
+        return {{"{REFERENCE_RESULT_STATUS}", expectedWorkbookName, expectedSheetName, expectedSelectionAddress, referencePayloads}}
+    end tell
+end using terms from
+'''
+
+
+def _parse_reference_result(
+    payload: object,
+    selection: ExcelFormulaSelection,
+    requests: tuple[_ReferenceRequest, ...],
+    completeness: dict[str, bool],
+) -> ExcelFormulaSelection:
+    _raise_error_payload(payload)
+    if not isinstance(payload, (list, tuple)) or len(payload) != 5:
+        raise ExcelFormulaError(INVALID_RESPONSE)
+    status, workbook, sheet, address, raw_references = payload
+    if status != REFERENCE_RESULT_STATUS:
+        raise ExcelFormulaError(INVALID_RESPONSE)
+    if (workbook, sheet, address) != (
+        selection.workbook,
+        selection.sheet,
+        selection.address,
+    ):
+        raise ExcelFormulaError(SELECTION_CHANGED)
+    if not isinstance(raw_references, (list, tuple)) or len(raw_references) != len(requests):
+        raise ExcelFormulaError(INVALID_RESPONSE)
+
+    references_by_owner: dict[str, list[ExcelFormulaReference]] = {}
+    value_character_count = sum(
+        len(cell.value) for cell in selection.cells if cell.value is not None
+    )
+    for raw_reference, request in zip(raw_references, requests):
+        if not isinstance(raw_reference, (list, tuple)) or not raw_reference:
+            raise ExcelFormulaError(INVALID_RESPONSE)
+        target = request.target
+        if raw_reference[0] == "unresolved":
+            if list(raw_reference[1:]) != [
+                request.owner_address,
+                target.sheet,
+                target.address,
+            ]:
+                raise ExcelFormulaError(INVALID_RESPONSE)
+            completeness[request.owner_address] = False
+            continue
+        if len(raw_reference) != 7 or raw_reference[0] != "ok":
+            raise ExcelFormulaError(INVALID_RESPONSE)
+        (
+            _,
+            owner_address,
+            reference_sheet,
+            reference_address,
+            raw_rows,
+            raw_columns,
+            raw_values,
+        ) = raw_reference
+        if (
+            owner_address != request.owner_address
+            or reference_sheet != target.sheet
+            or reference_address != target.address
+            or _positive_int(raw_rows) != target.row_count
+            or _positive_int(raw_columns) != target.column_count
+        ):
+            raise ExcelFormulaError(INVALID_RESPONSE)
+        values = _flatten_tagged_values(
+            raw_values, target.row_count, target.column_count
+        )
+        candidate_character_count = value_character_count + sum(
+            len(value) for value in values if value is not None
+        )
+        if candidate_character_count > MAX_VALUE_CHARACTERS:
+            completeness[request.owner_address] = False
+            continue
+        value_character_count = candidate_character_count
+        start_row, start_column, _, _ = _rectangle_bounds(target.address)
+        cells = tuple(
+            ExcelReferenceCell(
+                _absolute_address(
+                    start_row + (index // target.column_count),
+                    start_column + (index % target.column_count),
+                    start_row + (index // target.column_count),
+                    start_column + (index % target.column_count),
+                ),
+                value,
+            )
+            for index, value in enumerate(values)
+        )
+        references_by_owner.setdefault(owner_address, []).append(
+            ExcelFormulaReference(target.sheet, target.address, cells)
+        )
+
+    updated_cells = tuple(
+        replace(
+            cell,
+            references=tuple(references_by_owner.get(cell.address, ())),
+            references_complete=completeness.get(cell.address, True),
+        )
+        if cell.formula_a1 is not None
+        else cell
+        for cell in selection.cells
+    )
+    return replace(selection, cells=updated_cells)
+
+
+def _mark_reference_completeness(
+    selection: ExcelFormulaSelection, completeness: dict[str, bool]
+) -> ExcelFormulaSelection:
+    return replace(
+        selection,
+        cells=tuple(
+            replace(
+                cell,
+                references_complete=completeness.get(cell.address, True),
+            )
+            if cell.formula_a1 is not None
+            else cell
+            for cell in selection.cells
+        ),
+    )
+
+
 def _flatten_formula_matrix(
     raw_values: object, rows: int, columns: int, *, allow_empty: bool
 ) -> list[str]:
@@ -1117,7 +1429,37 @@ def read_selected_excel_formulas(
         mask_payload = active_executor.run(EXCEL_MASK_SCRIPT)
         plan = _parse_mask_result(mask_payload)
         formula_payload = active_executor.run(_build_formula_read_script(plan))
-        return parse_excel_formula_result(formula_payload, expected_plan=plan)
+        selection = parse_excel_formula_result(formula_payload, expected_plan=plan)
+        requests, completeness = _reference_requests(selection)
+        if not requests:
+            return _mark_reference_completeness(selection, completeness)
+        try:
+            reference_payload = active_executor.run(
+                _build_reference_read_script(plan, requests)
+            )
+            return _parse_reference_result(
+                reference_payload, selection, requests, completeness
+            )
+        except ExcelFormulaError as exc:
+            if exc.code == SELECTION_CHANGED:
+                raise
+            # Reference enrichment is additive. Keep the established formula
+            # export available, but make incompleteness explicit in the XML.
+            failed_completeness = dict(completeness)
+            failed_completeness.update(
+                {request.owner_address: False for request in requests}
+            )
+            return _mark_reference_completeness(
+                selection, failed_completeness
+            )
+        except Exception:
+            failed_completeness = dict(completeness)
+            failed_completeness.update(
+                {request.owner_address: False for request in requests}
+            )
+            return _mark_reference_completeness(
+                selection, failed_completeness
+            )
     except ExcelFormulaError:
         raise
     except Exception:

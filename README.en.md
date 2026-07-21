@@ -48,7 +48,7 @@ The release DMG is built with Developer ID signing and Apple notarization. The M
 | Excel/Google Sheets table (`Cmd+C`) | Obsidian/GitHub/Markdown editor (`Cmd+V`) | Markdown source table |
 | Markdown table (`Cmd+C`) | Excel (`Cmd+V`) | Spreadsheet cells |
 | Select an Excel table range, then “Copy selected table as XML” or `⌘⌃X` | LLM prompt (`Cmd+V`) | Merge-aware LLM-friendly XML |
-| Select an Excel formula range, then “Copy table with formulas as XML” or `⌘⌃E` | LLM prompt (`Cmd+V`) | Cell values, blanks, addresses, and A1/R1C1 formulas as XML |
+| Select an Excel formula range, then “Copy table with formulas as XML” or `⌘⌃E` | LLM prompt (`Cmd+V`) | Cell values, blanks, addresses, A1/R1C1 formulas, and direct reference values as XML |
 
 When Tabledown is on, spreadsheet tables paste as Markdown source in Markdown editors such as Obsidian.
 
@@ -94,29 +94,37 @@ Example: a cross-table of two vertical levels (Rank ▸ Manager/Deputy, Title) �
 
 ## Copy a table with formulas as XML (Excel only)
 
-Select one rectangular range containing formulas in the Excel desktop app, then click **“Copy table with formulas as XML”** in the menu bar or press the global shortcut **⌘⌃E**. Tabledown copies every selected cell in the original row-and-column shape: constant values, blanks, addresses, and each formula cell’s current result plus A1/R1C1 formulas. You do not need to press `Cmd+C` first.
+Select one rectangular range containing formulas in the Excel desktop app, then click **“Copy table with formulas as XML”** in the menu bar or press the global shortcut **⌘⌃E**. Tabledown copies every selected cell in the original row-and-column shape: constant values, blanks, addresses, and each formula cell’s current result plus A1/R1C1 formulas. Direct static A1 references in the same workbook include their current values under the formula cell, on both the current sheet and other sheets. You do not need to press `Cmd+C` first.
 
 ```xml
 <표범위 통합문서="Book1.xlsx" 시트="Sheet1" 주소="$A$1:$C$2" 행수="2" 열수="3">
   <행 인덱스="1">
     <셀 주소="$A$1" 값="10" />
     <셀 주소="$B$1" 값="20" />
-    <셀 주소="$C$1" 값="30" 수식="=A1+B1" 수식R1C1="=RC[-2]+RC[-1]" />
+    <셀 주소="$C$1" 값="30" 수식="=A1+B1" 수식R1C1="=RC[-2]+RC[-1]">
+      <참조범위 시트="Sheet1" 주소="$A$1"><참조셀 주소="$A$1" 값="10" /></참조범위>
+      <참조범위 시트="Sheet1" 주소="$B$1"><참조셀 주소="$B$1" 값="20" /></참조범위>
+    </셀>
   </행>
   <행 인덱스="2">
     <셀 주소="$A$2" />
     <셀 주소="$B$2" 값="5" />
-    <셀 주소="$C$2" 값="60" 수식="=C1*2" 수식R1C1="=R[-1]C*2" />
+    <셀 주소="$C$2" 값="60" 수식="=C1*2" 수식R1C1="=R[-1]C*2">
+      <참조범위 시트="Sheet1" 주소="$C$1"><참조셀 주소="$C$1" 값="30" /></참조범위>
+    </셀>
   </행>
 </표범위>
 ```
 
 - `값` is Excel’s current constant or calculated formula result, `수식` is the readable A1 expression, and `수식R1C1` makes relative and absolute references explicit.
+- Each `<참조범위>` links a direct same-workbook A1 cell/range to its current values. The `시트` attribute identifies current-sheet and cross-sheet references, and `<참조셀>` entries are row-major.
+- `INDIRECT`, `OFFSET`, defined names, structured references, 3-D references, external workbooks, and over-limit references are not guessed. The formula and current result remain intact, with `참조상태="일부"` marking partial reference data.
 - Tabledown does not calculate or execute formulas; it reads Excel’s current values. Blank cells remain in the grid without a `값` attribute.
 - This requires the Excel desktop app. Google Sheets and LibreOffice are not supported.
 - Discontiguous multi-area selections are rejected, and a selection is limited to 10,000 cells.
 - On macOS, formula cells split across more than 64 separate rectangular blocks must be copied in smaller selections.
 - Combined A1 and R1C1 formula text is limited to 1,000,000 characters per export.
+- Direct reference values are limited to 256 ranges, 10,000 cells total, and 2,048 cells per range. Larger references keep the existing formula export available and are marked `참조상태="일부"`.
 - Cell values are limited to 5,000,000 characters in total, and the final UTF-8 XML is limited to 10 MB.
 - On macOS, first use of either XML command may request Automation permission to read the selected range from Excel. Existing automatic table conversion does not need that permission.
 
@@ -203,7 +211,7 @@ When the diagnostic log exceeds 1 MB, it is rotated to `Tabledown.log.1` and a n
 
 Tabledown does not collect, store, sell, or share personal information.
 
-When you explicitly choose “Copy selected table as XML,” Tabledown locally reads values, blanks, and merge structure from the current Excel selection. “Copy table with formulas as XML” reads values, blanks, formulas, and addresses. Both commands write XML to the same clipboard; cell values and formulas are never written to the diagnostic log or sent to an external server.
+When you explicitly choose “Copy selected table as XML,” Tabledown locally reads values, blanks, and merge structure from the current Excel selection. “Copy table with formulas as XML” reads values, blanks, formulas, and addresses from the selection plus current values from direct static A1 references in the same workbook. Both commands write XML to the same clipboard; cell values and formulas are never written to the diagnostic log or sent to an external server.
 
 The app reads the current macOS clipboard locally and writes the text/html formats needed for table conversion back to the same clipboard. Conversion happens only on the user's Mac and is not sent to an external server.
 

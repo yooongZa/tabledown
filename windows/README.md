@@ -32,9 +32,9 @@ python run_windows.py
 
 1. Excel desktop app에서 수식이 포함된 단일 사각형 영역을 선택합니다. (`Ctrl+C` 불필요)
 2. 트레이 메뉴의 **‘표의 수식을 포함해 XML로 복사’** 를 누르거나 전역 단축키 **`Ctrl+Alt+E`** 를 누릅니다.
-3. LLM/문서에 붙여넣으면 모든 셀의 주소·값·빈칸과 수식 셀의 현재 결과·A1·R1C1 수식이 표 구조 그대로 XML text로 들어갑니다.
+3. LLM/문서에 붙여넣으면 모든 셀의 주소·값·빈칸과 수식 셀의 현재 결과·A1·R1C1 수식이 표 구조 그대로 XML text로 들어갑니다. 같은 통합문서의 same-sheet/cross-sheet static A1 reference(같은 시트/다른 시트 정적 A1 참조)는 `<참조범위>` 아래 현재 값도 함께 연결됩니다.
 
-Tabledown은 수식을 실행하지 않고 Excel의 현재 값을 읽습니다. 빈 셀도 XML에 남아 표 모양을 보존합니다. multi-area selection(다중 영역 선택)은 지원하지 않고 한 번에 최대 10,000셀, 셀 값 합계 5,000,000자, A1·R1C1 수식 합계 1,000,000자, 최종 XML 10MB까지 처리합니다. 잘못된 Excel instance(인스턴스)를 읽지 않도록 화면에 보이는 Excel process(프로세스)가 하나일 때만 동작합니다. Excel desktop app 전용이며 Google Sheets·LibreOffice는 지원하지 않습니다.
+Tabledown은 수식을 실행하지 않고 Excel의 현재 값을 읽습니다. 빈 셀도 XML에 남아 표 모양을 보존합니다. `INDIRECT`·`OFFSET`·defined name(정의된 이름)·structured reference(구조화 참조)·3-D·외부 통합문서·한도 초과 참조는 추측하지 않고 `참조상태="일부"`로 표시합니다. multi-area selection(다중 영역 선택)은 지원하지 않고 한 번에 최대 10,000셀, 직접 참조 최대 256범위·총 10,000셀·범위당 2,048셀, 셀 값 합계 5,000,000자, A1·R1C1 수식 합계 1,000,000자, 최종 XML 10MB까지 처리합니다. 잘못된 Excel instance(인스턴스)를 읽지 않도록 화면에 보이는 Excel process(프로세스)가 하나일 때만 동작합니다. Excel desktop app 전용이며 Google Sheets·LibreOffice는 지원하지 않습니다.
 
 ## 트레이 메뉴 / 기능
 
@@ -44,7 +44,7 @@ Tabledown은 수식을 실행하지 않고 Excel의 현재 값을 읽습니다. 
   (Accessibility 권한 불필요, user32 `RegisterHotKey`)로도 토글되며, 꺼지면
   트레이 아이콘에 빨간 사선이 표시됩니다. 토글은 "일시정지"용이라 매 실행 시
   켜진 상태로 시작합니다(영속 안 함).
-- **표의 수식을 포함해 XML로 복사** — 현재 Excel 선택 영역의 값·빈칸·주소와 A1·R1C1 수식을 표 구조 그대로 XML text로 복사합니다. 전역 단축키는 `Ctrl+Alt+E`입니다.
+- **표의 수식을 포함해 XML로 복사** — 현재 Excel 선택 영역의 값·빈칸·주소·A1/R1C1 수식과 같은 통합문서의 직접 A1 참조값을 표 구조 그대로 XML text로 복사합니다. 전역 단축키는 `Ctrl+Alt+E`입니다.
 - **빈칸을 자동 채우기** (0.2.7) — 병합 셀이 남긴 헤더 빈칸을 마크다운 변환 시
   forward-fill 합니다(헤더 프레임만, 값 영역은 보존). 기본 꺼짐이며 켜면 설정에
   영속됩니다. macOS 0.5.0 의 `fill_blanks` 포팅.

@@ -286,6 +286,33 @@ class _FormulaRange:
         self.Areas = _ComCollection(areas)
 
 
+class _ReferenceValueRange:
+    def __init__(self, address, values, *, row=1, column=1, rows=1, columns=1):
+        self.Address = address
+        self.Row = row
+        self.Column = column
+        self.Rows = types.SimpleNamespace(Count=rows)
+        self.Columns = types.SimpleNamespace(Count=columns)
+        self.CountLarge = rows * columns
+        self.Value2 = values
+
+
+class _ReferenceWorksheet:
+    def __init__(self, ranges):
+        self._ranges = ranges
+
+    def Range(self, address):
+        return self._ranges[address]
+
+
+class _ReferenceWorksheets:
+    def __init__(self, sheets):
+        self._sheets = sheets
+
+    def Item(self, name):
+        return self._sheets[name]
+
+
 _DEFAULT_VALUES = object()
 
 
@@ -510,6 +537,89 @@ class ExcelFormulaAdapterTests(unittest.TestCase):
         self.assertEqual(selection.special_cells_calls, [])
         client.GetActiveObject.return_value.Intersect.assert_not_called()
         client.GetActiveObject.assert_called_once_with("Excel.Application")
+
+    def test_enriches_same_and_cross_sheet_static_reference_values(self):
+        selection = excel_formula.ExcelFormulaSelection(
+            "Budget.xlsx",
+            "기본_표",
+            "$E$6",
+            1,
+            1,
+            (
+                excel_formula.ExcelSelectionCell(
+                    "$E$6",
+                    "120",
+                    "=C6*'단가 표'!D6",
+                    "=RC[-2]*'단가 표'!R6C4",
+                ),
+            ),
+        )
+        workbook = types.SimpleNamespace(
+            Worksheets=_ReferenceWorksheets(
+                {
+                    "기본_표": _ReferenceWorksheet(
+                        {
+                            "$C$6": _ReferenceValueRange(
+                                "$C$6", 10, row=6, column=3
+                            )
+                        }
+                    ),
+                    "단가 표": _ReferenceWorksheet(
+                        {
+                            "$D$6": _ReferenceValueRange(
+                                "$D$6", 12, row=6, column=4
+                            )
+                        }
+                    ),
+                }
+            )
+        )
+
+        enriched = excel_formula._enrich_formula_references(
+            workbook,
+            selection,
+            max_value_characters=100,
+        )
+
+        formula_cell = enriched.cells[0]
+        self.assertTrue(formula_cell.references_complete)
+        self.assertEqual(
+            [
+                (reference.sheet, reference.address, reference.cells[0].value)
+                for reference in formula_cell.references
+            ],
+            [
+                ("기본_표", "$C$6", "10"),
+                ("단가 표", "$D$6", "12"),
+            ],
+        )
+
+    def test_dynamic_or_unavailable_reference_keeps_formula_and_marks_partial(self):
+        selection = excel_formula.ExcelFormulaSelection(
+            "Budget.xlsx",
+            "Sheet1",
+            "$A$1",
+            1,
+            1,
+            (
+                excel_formula.ExcelSelectionCell(
+                    "$A$1", "10", '=INDIRECT("Sheet2!A1")+B1'
+                ),
+            ),
+        )
+        workbook = types.SimpleNamespace(
+            Worksheets=_ReferenceWorksheets({"Sheet1": _ReferenceWorksheet({})})
+        )
+
+        enriched = excel_formula._enrich_formula_references(
+            workbook,
+            selection,
+            max_value_characters=100,
+        )
+
+        self.assertEqual(enriched.cells[0].formula_a1, '=INDIRECT("Sheet2!A1")+B1')
+        self.assertEqual(enriched.cells[0].references, ())
+        self.assertFalse(enriched.cells[0].references_complete)
 
     def test_reads_complete_table_row_major_with_values_blanks_and_formulas(self):
         formula = _FormulaCell(
@@ -942,14 +1052,31 @@ class ExcelFormulaAdapterTests(unittest.TestCase):
 
 class StableExcelFormulaReaderTests(unittest.TestCase):
     @staticmethod
-    def _selection(value: str, formula: str):
+    def _selection(value: str, formula: str, *, reference_value: str | None = None):
+        references = ()
+        if reference_value is not None:
+            references = (
+                excel_formula.ExcelFormulaReference(
+                    "Sheet2",
+                    "$B$2",
+                    (excel_formula.ExcelReferenceCell("$B$2", reference_value),),
+                ),
+            )
         return excel_formula.ExcelFormulaSelection(
             "Book.xlsx",
             "Sheet1",
             "$A$1",
             1,
             1,
-            (excel_formula.ExcelSelectionCell("$A$1", value, formula, formula),),
+            (
+                excel_formula.ExcelSelectionCell(
+                    "$A$1",
+                    value,
+                    formula,
+                    formula,
+                    references=references,
+                ),
+            ),
         )
 
     @staticmethod
@@ -986,6 +1113,20 @@ class StableExcelFormulaReaderTests(unittest.TestCase):
     def test_formula_only_edit_retries_and_accepts_new_stable_formula(self):
         old = self._selection("2", "=1+1")
         new = self._selection("2", "=2*1")
+        with mock.patch.object(
+            excel_formula,
+            "read_selected_excel_formulas",
+            side_effect=[self._success(old), self._success(new), self._success(new)],
+        ) as reader:
+            result = excel_formula.read_stable_selected_excel_formulas()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.selection, new)
+        self.assertEqual(reader.call_count, 3)
+
+    def test_reference_value_change_retries_and_accepts_new_stable_snapshot(self):
+        old = self._selection("2", "=Sheet2!B2", reference_value="1")
+        new = self._selection("2", "=Sheet2!B2", reference_value="2")
         with mock.patch.object(
             excel_formula,
             "read_selected_excel_formulas",

@@ -8,19 +8,25 @@ from __future__ import annotations
 
 import ctypes
 from ctypes import wintypes
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Iterator
 
 from tablemark.converter.formula_export import (
     MAX_FORMULA_CHARACTERS,
+    MAX_REFERENCE_CELLS,
+    MAX_REFERENCE_RANGES,
     MAX_SNAPSHOT_READS,
     MAX_VALUE_CHARACTERS,
+    ExcelFormulaReference,
     ExcelFormulaSelection,
+    ExcelReferenceCell,
     ExcelSelectionCell,
+    extract_formula_reference_targets,
 )
 
 
 MAX_SELECTION_CELLS = 10_000
+MAX_REFERENCE_RANGE_CELLS = 2_048
 XL_CELL_TYPE_FORMULAS = -4123
 
 SUCCESS = "success"
@@ -333,6 +339,20 @@ def _read_initialized(
     except Exception:  # noqa: BLE001 - never retain value-bearing exceptions
         return _error(COM_FAILURE)
 
+    selection_payload = ExcelFormulaSelection(
+        workbook=workbook_name,
+        sheet=sheet_name,
+        address=range_address,
+        row_count=row_count,
+        column_count=column_count,
+        cells=cells,
+    )
+    selection_payload = _enrich_formula_references(
+        workbook,
+        selection_payload,
+        max_value_characters=max_value_characters,
+    )
+
     # Re-read the active selection after all formula properties.  Any movement,
     # workbook/sheet switch, range change, or formula-address change invalidates
     # the snapshot.  Only addresses are inspected here; no second content copy
@@ -352,15 +372,114 @@ def _read_initialized(
     if final_topology != initial_topology:
         return _error(SELECTION_CHANGED)
 
-    selection_payload = ExcelFormulaSelection(
-        workbook=workbook_name,
-        sheet=sheet_name,
-        address=range_address,
-        row_count=row_count,
-        column_count=column_count,
-        cells=cells,
-    )
     return ExcelFormulaResult(SUCCESS, selection_payload)
+
+
+def _enrich_formula_references(
+    workbook: Any,
+    selection: ExcelFormulaSelection,
+    *,
+    max_value_characters: int,
+) -> ExcelFormulaSelection:
+    """Attach bounded static A1 reference values without changing Excel UI state."""
+
+    references_by_owner: dict[str, list[ExcelFormulaReference]] = {}
+    completeness: dict[str, bool] = {}
+    reference_range_count = 0
+    reference_cell_count = 0
+    value_character_count = sum(
+        len(cell.value) for cell in selection.cells if cell.value is not None
+    )
+
+    for cell in selection.cells:
+        if cell.formula_a1 is None:
+            continue
+        targets, complete = extract_formula_reference_targets(
+            cell.formula_a1, selection.sheet
+        )
+        completeness[cell.address] = complete
+        for target in targets:
+            target_cell_count = target.row_count * target.column_count
+            if (
+                reference_range_count >= MAX_REFERENCE_RANGES
+                or target_cell_count > MAX_REFERENCE_RANGE_CELLS
+                or reference_cell_count + target_cell_count > MAX_REFERENCE_CELLS
+            ):
+                completeness[cell.address] = False
+                continue
+            reference_range_count += 1
+            reference_cell_count += target_cell_count
+            try:
+                worksheet = _worksheet_by_name(workbook, target.sheet)
+                target_range = _range_by_address(worksheet, target.address)
+                if (
+                    _range_count(target_range) != target_cell_count
+                    or _range_count(target_range.Rows) != target.row_count
+                    or _range_count(target_range.Columns) != target.column_count
+                    or str(target_range.Address) != target.address
+                ):
+                    raise _FormulaSnapshotChanged
+                values = _read_bulk_values(
+                    target_range,
+                    row_count=target.row_count,
+                    column_count=target.column_count,
+                    max_value_characters=max_value_characters,
+                )
+            except Exception:  # noqa: BLE001 - enrichment never exposes COM detail
+                completeness[cell.address] = False
+                continue
+
+            candidate_characters = value_character_count + sum(
+                len(value) for value in values if value is not None
+            )
+            if candidate_characters > max_value_characters:
+                completeness[cell.address] = False
+                continue
+            value_character_count = candidate_characters
+            start_row = int(target_range.Row)
+            start_column = int(target_range.Column)
+            reference_cells = tuple(
+                ExcelReferenceCell(
+                    _absolute_address(
+                        start_row + (index // target.column_count),
+                        start_column + (index % target.column_count),
+                    ),
+                    value,
+                )
+                for index, value in enumerate(values)
+            )
+            references_by_owner.setdefault(cell.address, []).append(
+                ExcelFormulaReference(
+                    sheet=target.sheet,
+                    address=target.address,
+                    cells=reference_cells,
+                )
+            )
+
+    return replace(
+        selection,
+        cells=tuple(
+            replace(
+                cell,
+                references=tuple(references_by_owner.get(cell.address, ())),
+                references_complete=completeness.get(cell.address, True),
+            )
+            if cell.formula_a1 is not None
+            else cell
+            for cell in selection.cells
+        ),
+    )
+
+
+def _worksheet_by_name(workbook: Any, name: str) -> Any:
+    worksheets = workbook.Worksheets
+    item = worksheets.Item
+    return item(name) if callable(item) else item[name]
+
+
+def _range_by_address(worksheet: Any, address: str) -> Any:
+    range_member = worksheet.Range
+    return range_member(address) if callable(range_member) else range_member[address]
 
 
 def _read_formula_cells(

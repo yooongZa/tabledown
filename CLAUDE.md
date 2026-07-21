@@ -181,6 +181,17 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   루트의 직접 자식이 모두 `행` 또는 `{X}그룹`(재귀적으로 `행` 포함) + `행` 의 자식은 `열`
   또는 `열그룹`(재귀)만이고 `열` 은 leaf(자식 없음) + (`행` 2개 이상 **또는** 루트가 알려진
   표 루트(`표`,`dataset`,`table`…)·행 태그가 알려진 것). **이 가드를 느슨하게 풀지 말 것.**
+- **수식 XML의 직접 참조값은 같은 통합문서 static A1 reference만 보강한다 (2026-07-21)**:
+  `formula_export.py`의 formula cell(수식 셀)은 현재 결과·A1/R1C1에 더해, formula text에 명시된
+  같은 시트·다른 시트 A1 셀/범위의 현재 값을 `<참조범위><참조셀>`로 중첩한다. 연결값도 선택값·수식과
+  같은 immutable snapshot(불변 스냅샷)에 들어가 두 번 연속 같아야 성공한다. Excel
+  `DirectPrecedents`는 다른 시트를 못 따라가고 `NavigateArrow`는 사용자 선택을 바꾸므로 쓰지 말 것 —
+  UI를 건드리지 않는 보수적 A1 parser(파서)+range batch(범위 일괄 읽기)를 유지한다. `INDIRECT`·
+  `OFFSET`·defined name(정의된 이름)·structured/3-D/external reference(구조화/3차원/외부 참조)는
+  추측하지 않고 수식·결과를 보존한 채 `참조상태="일부"`로 표시한다. 참조 한도는 최대 256범위·총
+  10,000셀·범위당 2,048셀이고, 초과/읽기 실패도 기존 수식 export를 막지 않고 일부 표시로 degrade한다.
+  수식의 정적 참조값은 선택 영역 밖·다른 시트에서도 읽혀 clipboard XML에 들어간다는 privacy scope(개인정보 범위)를
+  README·Windows PRIVACY와 동기화할 것. 외부 통합문서를 자동으로 열거나 참조를 재귀 추적하지 말 것.
 - **표 → XML (메뉴 `copy_as_xml`)은 Excel 직접 선택 방식 — `Cmd+C` 금지 전제**: 수식 XML 메뉴와
   동일하게 Excel desktop app의 현재 **단일 사각형 선택 영역**을 직접 읽는다. `excel_table.py`가
   서식 적용값(데이터 셀 원문 text의 유의미한 공백과 숫자·날짜·퍼센트·통화·사용자 지정 서식·오류값을 모두

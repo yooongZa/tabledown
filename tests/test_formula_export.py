@@ -5,13 +5,148 @@ import xml.etree.ElementTree as ET
 from unittest.mock import patch
 
 from tablemark.converter.formula_export import (
+    ExcelFormulaReference,
     ExcelFormulaSelection,
+    ExcelReferenceCell,
     ExcelSelectionCell,
+    extract_formula_reference_targets,
     formula_selection_to_xml,
 )
 
 
 class FormulaExportTests(unittest.TestCase):
+    def test_serializes_same_and_cross_sheet_reference_values_under_formula(self):
+        selection = self._one_cell(value="120", formula_a1="=C6*'단가 표'!D6")
+        cell = selection.cells[0]
+        selection = ExcelFormulaSelection(
+            selection.workbook,
+            selection.sheet,
+            selection.address,
+            selection.row_count,
+            selection.column_count,
+            (
+                ExcelSelectionCell(
+                    cell.address,
+                    cell.value,
+                    cell.formula_a1,
+                    cell.formula_r1c1,
+                    references=(
+                        ExcelFormulaReference(
+                            "Sheet1",
+                            "$C$6",
+                            (ExcelReferenceCell("$C$6", "10"),),
+                        ),
+                        ExcelFormulaReference(
+                            "단가 표",
+                            "$D$6",
+                            (ExcelReferenceCell("$D$6", "12"),),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        xml = formula_selection_to_xml(selection)
+
+        root = ET.fromstring(xml)
+        formula_cell = root.find("행/셀")
+        self.assertEqual(formula_cell.attrib["값"], "120")
+        references = formula_cell.findall("참조범위")
+        self.assertEqual(
+            [(item.attrib["시트"], item.attrib["주소"]) for item in references],
+            [("Sheet1", "$C$6"), ("단가 표", "$D$6")],
+        )
+        self.assertEqual(
+            [item.find("참조셀").attrib["값"] for item in references],
+            ["10", "12"],
+        )
+
+    def test_partial_static_reference_state_is_explicit(self):
+        selection = self._one_cell(value="10", formula_a1='=INDIRECT("A1")')
+        cell = selection.cells[0]
+        selection = ExcelFormulaSelection(
+            selection.workbook,
+            selection.sheet,
+            selection.address,
+            1,
+            1,
+            (
+                ExcelSelectionCell(
+                    cell.address,
+                    cell.value,
+                    cell.formula_a1,
+                    references_complete=False,
+                ),
+            ),
+        )
+
+        formula_cell = ET.fromstring(formula_selection_to_xml(selection)).find(
+            "행/셀"
+        )
+
+        self.assertEqual(formula_cell.attrib["참조상태"], "일부")
+
+    def test_extracts_static_a1_ranges_and_cross_sheet_references(self):
+        targets, complete = extract_formula_reference_targets(
+            "=C6*D6+SUM('단가 표'!B2:B4)", "기본_표"
+        )
+
+        self.assertTrue(complete)
+        self.assertEqual(
+            [(item.sheet, item.address, item.row_count, item.column_count) for item in targets],
+            [
+                ("기본_표", "$C$6", 1, 1),
+                ("기본_표", "$D$6", 1, 1),
+                ("단가 표", "$B$2:$B$4", 3, 1),
+            ],
+        )
+
+    def test_reference_extraction_ignores_strings_and_marks_unsupported_partial(self):
+        static_targets, static_complete = extract_formula_reference_targets(
+            '=IF(A1="Sheet2!B2",Sheet2!C3,0)', "Sheet1"
+        )
+        dynamic_targets, dynamic_complete = extract_formula_reference_targets(
+            '=INDIRECT("Sheet2!A1")+Table1[A1]+B1', "Sheet1"
+        )
+        external_targets, external_complete = extract_formula_reference_targets(
+            "='[Other.xlsx]Sheet1'!A1", "Sheet1"
+        )
+
+        self.assertTrue(static_complete)
+        self.assertEqual(
+            [(item.sheet, item.address) for item in static_targets],
+            [("Sheet1", "$A$1"), ("Sheet2", "$C$3")],
+        )
+        self.assertFalse(dynamic_complete)
+        self.assertEqual(
+            [(item.sheet, item.address) for item in dynamic_targets],
+            [("Sheet1", "$B$1")],
+        )
+        self.assertFalse(external_complete)
+        self.assertEqual(external_targets, ())
+
+    def test_three_dimensional_references_are_not_misread_as_current_sheet(self):
+        for formula in (
+            "=SUM(Sheet1:Sheet3!A1)",
+            "=SUM('Sheet 1':'Sheet 3'!A1:B2)",
+        ):
+            with self.subTest(formula=formula):
+                targets, complete = extract_formula_reference_targets(
+                    formula, "Current"
+                )
+
+                self.assertEqual(targets, ())
+                self.assertFalse(complete)
+
+        mixed_targets, mixed_complete = extract_formula_reference_targets(
+            "=B1+SUM(Sheet1:Sheet3!A1)", "Current"
+        )
+        self.assertEqual(
+            [(item.sheet, item.address) for item in mixed_targets],
+            [("Current", "$B$1")],
+        )
+        self.assertFalse(mixed_complete)
+
     def test_serializes_full_table_row_major_deterministically(self):
         selection = ExcelFormulaSelection(
             workbook="매출.xlsx",
