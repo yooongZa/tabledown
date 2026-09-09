@@ -14,7 +14,7 @@ spreadsheet-pasteable format — by watching the system clipboard.
   it detects a table, writes the converted text/HTML formats back to the **same
   clipboard**. All conversion happens **on your PC**; nothing is sent to any
   external server.
-- When you explicitly choose **Copy table with formulas as XML**, the app locally
+- When you explicitly choose **Copy cell values, formulas, and references as XML**, the app locally
   reads cell values, blanks, formula text, and addresses from the current
   Microsoft Excel selection, plus current values from direct static A1 references
   in the same workbook, and writes XML to the same clipboard. Cell values and
@@ -44,7 +44,7 @@ Contact: <sukmack@gmail.com>
 - 앱은 Windows 클립보드의 현재 내용을 로컬에서 읽고, 표를 감지하면 변환한
   text/HTML 형식을 **같은 클립보드**에 다시 기록합니다. 모든 변환은 **사용자의 PC
   안에서만** 처리되며 외부 서버로 전송되지 않습니다.
-- 사용자가 **‘표의 수식을 포함해 XML로 복사’** 를 명시적으로 실행한 경우에만 현재 Microsoft
+- 사용자가 **‘셀 값·수식·참조를 XML로 복사’** 를 명시적으로 실행한 경우에만 현재 Microsoft
   Excel 선택 영역의 셀 값·빈칸·수식·주소와 수식에 직접 적힌 같은 통합문서의 정적 A1
   참조값을 로컬에서 읽어 같은 클립보드에 XML을 기록합니다. 셀 값과 수식 내용은 진단
   로그에 기록되거나 외부 서버로 전송되지 않습니다.

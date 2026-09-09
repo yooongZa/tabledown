@@ -47,8 +47,9 @@ The release DMG is built with Developer ID signing and Apple notarization. The M
 |------|--------------|--------|
 | Excel/Google Sheets table (`Cmd+C`) | Obsidian/GitHub/Markdown editor (`Cmd+V`) | Markdown source table |
 | Markdown table (`Cmd+C`) | Excel (`Cmd+V`) | Spreadsheet cells |
-| Select an Excel table range, then “Copy selected table as XML” or `⌘⌃X` | LLM prompt (`Cmd+V`) | Merge-aware LLM-friendly XML |
-| Select an Excel formula range, then “Copy table with formulas as XML” or `⌘⌃E` | LLM prompt (`Cmd+V`) | Cell values, blanks, addresses, A1/R1C1 formulas, and direct reference values as XML |
+| Select an Excel table range, then “Copy table structure and displayed values as XML” or `⌘⌃X` | LLM prompt (`Cmd+V`) | Hierarchy, exact merge ranges, source, and displayed values as XML |
+| Select an Excel formula range, then “Copy cell values, formulas, and references as XML” or `⌘⌃E` | LLM prompt (`Cmd+V`) | Cell types, raw values, calculation state, A1/R1C1 formulas, and direct reference values as XML |
+| Select an Excel formula range, then “Copy compact XML for AI” | LLM prompt (`Cmd+V`) | Existing formula information, inferred context, and shared references with less repetition as XML |
 
 When Tabledown is on, spreadsheet tables paste as Markdown source in Markdown editors such as Obsidian.
 
@@ -68,9 +69,9 @@ The screenshot above shows the two paste results — Markdown source (top) and a
 
 ## XML conversion (LLM-friendly)
 
-Tabledown supports a **nested multi-level-header XML** — the shape an LLM recognizes best when a table is pasted into a prompt. Multi-level (group) headers are kept as an XML nesting hierarchy: the root is `<표>` (table), vertical groups are `<{header}그룹 이름="value">`, a row is `<행 {header}="value">`, horizontal groups are `<열그룹 이름="value">`, and a cell is `<열 n="headerValue">cellValue</열>`. (The structural tags are Korean words — `표` table, `행` row, `열` column, `열그룹` column-group — so the XML never collides with real HTML elements.)
+Tabledown supports a **nested multi-level-header XML** — the shape an LLM recognizes best when a table is pasted into a prompt. Multi-level (group) headers are represented as an XML nesting hierarchy: the root is `<표>` (table), vertical groups are `<{header}그룹 이름="value">`, a row is `<행 {header}="value">`, horizontal groups are `<열그룹 이름="value">`, and a cell is `<열 n="headerValue">cellValue</열>`. This nesting is a structural inference from Excel merges and value layout; the exact source merge ranges are preserved separately in the root’s `병합범위` attribute. (The structural tags are Korean words — `표` table, `행` row, `열` column, `열그룹` column-group — so the XML never collides with real HTML elements.)
 
-Example: a cross-table of two vertical levels (Rank ▸ Manager/Deputy, Title) × two horizontal levels (Q1 ▸ 1,2,3 / Q2 ▸ 4,5,6).
+Example: a cross-table of two vertical levels (Rank ▸ Manager/Deputy, Title) × two horizontal levels (Q1 ▸ 1,2,3 / Q2 ▸ 4,5,6). For readability, this abbreviated example omits only the root source and merge metadata.
 
 ```xml
 <표>
@@ -86,47 +87,62 @@ Example: a cross-table of two vertical levels (Rank ▸ Manager/Deputy, Title) �
 </표>
 ```
 
-- **Selected Excel table → XML (menu or ⌘⌃X)**: Select one rectangular table range in the Excel desktop app, then click **“Copy selected table as XML”** or press **⌘⌃X**. Without first pressing `Cmd+C`, Tabledown reads Excel's displayed number, date, percentage, currency, and custom-formatted values, error values, significant data-cell text whitespace, blanks, and merge structure. In data cells, literal `<br>` text remains distinct from an actual in-cell line break. It never falls back to an older clipboard table. On success the menu bar icon briefly shows a checkmark and the previous clipboard formats are replaced with plain-text XML so every destination receives XML. Google Sheets, LibreOffice, and clipboard Markdown/XML are not inputs to this manual command. There is no automatic XML→table direction.
-- **Only a stable selection is exported**: Tabledown requires two consecutive matching snapshots of the selection, values, and merge structure (at most three reads) before writing the clipboard. Disjoint ranges, selections over **10,000 cells**, partially selected merged cells, and tables that change while being read are rejected while preserving the existing clipboard. If Excel shows a value as `##` because a column is too narrow or a date/time cannot be displayed, Tabledown asks you to make the full value visible instead of exporting damaged text (literal `##` text is preserved). Merge areas are read from Excel in a batch, preserving their exact structure; the general and formula XML commands share the same selection limit.
+- **Excel table structure and displayed values → XML (menu or ⌘⌃X)**: Select one rectangular table range in the Excel desktop app, then click **“Copy table structure and displayed values as XML”** or press **⌘⌃X**. Without first pressing `Cmd+C`, Tabledown reads Excel's displayed number, date, percentage, currency, and custom-formatted values, error values, significant data-cell text whitespace, blanks, and merge structure. Formula text is not included. In data cells, literal `<br>` text remains distinct from an actual in-cell line break. It never falls back to an older clipboard table. On success the menu bar icon briefly shows a checkmark and the previous clipboard formats are replaced with plain-text XML so every destination receives XML. Google Sheets, LibreOffice, and clipboard Markdown/XML are not inputs to this manual command. There is no automatic XML→table direction.
+- **Source facts are separated from inference**: Root attributes `통합문서`, `시트`, `주소`, `행수`, and `열수` identify the source, while `병합범위` records Excel’s actual merge areas. In selections with at least two columns, `제목N주소`/`제목N값` preserve leading full-width titles omitted from the hierarchy; a vertical merge in a one-column selection is not misclassified as a title. `헤더기준="추정"` means Excel provides no definitive header marker, so Tabledown inferred headers from the first row and merge layout. **Include the header row in your selection.** Blank, whitespace-only, and duplicate horizontal leaf headers retain their original `n` value and use the auxiliary column index `i` to stay distinguishable.
+- **Only a stable selection is exported**: Tabledown requires two consecutive matching snapshots of the selection, values, and merge structure (at most three reads) before writing the clipboard. Disjoint ranges, selections over **10,000 cells**, partially selected merged cells, and tables that change while being read are rejected while preserving the existing clipboard. If Excel shows a value as `##` because a column is too narrow or a date/time cannot be displayed, Tabledown asks you to make the full value visible instead of exporting damaged text (literal `##` text is preserved). Both general and formula XML are limited to 5,000,000 total cell-value characters and 10 MB of UTF-8; an over-limit export leaves the clipboard untouched and asks for a smaller range.
+- **Progress state and clipboard-overwrite protection**: XML commands first show `…` beside the menu-bar icon, switch the menu to “Copying…”, and allow only one export at a time. Because macOS requires NSAppleScript on the main thread, a large selection—especially near 10,000 cells—can leave the menu unresponsive for tens of seconds, and an in-progress read cannot currently be cancelled. Split the range if it takes too long. If you copy something else while XML is being prepared, the final clipboard-generation check cancels the XML write. A success checkmark appears only after read-back verification. macOS exposes no atomic clipboard compare-and-swap, so an extremely small race window remains between the final check and clearing the pasteboard.
 - **Both horizontal and vertical groups nest**: horizontal multi-level headers nest as `<열그룹>`, and vertical groups (Rank: Manager/Deputy) nest as `<{header}그룹>`, keeping the table's hierarchy. Horizontal headers live in `n=`/`이름=` attributes (not tag names), so spaces, symbols, or leading digits never mangle a tag and stay safe in any standard XML parser. The Korean `<표>` root (not `<table>`) means the content survives even where the text is rendered as HTML (a browser, an Obsidian preview).
 - **Vertical groups nest as parent nodes (changed from the previous version)**: the previous version repeated each vertical key column (Rank) on every row, so each row was a self-contained record. Now vertical groups nest as parent nodes (`<직급그룹>`) — the hierarchy is preserved, but the group value lives only on the parent, so **a single row on its own no longer carries its Rank** (a deliberate trade: hierarchy preservation over self-contained rows).
-- **“Auto-fill blank cells” (Settings ▸, off by default)**: When converting a table, this one toggle drives **both the Markdown and XML paths**, filling blank cells in the left grouping (key) columns and the header frame from the value above (vertical), then to the left (horizontal). Blanks in the data (value) region are left as-is.
+- **“Auto-fill blank cells” (Settings ▸, off by default)**: When converting a table, this one toggle drives **both the Markdown and XML paths**, filling blank cells in the left grouping (key) columns and the header frame from the value above (vertical), then to the left (horizontal). Blanks in the data (value) region are left as-is. General XML records whether the rule ran and the exact source cells it changed in `빈칸채움`, `빈칸채움기준`, `빈칸채움수`, and `빈칸채움셀`, so generated values are not mistaken for original Excel input.
 
-## Copy a table with formulas as XML (Excel only)
+## Copy cell values, formulas, and references as XML (Excel only)
 
-Select one rectangular range containing formulas in the Excel desktop app, then click **“Copy table with formulas as XML”** in the menu bar or press the global shortcut **⌘⌃E**. Tabledown copies every selected cell in the original row-and-column shape: constant values, blanks, addresses, and each formula cell’s current result plus A1/R1C1 formulas. Direct static A1 references in the same workbook include their current values under the formula cell, on both the current sheet and other sheets. You do not need to press `Cmd+C` first.
+Select one rectangular range containing formulas in the Excel desktop app, then click **“Copy cell values, formulas, and references as XML”** in the menu bar or press the global shortcut **⌘⌃E**. Tabledown copies every selected cell in the original row-and-column shape: constant values, blanks, addresses, and each formula cell’s current result plus A1/R1C1 formulas. Direct static A1 references in the same workbook include their current values under the formula cell, on both the current sheet and other sheets. Merge hierarchy and display formatting are not included. You do not need to press `Cmd+C` first.
 
 ```xml
-<표범위 통합문서="Book1.xlsx" 시트="Sheet1" 주소="$A$1:$C$2" 행수="2" 열수="3">
+<표범위 통합문서="Book1.xlsx" 시트="Sheet1" 주소="$A$1:$C$2" 행수="2" 열수="3" 형식버전="2" 계산모드="automatic" 계산상태="unavailable" 계산결과상태="freshness_unverified" 값기준="Excel현재원시값" 표시정보상태="미포함" 병합정보상태="미포함">
   <행 인덱스="1">
-    <셀 주소="$A$1" 값="10" />
-    <셀 주소="$B$1" 값="20" />
-    <셀 주소="$C$1" 값="30" 수식="=A1+B1" 수식R1C1="=RC[-2]+RC[-1]">
-      <참조범위 시트="Sheet1" 주소="$A$1"><참조셀 주소="$A$1" 값="10" /></참조범위>
-      <참조범위 시트="Sheet1" 주소="$B$1"><참조셀 주소="$B$1" 값="20" /></참조범위>
+    <셀 주소="$A$1" 값="10" 값종류="number" />
+    <셀 주소="$B$1" 값="20" 값종류="number" />
+    <셀 주소="$C$1" 값="30" 값종류="number" 수식="=A1+B1" 수식R1C1="=RC[-2]+RC[-1]" 값대입수식="=10+20" 값대입수식동등성="보장안함">
+      <참조범위 시트="Sheet1" 주소="$A$1"><참조셀 주소="$A$1" 값="10" 값종류="number" /></참조범위>
+      <참조범위 시트="Sheet1" 주소="$B$1"><참조셀 주소="$B$1" 값="20" 값종류="number" /></참조범위>
     </셀>
   </행>
   <행 인덱스="2">
-    <셀 주소="$A$2" />
-    <셀 주소="$B$2" 값="5" />
-    <셀 주소="$C$2" 값="60" 수식="=C1*2" 수식R1C1="=R[-1]C*2">
-      <참조범위 시트="Sheet1" 주소="$C$1"><참조셀 주소="$C$1" 값="30" /></참조범위>
+    <셀 주소="$A$2" 값종류="blank" />
+    <셀 주소="$B$2" 값="5" 값종류="number" />
+    <셀 주소="$C$2" 값="60" 값종류="number" 수식="=C1*2" 수식R1C1="=R[-1]C*2" 값대입수식="=30*2" 값대입수식동등성="보장안함">
+      <참조범위 시트="Sheet1" 주소="$C$1"><참조셀 주소="$C$1" 값="30" 값종류="number" /></참조범위>
     </셀>
   </행>
 </표범위>
 ```
 
-- `값` is Excel’s current constant or calculated formula result, `수식` is the readable A1 expression, and `수식R1C1` makes relative and absolute references explicit.
-- Each `<참조범위>` links a direct same-workbook A1 cell/range to its current values. The `시트` attribute identifies current-sheet and cross-sheet references, and `<참조셀>` entries are row-major.
-- `INDIRECT`, `OFFSET`, defined names, structured references, 3-D references, external workbooks, and over-limit references are not guessed. The formula and current result remain intact, with `참조상태="일부"` marking partial reference data.
+- `값` is Excel’s current constant or calculated formula result. `값종류` distinguishes `blank`, `number`, `text`, `boolean`, and `error`, so a true blank, a formula returning an empty string, numeric `123`, and text `"123"` are not conflated. `수식` is the readable A1 expression, and `수식R1C1` exposes relative and absolute references.
+- `값대입수식` is an LLM-oriented explanation generated only when every supported static A1 reference was read from the same stable snapshot with a known native type. It substitutes current values one level deep; it is not an Excel-runnable or generally calculation-equivalent formula, as stated by `값대입수식동등성="보장안함"`. The original `수식` and `값` remain authoritative.
+- Each `<참조범위>` links a direct same-workbook A1 cell/range to its current values. A range shared by many formulas is read from Excel once, while each formula cell keeps its own formula-occurrence order in XML. The `시트` attribute identifies current-sheet and cross-sheet references, and `<참조셀>` entries are row-major.
+- `계산모드` and `계산상태` capture Excel’s state at export time; Tabledown never triggers recalculation. On Windows, `done` maps to `계산결과상태="snapshot_stable"`, `calculating`/`pending` map to `calculation_incomplete`, and `unknown` maps to `freshness_unverified`. macOS reports `계산상태="unavailable"` and `계산결과상태="freshness_unverified"` because Excel’s macOS API does not expose calculation state. Even `snapshot_stable` proves only that two current snapshots matched, not that a manual-calculation workbook was freshly recalculated.
+- `값기준="Excel현재원시값"` means this schema carries raw current values, not displayed strings. Formula XML intentionally omits display formatting and merge hierarchy and says so with `표시정보상태="미포함"` and `병합정보상태="미포함"`. Use the separate **table structure and displayed values** XML when you need formatted dates/currency/percentages or exact merges.
+- Native numeric values are serialized as ordinary decimal text such as `315000`, not scientific notation such as `3.15E+5`; literal text that merely looks numeric is preserved exactly.
+- `INDIRECT`, `OFFSET`, defined names, structured references, 3-D references, external workbooks, read failures, and over-limit references are not guessed. The formula and current result remain intact, with `참조상태="일부"`, `참조포함범위수`, and `참조누락이유` explaining partial reference data. Reason codes are `dynamic_reference`, `calculated_range_reference`, `external_or_structured_reference`, `three_dimensional_reference`, `whole_row_or_column_reference`, `defined_name_or_unsupported_syntax`, `invalid_a1_reference`, `range_count_limit`, `cell_count_limit`, `range_size_limit`, `read_failed`, `value_size_limit`, and `unspecified`.
+- A brief notice appears after copying if some reference values are missing or Excel is still calculating. Original formulas and current results remain in the copy. An unavailable calculation status alone does not trigger a notice. Computed ranges such as `A1:INDEX(...)` are marked as partial instead of guessing their boundaries.
 - Tabledown does not calculate or execute formulas; it reads Excel’s current values. Blank cells remain in the grid without a `값` attribute.
 - This requires the Excel desktop app. Google Sheets and LibreOffice are not supported.
 - Discontiguous multi-area selections are rejected, and a selection is limited to 10,000 cells.
 - On macOS, formula cells split across more than 64 separate rectangular blocks must be copied in smaller selections.
-- Combined A1 and R1C1 formula text is limited to 1,000,000 characters per export.
-- Direct reference values are limited to 256 ranges, 10,000 cells total, and 2,048 cells per range. Larger references keep the existing formula export available and are marked `참조상태="일부"`.
-- Cell values are limited to 5,000,000 characters in total, and the final UTF-8 XML is limited to 10 MB.
-- On macOS, first use of either XML command may request Automation permission to read the selected range from Excel. Existing automatic table conversion does not need that permission.
+- Combined A1 and R1C1 formula text is limited to 1,000,000 characters per export. Derived `값대입수식` text has a separate 1,000,000-character limit. A formula cell omitted by that character budget records `값대입수식상태="omitted_character_limit"` on `<셀>`; if the final XML byte limit requires removing all derived expressions, the root records `값대입수식상태="omitted_xml_size_limit"`. The core export remains intact in both cases.
+- Direct reference values are limited to 256 **unique ranges**, 10,000 cells total, and 2,048 cells per range. Larger references keep the existing formula export available and are marked `참조상태="일부"`.
+- Cell values are limited to 5,000,000 characters in total, and the final UTF-8 XML is limited to 10 MB. Rendering stops as soon as the bound is exceeded. If omitting the derived `값대입수식` is still insufficient, Tabledown fails the export and preserves the clipboard instead of silently dropping value kinds, calculation state, or partial-reference reasons.
+- On macOS, first use of an XML command may request Automation permission to read the selected range from Excel. Existing automatic table conversion does not need that permission.
+
+## Copy compact XML for AI (Excel only)
+
+Select a range containing formulas, then choose **“Copy compact XML for AI”**. Include headers and item names to help AI interpret the values. This uses the same stable snapshot reader as the existing formula export and preserves values, formulas, reference values, calculation state, missing-reference reasons, and existing size limits.
+
+- Simple column headers and row labels within the selection are linked to their source cells, with context marked **inferred or unconfirmed**. Complex multi-level headers, duplicate or blank labels, and ordinary text data may remain unconfirmed. No surrounding cells are read to find context.
+- Reference ranges with exactly matching sheet names and addresses appear once in `<참조목록>` and are linked from each formula through `<참조 ref="…">`. Partially overlapping ranges stay separate, and each formula preserves its reference order. Repeated references benefit most; small tables may become longer because of the context information.
+- The existing formula XML menu, `⌘⌃E`, automatic conversion, and defaults remain unchanged. There is no new setting or shortcut. Results are copied to the local clipboard; Tabledown does not send them to AI.
 
 ## How It Works
 
@@ -167,7 +183,7 @@ A 3x2 table icon appears in the macOS menu bar.
 
 ### 3. macOS Permissions
 
-Basic table conversion does not require Accessibility or Input Monitoring permissions. “Copy selected table as XML” and “Copy table with formulas as XML” read the current Excel selection directly, so they may request Microsoft Excel Automation permission on first use.
+Basic table conversion does not require Accessibility or Input Monitoring permissions. “Copy table structure and displayed values as XML,” “Copy cell values, formulas, and references as XML,” and “Copy compact XML for AI” read the current Excel selection directly, so they may request Microsoft Excel Automation permission on first use.
 
 ## Usage
 
@@ -211,7 +227,7 @@ When the diagnostic log exceeds 1 MB, it is rotated to `Tabledown.log.1` and a n
 
 Tabledown does not collect, store, sell, or share personal information.
 
-When you explicitly choose “Copy selected table as XML,” Tabledown locally reads values, blanks, and merge structure from the current Excel selection. “Copy table with formulas as XML” reads values, blanks, formulas, and addresses from the selection plus current values from direct static A1 references in the same workbook. Both commands write XML to the same clipboard; cell values and formulas are never written to the diagnostic log or sent to an external server.
+When you explicitly choose “Copy table structure and displayed values as XML,” Tabledown locally reads values, blanks, and merge structure from the current Excel selection. “Copy cell values, formulas, and references as XML” and “Copy compact XML for AI” read values, blanks, formulas, and addresses from the selection plus current values from direct static A1 references in the same workbook. These commands write XML to the same clipboard; cell values and formulas are never written to the diagnostic log or sent to an external server.
 
 The app reads the current macOS clipboard locally and writes the text/html formats needed for table conversion back to the same clipboard. Conversion happens only on the user's Mac and is not sent to an external server.
 
@@ -221,8 +237,13 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 
 ## Changelog
 
-- 2026-07-17: **Changed general Table→XML to direct Excel selection.** Select a table range in Excel and invoke “Copy selected table as XML” or `⌘⌃X`; Tabledown now reads formatted values, error values, significant whitespace, blanks, and merge structure without `Cmd+C`. Clipboard fallback was removed to prevent exporting a stale copy, and only two matching snapshots are exported.
-- 2026-07-13: **Added full Excel table export with values, blanks, and formulas as XML (macOS 0.6.0).** Select one rectangular range containing formulas in the Excel desktop app, then use “Copy table with formulas as XML,” `⌘⌃E` on macOS, or `Ctrl+Alt+E` on Windows. Tabledown copies every cell address and current value, preserves blanks, and adds A1/R1C1 formulas to formula cells in a `<표범위>` XML document. True blanks, `=""` results, and Excel error values remain distinct; selection changes, discontiguous ranges, and size-limit failures are rejected fail-closed. macOS 0.6.0 was uploaded as **TestFlight build 0.6.1** and reached “Ready to Submit” in internal group `22`. All 39 focused tests and 75/75 test-matrix cases passed.
+- 2026-09-09: **macOS 0.6.0 release (build 0.6.4).** The Apple Silicon DMG and ZIP passed signature, Apple notarization, and Gatekeeper checks; the frozen candidate passed 223 automated checks. [v0.6.0 installers](https://github.com/yooongZa/tabledown/releases/tag/v0.6.0) accompany this release. The App Store version is waiting for review and will release automatically after approval. The approved Korean description is preserved verbatim. No Windows installer is released in this update.
+
+- 2026-09-09: **Uploaded macOS 0.6.0 / TestFlight build 0.6.4.** Includes the new AI copy option to bring headers, item names, and calculation values together, reduce repeated details, and fix Korean tables pasted into Apple Notes. Korean and English TestFlight copy covers the whole app: moving tables into notes, continuing edits in Excel, preparing complex tables for explanations, and keeping familiar copy and paste. The final headline is “Get more out of your AI,” with automatic Markdown conversion distinguished from Excel menu-based copying. The isolated candidate passed 223 automated checks plus package and Apple validation. Apple processing completed, the build is available to the existing internal test group, and both languages were saved and verified.
+
+- 2026-09-09: **Fixed corrupted Korean text when pasting Markdown tables into Apple Notes.** Generated HTML now explicitly declares UTF-8. Original Markdown and existing Excel/web table HTML are preserved. The reinstalled macOS app passed real Notes and Excel paste checks for eight cells containing Korean, emoji, and special characters, plus Excel → Markdown copy-back. Automated checks passed: 1 macOS encoding test, 51 converter tests, and 80 Windows-port tests with 27 skipped on macOS. This change has not been tested on a physical Windows device.
+- 2026-07-17: **Changed general Table→XML to direct Excel selection.** Select a table range in Excel and invoke “Copy table structure and displayed values as XML” or `⌘⌃X`; Tabledown now reads formatted values, error values, significant whitespace, blanks, and merge structure without `Cmd+C`. Clipboard fallback was removed to prevent exporting a stale copy, and only two matching snapshots are exported.
+- 2026-07-13: **Added full Excel table export with values, blanks, and formulas as XML (macOS 0.6.0).** Select one rectangular range containing formulas in the Excel desktop app, then use “Copy cell values, formulas, and references as XML,” `⌘⌃E` on macOS, or `Ctrl+Alt+E` on Windows. Tabledown copies every cell address and current value, preserves blanks, and adds A1/R1C1 formulas to formula cells in a `<표범위>` XML document. True blanks, `=""` results, and Excel error values remain distinct; selection changes, discontiguous ranges, and size-limit failures are rejected fail-closed. macOS 0.6.0 was uploaded as **TestFlight build 0.6.1** and reached “Ready to Submit” in internal group `22`. All 39 focused tests and 75/75 test-matrix cases passed.
 - 2026-07-01: **“Auto-fill blank cells” now applies to Markdown conversion too (0.5.0).** When converting an Excel/Sheets table to Markdown, the blanks left by merged cells are filled if the “Auto-fill blank cells” setting (off by default) is on — a group-header band (`1분기`) spreads right, a left key column (`부장`) spreads down. Only the **header frame** is filled; blanks in the value (data) region are preserved (same guard as the XML fill). The flattened multi-level header (a leaf header row demoted into the body) is left as-is, since Markdown table syntax can't draw a merge. This toggle now drives **both** the XML and Markdown paths (dropped the “XML:” prefix from the old label). With the toggle off, behavior is unchanged.
 - 2026-07-01: **Windows: ported the 0.5.0 “Auto-fill blank cells” toggle to the tray** (parity with macOS, 0.2.7). The merged-header fill logic already lived in the shared `tablemark.converter.html_to_md` that Windows imports; what was missing was the toggle, the setting, and the wiring (Windows never had the `fill_blanks` option — macOS shipped it only on the XML path, which is macOS-only). Now `conversion.py` passes the `fill_blanks` flag into the Markdown conversion (`html_table_to_markdown`/`convert_document_tables`) — default off, so behavior is unchanged and the HTML slot is still preserved — and the tray gains a checkable “Auto-fill blank cells” menu item (persisted, placed after the toggle and before Language, mirroring the macOS Settings order). No “XML:” prefix, since Windows has no XML path. Regression tests: off keeps blanks, on fills the merged key column (and keeps HTML), label translations, menu inclusion, toggle persistence
 - 2026-06-30: **Renamed the XML menu item “Copy table as XML” → “Convert copied table to XML” (0.4.2).** Same behavior, but the verb “Convert” describes what actually happens, and “copied table” names the precondition (copy a table first), addressing the most common first-time confusion. Help text, tooltip, and usage docs updated to match.
