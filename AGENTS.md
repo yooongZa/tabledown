@@ -46,9 +46,13 @@ Tabledown 은 macOS 메뉴바 앱으로, 클립보드를 감시하며 **Excel/Sh
   ⚠️ `clipboard_direct`(및 `watcher`) 그룹은 **시스템 클립보드를 읽고 쓴다** — 실행 중 클립보드 내용이 잠깐 바뀐다. 산출물(fixture·`report.json`)은 gitignore 된 `outputs/tabledown_test_envs/` 로 나간다.
 - **Windows 포트 테스트**(`.github/workflows/windows-build.yml` 이 CI 에서 쓰는 커맨드) — macOS 에서도 리포 루트 `.venv` 로 실행됨(트레이·`winsdk` 의존 테스트는 자동 skip):
   ```bash
-  cd windows/tests && ../../.venv/bin/python -m unittest test_windows_port -v   # 총 85개 실행 = 64 pass + 21 skip (macOS)
+  cd windows/tests && ../../.venv/bin/python -m unittest test_windows_port -v   # 2026-09-09 검증: 114개 = 87 pass + 27 skip (macOS)
   ```
 - converter만 빠르게(클립보드 안 건드림)는 이 파일 **불변식 섹션 끝의 원라이너**(51/51) 참조.
+
+- **2026-09-09 추가 회귀 테스트**: `tests/test_formula_ai_export.py`(간결 출력·핵심 정보 보존),
+  `tests/test_ai_formula_action_macos.py`(실패·취소·재시도),
+  `tests/test_markdown_html_encoding_macos.py`(Apple 메모 한글 인코딩).
 
 ### 자주 쓰는 명령 포인터
 - 로컬 실행: `.venv/bin/python run.py` (Windows 포트는 `windows/run_windows.py`).
@@ -122,6 +126,12 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   받아 리치 표로 붙일 수 있다(text 의 마크다운이 무시될 수 있음). 이는 도착지 앱 정책이라
   TableDown 통제 밖이며, "표 형식 붙여넣기를 잃지 않는다"는 이득과의 교환이다.
 
+- **Markdown에서 생성하는 HTML의 UTF-8 선언 유지 (2026-09-09)**: `markdown_table_to_html`의
+  `<meta charset="utf-8">`는 Apple 메모가 한글 인코딩을 잘못 추측하지 않도록 한다. Markdown 원문과
+  기존 Excel·웹 HTML은 보존한다. `tests/test_markdown_html_encoding_macos.py`는 실제 clipboard
+  writer(클립보드 기록기)와 독립 pasteboard(클립보드)를 거쳐 AppKit HTML importer(가져오기 기능)로
+  한글·이모지·특수문자를 확인한다. 단순 HTML 문자열 비교만으로 이 검증을 대체하지 말 것.
+
 ### 4. 표가 포함된 "문서" → text 에 마크다운 표 보강 + html 유지 (0.2.3)
 - 문단·헤딩·리스트 사이에 표가 섞인 문서(`html_has_content_outside_table` 가 True)는
   **표만 추출하면 안 된다** (나머지 텍스트가 통째로 소실됨 — 0.2.2 이전 버그).
@@ -145,6 +155,21 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
     </직급그룹>
   </표>
   ```
+- **일반 XML의 source metadata(출처 메타데이터)는 additive(추가형) root attribute로만 기록**:
+  Excel 직접 선택 export는 기존 v2 계층을 바꾸지 않고 루트에 `형식버전="2"`·`통합문서`·`시트`·
+  `주소`·`행수`·`열수`·`헤더행수`·`헤더기준="추정"`·`병합범위`·`제목수`·`제목N주소/값`·
+  `빈칸채움`·`빈칸채움기준`·`빈칸채움수`·`빈칸채움셀`을 추가한다.
+  값과 같은 immutable snapshot(불변 스냅샷)에서 만들고 metadata 때문에 Excel을 다시 읽지 말 것.
+  중첩 계층은 structural inference(구조 추론)이며 정확한 merge topology(병합 위상)의 source of
+  truth(진실의 원천)는 정렬된 `병합범위`다. 2열 이상에서만 선두 전체 폭 병합 제목을 계층에서 제외하고
+  제목 metadata로 보존하며, 1열의 세로 병합은 제목으로 보지 않는다. 헤더 없는 범위를 값 heuristic
+  (휴리스틱)으로 단정하지 말고 사용자가 헤더 행을 포함해 선택한다는 전제와 `헤더기준="추정"`을 유지한다.
+  빈·공백·중복 **가로 leaf(리프)** 헤더는 임의의 `colN`으로 바꾸지 않고 원문 `n`을 보존하며 모호한
+  열에만 1-based `i`를 추가한다. 빈칸 채움이 켜지면 적용 기준과 실제 생성값의 원본 단일 셀 A1 주소를
+  같은 root metadata에 남겨 원본값처럼 보이지 않게 하고, 꺼짐이면 수 0·빈 주소를 유지한다. `<메타>`
+  child(자식) 노드는 기존 표 XML 가드를 깨므로 넣지 말 것. 일반 XML도 셀 값 합계 5,000,000자·UTF-8
+  10MB 상한을 bounded serializer(제한 직렬화기)로 생성 중 적용하고, 초과 시 clipboard writer 전에
+  실패할 것.
 - **루트는 한글 `<표>`, 절대 `<table>`/`<tr>` 금지**: `<table>`(영문) 은 진짜 HTML 태그라, 이 XML
   텍스트가 HTML 로 렌더링되는 곳(브라우저·Obsidian 미리보기·리치텍스트)에 가면 HTML 표 파싱이
   걸려 비-table 자식을 **표 밖으로 쫓아내(foster-parenting)** 표가 텅 빈다. 한글 `표`/`행`/`열`/
@@ -192,6 +217,37 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   10,000셀·범위당 2,048셀이고, 초과/읽기 실패도 기존 수식 export를 막지 않고 일부 표시로 degrade한다.
   수식의 정적 참조값은 선택 영역 밖·다른 시트에서도 읽혀 clipboard XML에 들어간다는 privacy scope(개인정보 범위)를
   README·Windows PRIVACY와 동기화할 것. 외부 통합문서를 자동으로 열거나 참조를 재귀 추적하지 말 것.
+- **수식 XML의 해석 보조 metadata는 기존 core(핵심) 필드에 additive로만 추가**:
+  선택·참조 셀은 native type을 `값종류=blank|number|text|boolean|error`로 보존하고, 루트는
+  `계산모드`·`계산상태`·`계산결과상태`·`값기준="Excel현재원시값"`을 기록한다. Windows는
+  `Application.Calculation/CalculationState`, macOS는 calculation mode만 읽고 state는
+  `unavailable`로 둘 것. Windows의 `done`은 `snapshot_stable`, `calculating/pending`은
+  `calculation_incomplete`, `unknown`과 macOS `unavailable`은 `freshness_unverified`로 표시한다.
+  재계산을 호출하거나 freshness(최신성)를 추측하지 말 것. 표시값·숫자 서식·
+  병합 계층은 성능·정확성을 검증하기 전까지 수식 경로에서 만들지 않고 `표시정보상태="미포함"`·
+  `병합정보상태="미포함"`으로 명시한다. `값대입수식`은 설명식이므로
+  `값대입수식동등성="보장안함"`을 함께 기록한다. 부분 참조는 `참조상태="일부"`를 유지하면서
+  `참조누락이유`에 parser/read/limit 사유를 기록한다. 같은 exact target(정확히 같은 대상)은 export
+  호출 내부에서 `(sheet,address,row_count,column_count)`로 한 번만 읽고 256범위·10,000셀 한도도
+  unique target(고유 대상) 기준으로 계산한 뒤 모든 owner(소유 수식 셀)에 같은 immutable reference를
+  연결하되, XML에는 **각 owner 수식에 참조가 나타난 순서**로 배치한다. owner 수집에 list membership
+  scan(목록 포함 검사)을 써 10,000셀에서 O(n²)가 되지 않게 set을 병행하고, 겹치지만 다른 범위는
+  합치지 말며 전역 cache도 두지 말 것. macOS 원시값은 Excel `value2`로 읽어야 한다(`value`로
+  되돌리면 날짜·통화가 지역화된 표시값처럼 분류될 수 있음). 파생식 1,000,000자 한도 때문에 한 셀의
+  설명식을 생략하면 해당 `<셀>`에 `값대입수식상태="omitted_character_limit"`을 기록한다. 최종 XML
+  10MB는 tree(트리)를 전부 만든 뒤 검사하지 말고 bounded serializer(제한 직렬화기)로 생성 중 차단한다.
+  XML byte 한도 재시도에서 설명용 `값대입수식`만 생략할 수 있고 이때 루트에
+  `값대입수식상태="omitted_xml_size_limit"`을 반드시 기록한다. `값종류`·계산 상태·참조 누락 사유를
+  조용히 제거해 성공시키지 말 것.
+- **‘AI용 간결 복사’는 같은 수식 snapshot의 별도 출력 (2026-09-09)**:
+  `formula_selection_to_ai_xml`은 `<표범위 형식="AI간결수식" 형식버전="1">`을 생성하며, 기존
+  `formula_selection_to_xml`의 출력·단축키·기본 설정·읽기/크기 한도를 유지한다. 원본 선택 셀·값·
+  A1/R1C1·값 타입·계산 상태·부분 참조 사유를 보존하고, 정확히 같은 `(sheet,address)` 참조만
+  `<참조목록>`에 한 번 기록해 각 수식의 `<참조 ref="rN">`로 연결한다. 겹치지만 다른 주소인 범위와
+  수식별 참조 순서는 유지한다. 선택 안의 단순한 제목·항목을 `<맥락>`의 원본 셀 주소로 연결하고
+  `추정`/`미확인`을 표시한다. 맥락을 위해 주변 셀을 추가로 읽거나 재계산하지 않는다. 기존 export
+  gate(내보내기 실행 제한)와 새 복사 취소·쓰기 실패·종료·재시도 경로를 공유한다. 작은 표는 맥락 정보로
+  더 길어질 수 있으며 AI 정확도 향상을 보장하지 않는다.
 - **표 → XML (메뉴 `copy_as_xml`)은 Excel 직접 선택 방식 — `Cmd+C` 금지 전제**: 수식 XML 메뉴와
   동일하게 Excel desktop app의 현재 **단일 사각형 선택 영역**을 직접 읽는다. `excel_table.py`가
   서식 적용값(데이터 셀 원문 text의 유의미한 공백과 숫자·날짜·퍼센트·통화·사용자 지정 서식·오류값을 모두
@@ -216,6 +272,16 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   표시하지 않는다. writer 자체 실패는 성공으로 보고하지 않고 내용도 log에 남기지 않지만,
   `NSPasteboard.clearContents()` 뒤의 OS 쓰기 실패까지 atomic(원자적) 복구한다고 주장하지 말 것.
   이 동작을 HTML 유지로 되돌리지 말 것.
+- **명시적 export와 watcher는 같은 clipboard generation(클립보드 세대)을 경쟁 소비하지 않음**:
+  export active flag(활성 플래그)는 clipboard operation lock 안에서 시작하고, watcher는 외부 검사뿐
+  아니라 lock 획득 뒤에도 다시 확인해 active면 아무 형식도 읽거나 쓰지 않고 change count를 advance
+  (진행)하지 않는다. export가 새 clipboard 때문에 취소되면 다음 watcher tick이 그 generation을 정상
+  처리한다. 출력 초과·verified writer failure(검증 쓰기 실패)·사용자 clipboard 변경은 서로 다른
+  content-free(내용 비노출) 오류로 안내하고, clear 뒤 실패를 자동 재시도해 새 clipboard를 덮지 말 것.
+  watcher 자체도 source generation을 읽기 직전에 잡고 preserving writer에 expected change
+  count/sequence로 넘겨, 변환 중 도착한 더 새 외부 복사본을 이전 변환 결과로 덮거나 섞지 말 것.
+  macOS pasteboard에는 atomic compare-and-swap(원자적 비교 후 쓰기)이 없어 마지막 check→clear 사이의
+  극소 TOCTOU window(검사-비우기 창)는 남지만, 확인을 없애거나 generation을 실패 시 소비하지 말 것.
 - **병합 셀의 계층/다단 헤더 *구조* 보존은 `excel_table.py`→`html_table_to_model` 경로가 한다**:
   직접 읽은 Excel merge area(병합 영역)를 `rowspan`/`colspan` HTML로 합성한 뒤 기존 XML model parser에
   넣는다. 마크다운은 병합·계층을 *그릴* 수 없어, 다단 헤더는 리프 헤더 행이 본문으로 내려가는 평면 구조로 둔다 —
@@ -425,6 +491,12 @@ fallback 을 지킬 것(`register()`/`start()` 가 False 를 돌려줄 뿐 예�
 - **GitHub 배포(DMG)**: `NOTARY_PROFILE=tabledown-notary bash scripts/build_dmg.sh`
   (Developer ID 서명 + Apple 공증 + staple. 앱과 DMG **둘 다** 공증해야 함 — DMG 만
   staple 하면 "Record not found" 로 실패.)
+- **DMG 자체 서명·최종 검증 보완 (2026-09-09 기준)**: 현재 `scripts/build_dmg.sh`는 DMG 자체
+  서명을 생략하고 마지막 `spctl` 실패를 `|| true`로 무시한다. 배포 담당자는 DMG 생성 → Developer ID로
+  DMG 자체 서명 → DMG 공증 → staple(공증 티켓 부착) 순서를 별도로 완료하고, `codesign --verify`·
+  `xcrun stapler validate`·`spctl -a -t open --context context:primary-signature`의 성공을 직접 확인한다.
+  ZIP 재추출본과 DMG 내부 앱도 동기화 폴더 밖에서 `codesign --verify --deep --strict`와 Gatekeeper로
+  검증한다. v0.6.0/build 0.6.4는 이 보완 절차를 통과했다. 스크립트 자동화 수정은 후속 항목이다.
 - **Windows 빌드는 `--collect-all winsdk` 필수**(`windows/build_windows.ps1`): `startup_task` 가 쓰는
   `winsdk` 는 namespace 모듈을 lazy import 하고 코드가 native `_winrt.pyd` 에 있어 PyInstaller 정적 분석이
   둘 다 놓친다. 빠지면 빌드는 통과하지만 **로그인 토글이 패키지 빌드에서 조용히 사라진다**(import 실패 →
@@ -445,6 +517,9 @@ fallback 을 지킬 것(`register()`/`start()` 가 False 를 돌려줄 뿐 예�
 - **macOS 릴리스는 App Store 와 GitHub Release 에 같은 버전으로 동시 배포**(사용자 확정 2026-07-12):
   git 태그 `vX.Y.Z` + GitHub Release DMG(Latest) + App Store(.pkg) 업로드가 **한 세트**다. 셋 중 하나만
   올려 버전이 어긋나지 않게 할 것.
+- 배포 상태는 확인 시점과 함께 구분한다. TestFlight 내부 배포·App Store 심사 제출·App Store 사용자
+  공개·GitHub 공개를 각각 기록하며, 심사 승인 후 자동 공개 설정만으로 App Store 출시 완료라 쓰지 않는다.
+  태그 소스와 검증 후보의 일치, 공개 DMG·ZIP 재다운로드의 SHA-256, Latest 고정 링크를 확인한다.
 - git 태그 `vX.Y.Z`, GitHub Release 는 최신 버전을 Latest 로.
 - README 의 DMG 다운로드 링크는 `releases/latest/download/Tabledown.dmg` —
   **Latest 릴리스에 DMG 에셋이 반드시 있어야** 404 가 안 난다.

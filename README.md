@@ -237,7 +237,7 @@ Tabledown은 계정 생성, analytics(분석), 광고 추적, 위치 정보, 연
 
 ## 변경 이력
 
-- 2026-09-09: **macOS 0.6.0 정식 배포본 (빌드 0.6.4).** Apple Silicon용 DMG·ZIP의 서명·Apple 공증·Gatekeeper와 배포 후보 자동 검증 223개를 통과했다. [v0.6.0 설치 파일](https://github.com/yooongZa/tabledown/releases/tag/v0.6.0)을 제공하며, App Store는 심사 대기 중이고 승인되면 자동 공개된다. 확정된 한국어 소개 문구를 그대로 반영했다. Windows 설치 파일은 이번 배포에 포함하지 않는다.
+- 2026-09-09: **macOS 0.6.0 정식 배포본 (빌드 0.6.4).** Apple Silicon용 DMG·ZIP의 서명·Apple 공증·Gatekeeper와 배포 후보 자동 검증 223개를 통과했다. GitHub [v0.6.0 설치 파일](https://github.com/yooongZa/tabledown/releases/tag/v0.6.0)을 Latest로 공개했고, 실제 DMG·ZIP 다운로드의 크기·SHA-256과 고정 DMG 링크를 확인했다. 2026-09-09 최종 조회에서 App Store는 심사 대기 중이며 승인 후 자동 공개로 설정돼 있다. 확정된 한국어 소개 문구를 그대로 반영했다. Windows 설치 파일은 이번 배포에 포함하지 않는다.
 
 - 2026-09-09: **macOS 0.6.0 / TestFlight build 0.6.4 업로드.** Excel 계산을 AI에 질문할 때 제목·항목명과 계산에 쓰인 값을 함께 가져가는 새 ‘AI용 간결 복사’, 반복 내용 정리, Apple 메모 한글 표 붙여넣기 개선을 포함한다. 한국어·영어 TestFlight 설명은 표 옮기기·Excel에서 이어서 편집하기·자료 설명 준비 등 앱 전체의 사용 편의 중심으로 작성했다. 최종 제목은 “당신의 AI를 더 스마트하게 사용하세요.”이며 한국어 안내는 사용자가 확정한 원문을 반영했다. 배포 후보 자동 검증 223개와 패키지/Apple 검증을 통과했고, 기존 내부 테스트 그룹에서 테스트 가능 상태와 두 언어 설명 저장을 확인했다.
 
