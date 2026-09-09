@@ -60,10 +60,12 @@ hold.
 """
 from __future__ import annotations
 
+from collections import Counter
+from dataclasses import dataclass
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape, quoteattr
 
-from .formula_export import validate_xml_text
+from .formula_export import MAX_XML_BYTES, validate_xml_text
 
 # Root/row tag names that, on their own, are strong evidence of a table. They
 # let a single-row table through; otherwise at least two rows are required so a
@@ -83,6 +85,62 @@ _COL_TAG = "열"
 _GROUP_SUFFIX = "그룹"
 _NAME_ATTR = "이름"  # group label attribute (both vertical groups and 열그룹)
 _LEAF_ATTR = "n"     # 열 leaf header attribute
+_INDEX_ATTR = "i"    # 1-based source column index for ambiguous headers
+
+# Keep explicit general-table XML under the same practical clipboard/prompt
+# ceiling as formula XML.  This must be enforced while lines are appended:
+# headers are repeated in every data row, so checking only after ``join`` can
+# already have allocated hundreds of megabytes from a small Excel selection.
+MAX_TABLE_XML_BYTES = MAX_XML_BYTES
+
+
+class TableXmlTooLargeError(ValueError):
+    """The serialized general-table XML exceeded its bounded UTF-8 size."""
+
+
+@dataclass(frozen=True)
+class TableXmlTitle:
+    """One leading full-width title row omitted from the semantic row model."""
+
+    address: str
+    value: str
+
+
+@dataclass(frozen=True)
+class TableXmlMetadata:
+    """Source facts captured in the same immutable Excel table snapshot."""
+
+    workbook: str
+    sheet: str
+    address: str
+    row_count: int
+    column_count: int
+    header_row_count: int
+    merge_areas: tuple[str, ...] = ()
+    title_rows: tuple[TableXmlTitle, ...] = ()
+    header_basis: str = "추정"
+    blank_fill_enabled: bool = False
+    blank_fill_cells: tuple[str, ...] = ()
+    blank_fill_basis: str = "왼쪽키열_위우선_좌측보완"
+
+
+class _BoundedXmlLines(list[str]):
+    """Collect XML lines while enforcing the final UTF-8 byte limit."""
+
+    def __init__(self, max_bytes: int):
+        super().__init__()
+        self.max_bytes = max_bytes
+        self.byte_count = 0
+
+    def append(self, line: str) -> None:
+        added = len(line.encode("utf-8")) + (1 if self else 0)
+        if self.byte_count + added > self.max_bytes:
+            raise TableXmlTooLargeError("표 XML이 너무 큽니다")
+        super().append(line)
+        self.byte_count += added
+
+    def render(self) -> str:
+        return "\n".join(self)
 
 # v1 tags still recognised on input so already-copied v1 XML keeps round-tripping.
 _V1_GROUP_TAG = "group"
@@ -94,6 +152,8 @@ def model_to_xml(
     data_rows: list[list[str]],
     *,
     indent: str = "  ",
+    max_bytes: int | None = None,
+    metadata: TableXmlMetadata | None = None,
 ) -> str:
     """Render a table model as nested v2 XML (spec §3).
 
@@ -120,6 +180,8 @@ def model_to_xml(
     for row in [*header_rows, *data_rows]:
         for value in row:
             validate_xml_text(value)
+    if metadata is not None:
+        _validate_metadata(metadata)
 
     ncols = max(len(level) for level in header_rows)
     header_rows = [level + [""] * (ncols - len(level)) for level in header_rows]
@@ -128,11 +190,110 @@ def model_to_xml(
     # Build the horizontal column tree over the *data* columns only, so a key
     # column (same label on every level) is not mistaken for a 1-column group.
     data_columns = _build_columns(header_rows, data_cols, 0)
+    leaf_names = [_leaf_name(header_rows, col) for col in data_cols]
+    duplicate_names = {
+        name for name, count in Counter(leaf_names).items() if count > 1
+    }
+    indexed_columns = {
+        col
+        for col, name in zip(data_cols, leaf_names, strict=True)
+        if not name.strip() or name in duplicate_names
+    }
 
-    lines = [f"<{_ROOT_TAG}>"]
-    _emit_rows(lines, key_headers, data_columns, data_rows, 0, len(data_rows), 0, indent, 1)
+    if max_bytes is None:
+        max_bytes = MAX_TABLE_XML_BYTES
+    if type(max_bytes) is not int or max_bytes <= 0:
+        raise ValueError("XML 최대 크기는 양의 정수여야 합니다")
+
+    lines = _BoundedXmlLines(max_bytes)
+    lines.append(_root_opening_tag(metadata))
+    _emit_rows(
+        lines,
+        key_headers,
+        data_columns,
+        data_rows,
+        0,
+        len(data_rows),
+        0,
+        indent,
+        1,
+        indexed_columns,
+    )
     lines.append(f"</{_ROOT_TAG}>")
-    return "\n".join(lines)
+    return lines.render()
+
+
+def _validate_metadata(metadata: TableXmlMetadata) -> None:
+    """Validate additive source metadata before emitting any XML."""
+
+    for value in (
+        metadata.workbook,
+        metadata.sheet,
+        metadata.address,
+        metadata.header_basis,
+        metadata.blank_fill_basis,
+        *metadata.merge_areas,
+        *metadata.blank_fill_cells,
+    ):
+        validate_xml_text(value)
+    for title in metadata.title_rows:
+        validate_xml_text(title.address)
+        validate_xml_text(title.value)
+    if (
+        type(metadata.row_count) is not int
+        or type(metadata.column_count) is not int
+        or type(metadata.header_row_count) is not int
+        or metadata.row_count <= 0
+        or metadata.column_count <= 0
+        or metadata.header_row_count <= 0
+        or metadata.header_row_count > metadata.row_count
+    ):
+        raise ValueError("표 원본 메타데이터가 올바르지 않습니다")
+    if (
+        type(metadata.blank_fill_enabled) is not bool
+        or (not metadata.blank_fill_enabled and metadata.blank_fill_cells)
+        or any(not address for address in metadata.blank_fill_cells)
+        or len(set(metadata.blank_fill_cells)) != len(metadata.blank_fill_cells)
+    ):
+        raise ValueError("빈칸 채움 메타데이터가 올바르지 않습니다")
+
+
+def _root_opening_tag(metadata: TableXmlMetadata | None) -> str:
+    """Return the v2 root, optionally enriched with same-snapshot source facts."""
+
+    if metadata is None:
+        return f"<{_ROOT_TAG}>"
+    attributes = [
+        ("형식버전", "2"),
+        ("통합문서", metadata.workbook),
+        ("시트", metadata.sheet),
+        ("주소", metadata.address),
+        ("행수", str(metadata.row_count)),
+        ("열수", str(metadata.column_count)),
+        ("헤더행수", str(metadata.header_row_count)),
+        ("헤더기준", metadata.header_basis),
+        ("병합범위", " ".join(metadata.merge_areas)),
+        ("제목수", str(len(metadata.title_rows))),
+    ]
+    for index, title in enumerate(metadata.title_rows, start=1):
+        attributes.extend(
+            (
+                (f"제목{index}주소", title.address),
+                (f"제목{index}값", title.value),
+            )
+        )
+    attributes.extend(
+        (
+            ("빈칸채움", "적용" if metadata.blank_fill_enabled else "미적용"),
+            ("빈칸채움기준", metadata.blank_fill_basis),
+            ("빈칸채움수", str(len(metadata.blank_fill_cells))),
+            ("빈칸채움셀", " ".join(metadata.blank_fill_cells)),
+        )
+    )
+    rendered = " ".join(
+        f"{name}={quoteattr(value)}" for name, value in attributes
+    )
+    return f"<{_ROOT_TAG} {rendered}>"
 
 
 def is_table_xml(text: str) -> bool:
@@ -292,8 +453,8 @@ def _column_is_leaf(header_rows: list[list[str]], col: int) -> bool:
     """
     leaf = _leaf_name(header_rows, col)
     for level in header_rows[:-1]:
-        label = (level[col] if col < len(level) else "").strip()
-        if label and label != leaf:
+        label = level[col] if col < len(level) else ""
+        if label.strip() and label != leaf:
             return False
     return True
 
@@ -313,6 +474,7 @@ def _emit_rows(
     key_level: int,
     indent: str,
     depth: int,
+    indexed_columns: set[int],
 ) -> None:
     """Emit rows[start:end] as nested vertical groups then ``<행>`` elements.
 
@@ -333,7 +495,14 @@ def _emit_rows(
                 lines.append(f"{pad}<{_ROW_TAG} {last_attr}={quoteattr(value)}>")
             else:
                 lines.append(f"{pad}<{_ROW_TAG}>")
-            _emit_columns(lines, data_columns, row, indent, depth + 1)
+            _emit_columns(
+                lines,
+                data_columns,
+                row,
+                indent,
+                depth + 1,
+                indexed_columns,
+            )
             lines.append(f"{pad}</{_ROW_TAG}>")
         return
 
@@ -352,7 +521,7 @@ def _emit_rows(
         lines.append(f"{pad}<{header}{_GROUP_SUFFIX} {_NAME_ATTR}={quoteattr(value)}>")
         _emit_rows(
             lines, key_headers, data_columns, data_rows,
-            r, run_end, key_level + 1, indent, depth + 1,
+            r, run_end, key_level + 1, indent, depth + 1, indexed_columns,
         )
         lines.append(f"{pad}</{header}{_GROUP_SUFFIX}>")
         r = run_end
@@ -365,48 +534,85 @@ def _build_columns(
 
     Returns nodes that are either ``("leaf", col_index, name)`` or
     ``("group", name, children)``. Consecutive columns sharing the same label at
-    ``level`` form a group; a column with no label at ``level`` (e.g. a key
-    column under an empty group cell) is a leaf named by its deepest label.
+    ``level`` form a group. An unnamed level is skipped as one consecutive
+    column run, preserving any named groups beneath it. Columns carrying only
+    their leaf label beneath an unnamed level retain the existing leaf shape.
     """
     nodes: list[tuple] = []
     i = 0
     last_level = level >= len(header_rows) - 1
     while i < len(cols):
         col = cols[i]
-        label = header_rows[level][col].strip() if level < len(header_rows) else ""
-        if not label or last_level:
+        raw_label = header_rows[level][col] if level < len(header_rows) else ""
+        if last_level:
             nodes.append(("leaf", col, _leaf_name(header_rows, col)))
             i += 1
+        elif not raw_label.strip():
+            j = i + 1
+            while j < len(cols) and not header_rows[level][cols[j]].strip():
+                j += 1
+            unnamed_cols = cols[i:j]
+            lower_headers = header_rows[level + 1:]
+            if all(_column_is_leaf(lower_headers, c) for c in unnamed_cols):
+                nodes.extend(
+                    ("leaf", c, _leaf_name(header_rows, c))
+                    for c in unnamed_cols
+                )
+            else:
+                # Descending one column at a time would split a real group
+                # spanning several columns. Keep the entire unnamed run so
+                # the lower level can recover its own group boundaries.
+                nodes.extend(_build_columns(header_rows, unnamed_cols, level + 1))
+            i = j
         else:
             same = [col]
             j = i + 1
-            while j < len(cols) and header_rows[level][cols[j]].strip() == label:
+            while (
+                j < len(cols)
+                and header_rows[level][cols[j]] == raw_label
+            ):
                 same.append(cols[j])
                 j += 1
-            nodes.append(("group", label, _build_columns(header_rows, same, level + 1)))
+            nodes.append(
+                (
+                    "group",
+                    raw_label,
+                    _build_columns(header_rows, same, level + 1),
+                )
+            )
             i = j
     return nodes
 
 
 def _leaf_name(header_rows: list[list[str]], col: int) -> str:
-    """The deepest non-empty header label for a column (its leaf name)."""
-    for level in reversed(header_rows):
-        value = level[col].strip()
-        if value:
-            return value
-    return f"col{col + 1}"
+    """Return the exact deepest header cell, including an intentional blank."""
+
+    if not header_rows or col >= len(header_rows[-1]):
+        return ""
+    return header_rows[-1][col]
 
 
 def _emit_columns(
-    lines: list[str], columns: list[tuple], row: list[str], indent: str, depth: int
+    lines: list[str],
+    columns: list[tuple],
+    row: list[str],
+    indent: str,
+    depth: int,
+    indexed_columns: set[int],
 ) -> None:
     """Emit the horizontal column tree for one row: ``<열그룹>`` / ``<열>``."""
     for node in columns:
         if node[0] == "leaf":
             _, col, name = node
             value = row[col] if col < len(row) else ""
+            index_attribute = (
+                f" {_INDEX_ATTR}={quoteattr(str(col + 1))}"
+                if col in indexed_columns
+                else ""
+            )
             lines.append(
-                f"{indent * depth}<{_COL_TAG} {_LEAF_ATTR}={quoteattr(name)}>"
+                f"{indent * depth}<{_COL_TAG}{index_attribute} "
+                f"{_LEAF_ATTR}={quoteattr(name)}>"
                 f"{escape(value)}</{_COL_TAG}>"
             )
         else:
@@ -414,7 +620,14 @@ def _emit_columns(
             lines.append(
                 f"{indent * depth}<{_COL_GROUP_TAG} {_NAME_ATTR}={quoteattr(name)}>"
             )
-            _emit_columns(lines, children, row, indent, depth + 1)
+            _emit_columns(
+                lines,
+                children,
+                row,
+                indent,
+                depth + 1,
+                indexed_columns,
+            )
             lines.append(f"{indent * depth}</{_COL_GROUP_TAG}>")
 
 
@@ -529,7 +742,12 @@ def _parse_row_tree(row: ET.Element) -> list[tuple]:
             label = child.get(_NAME_ATTR) or child.get("name") or name
             nodes.append(("group", label, _parse_row_tree(child)))
         else:  # 열 / cell leaf
-            label = child.get(_LEAF_ATTR) or child.get("name") or name
+            if _LEAF_ATTR in child.attrib:
+                label = child.attrib[_LEAF_ATTR]
+            elif "name" in child.attrib:
+                label = child.attrib["name"]
+            else:
+                label = name
             nodes.append(("leaf", label, []))
     return nodes
 

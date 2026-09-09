@@ -9,6 +9,7 @@ from __future__ import annotations
 import ctypes
 from ctypes import wintypes
 from dataclasses import dataclass, replace
+from decimal import Decimal
 from typing import Any, Iterator
 
 from tablemark.converter.formula_export import (
@@ -21,13 +22,21 @@ from tablemark.converter.formula_export import (
     ExcelFormulaSelection,
     ExcelReferenceCell,
     ExcelSelectionCell,
-    extract_formula_reference_targets,
+    FormulaReferenceTarget,
+    analyze_formula_references,
+    normalize_excel_number_text,
 )
 
 
 MAX_SELECTION_CELLS = 10_000
 MAX_REFERENCE_RANGE_CELLS = 2_048
 XL_CELL_TYPE_FORMULAS = -4123
+XL_CALCULATION_AUTOMATIC = -4105
+XL_CALCULATION_MANUAL = -4135
+XL_CALCULATION_SEMIAUTOMATIC = 2
+XL_CALCULATION_STATE_DONE = 0
+XL_CALCULATION_STATE_CALCULATING = 1
+XL_CALCULATION_STATE_PENDING = 2
 
 SUCCESS = "success"
 EXCEL_NOT_RUNNING = "excel_not_running"
@@ -71,6 +80,14 @@ class _FormulaMetadata:
     address: str
     formula_a1: str
     formula_r1c1: str | None
+
+
+@dataclass(frozen=True)
+class _ExcelValue:
+    """One Value2 scalar normalized for XML plus its native value kind."""
+
+    text: str | None
+    kind: str
 
 
 @dataclass(frozen=True)
@@ -346,6 +363,8 @@ def _read_initialized(
         row_count=row_count,
         column_count=column_count,
         cells=cells,
+        calculation_mode=_calculation_mode(excel),
+        calculation_state=_calculation_state(excel),
     )
     selection_payload = _enrich_formula_references(
         workbook,
@@ -381,88 +400,130 @@ def _enrich_formula_references(
     *,
     max_value_characters: int,
 ) -> ExcelFormulaSelection:
-    """Attach bounded static A1 reference values without changing Excel UI state."""
+    """Read each exact static target once and attach it to every owner."""
 
-    references_by_owner: dict[str, list[ExcelFormulaReference]] = {}
-    completeness: dict[str, bool] = {}
+    references_by_target: dict[
+        tuple[str, str, int, int],
+        ExcelFormulaReference,
+    ] = {}
+    owner_target_order: dict[str, list[tuple[str, str, int, int]]] = {}
+    issue_lists: dict[str, list[str]] = {}
+    target_owners: dict[
+        tuple[str, str, int, int],
+        tuple[FormulaReferenceTarget, list[str], set[str]],
+    ] = {}
+    for cell in selection.cells:
+        if cell.formula_a1 is None:
+            continue
+        targets, parser_issues = analyze_formula_references(
+            cell.formula_a1, selection.sheet
+        )
+        issue_lists[cell.address] = list(parser_issues)
+        ordered_keys = owner_target_order.setdefault(cell.address, [])
+        seen_keys: set[tuple[str, str, int, int]] = set()
+        for target in targets:
+            key = (
+                target.sheet,
+                target.address,
+                target.row_count,
+                target.column_count,
+            )
+            if key not in seen_keys:
+                ordered_keys.append(key)
+                seen_keys.add(key)
+            if key not in target_owners:
+                target_owners[key] = (target, [], set())
+            owners, owner_set = target_owners[key][1:]
+            if cell.address not in owner_set:
+                owner_set.add(cell.address)
+                owners.append(cell.address)
+
+    def add_issue(owners: list[str], issue: str) -> None:
+        for owner in owners:
+            owner_issues = issue_lists.setdefault(owner, [])
+            if issue not in owner_issues:
+                owner_issues.append(issue)
+
     reference_range_count = 0
     reference_cell_count = 0
     value_character_count = sum(
         len(cell.value) for cell in selection.cells if cell.value is not None
     )
-
-    for cell in selection.cells:
-        if cell.formula_a1 is None:
+    for key, (target, owners, _owner_set) in target_owners.items():
+        target_cell_count = target.row_count * target.column_count
+        if reference_range_count >= MAX_REFERENCE_RANGES:
+            add_issue(owners, "range_count_limit")
             continue
-        targets, complete = extract_formula_reference_targets(
-            cell.formula_a1, selection.sheet
-        )
-        completeness[cell.address] = complete
-        for target in targets:
-            target_cell_count = target.row_count * target.column_count
+        if target_cell_count > MAX_REFERENCE_RANGE_CELLS:
+            add_issue(owners, "range_size_limit")
+            continue
+        if reference_cell_count + target_cell_count > MAX_REFERENCE_CELLS:
+            add_issue(owners, "cell_count_limit")
+            continue
+        reference_range_count += 1
+        reference_cell_count += target_cell_count
+        try:
+            worksheet = _worksheet_by_name(workbook, target.sheet)
+            target_range = _range_by_address(worksheet, target.address)
             if (
-                reference_range_count >= MAX_REFERENCE_RANGES
-                or target_cell_count > MAX_REFERENCE_RANGE_CELLS
-                or reference_cell_count + target_cell_count > MAX_REFERENCE_CELLS
+                _range_count(target_range) != target_cell_count
+                or _range_count(target_range.Rows) != target.row_count
+                or _range_count(target_range.Columns) != target.column_count
+                or str(target_range.Address) != target.address
             ):
-                completeness[cell.address] = False
-                continue
-            reference_range_count += 1
-            reference_cell_count += target_cell_count
-            try:
-                worksheet = _worksheet_by_name(workbook, target.sheet)
-                target_range = _range_by_address(worksheet, target.address)
-                if (
-                    _range_count(target_range) != target_cell_count
-                    or _range_count(target_range.Rows) != target.row_count
-                    or _range_count(target_range.Columns) != target.column_count
-                    or str(target_range.Address) != target.address
-                ):
-                    raise _FormulaSnapshotChanged
-                values = _read_bulk_values(
-                    target_range,
-                    row_count=target.row_count,
-                    column_count=target.column_count,
-                    max_value_characters=max_value_characters,
-                )
-            except Exception:  # noqa: BLE001 - enrichment never exposes COM detail
-                completeness[cell.address] = False
-                continue
-
-            candidate_characters = value_character_count + sum(
-                len(value) for value in values if value is not None
+                raise _FormulaSnapshotChanged
+            values = _read_bulk_values(
+                target_range,
+                row_count=target.row_count,
+                column_count=target.column_count,
+                max_value_characters=max_value_characters,
             )
-            if candidate_characters > max_value_characters:
-                completeness[cell.address] = False
-                continue
-            value_character_count = candidate_characters
             start_row = int(target_range.Row)
             start_column = int(target_range.Column)
-            reference_cells = tuple(
-                ExcelReferenceCell(
-                    _absolute_address(
-                        start_row + (index // target.column_count),
-                        start_column + (index % target.column_count),
-                    ),
-                    value,
-                )
-                for index, value in enumerate(values)
+        except _FormulaTextTooLarge:
+            add_issue(owners, "value_size_limit")
+            continue
+        except Exception:  # noqa: BLE001 - enrichment never exposes COM detail
+            add_issue(owners, "read_failed")
+            continue
+
+        candidate_characters = value_character_count + sum(
+            len(value.text) for value in values if value.text is not None
+        )
+        if candidate_characters > max_value_characters:
+            add_issue(owners, "value_size_limit")
+            continue
+        value_character_count = candidate_characters
+        reference_cells = tuple(
+            ExcelReferenceCell(
+                _absolute_address(
+                    start_row + (index // target.column_count),
+                    start_column + (index % target.column_count),
+                ),
+                value.text,
+                value.kind,
             )
-            references_by_owner.setdefault(cell.address, []).append(
-                ExcelFormulaReference(
-                    sheet=target.sheet,
-                    address=target.address,
-                    cells=reference_cells,
-                )
-            )
+            for index, value in enumerate(values)
+        )
+        reference = ExcelFormulaReference(
+            sheet=target.sheet,
+            address=target.address,
+            cells=reference_cells,
+        )
+        references_by_target[key] = reference
 
     return replace(
         selection,
         cells=tuple(
             replace(
                 cell,
-                references=tuple(references_by_owner.get(cell.address, ())),
-                references_complete=completeness.get(cell.address, True),
+                references=tuple(
+                    references_by_target[key]
+                    for key in owner_target_order.get(cell.address, ())
+                    if key in references_by_target
+                ),
+                references_complete=not issue_lists.get(cell.address),
+                reference_issues=tuple(issue_lists.get(cell.address, ())),
             )
             if cell.formula_a1 is not None
             else cell
@@ -524,7 +585,7 @@ def _read_bulk_values(
     row_count: int,
     column_count: int,
     max_value_characters: int,
-) -> tuple[str | None, ...]:
+) -> tuple[_ExcelValue, ...]:
     """Return one bulk ``Range.Value2`` snapshot flattened row-major."""
 
     raw_values = selection.Value2
@@ -545,30 +606,72 @@ def _read_bulk_values(
         raise _FormulaSnapshotChanged
 
     value_characters = 0
-    values: list[str | None] = []
+    values: list[_ExcelValue] = []
     for value in flattened:
-        text = _value_to_text(value)
-        value_characters += len(text or "")
+        converted = _value_to_excel_value(value)
+        value_characters += len(converted.text or "")
         if value_characters > max_value_characters:
             raise _FormulaTextTooLarge
-        values.append(text)
+        values.append(converted)
     return tuple(values)
 
 
 def _value_to_text(value: Any) -> str | None:
     """Convert one Value2 result, including Excel CVErr HRESULTs, to text."""
 
+    return _value_to_excel_value(value).text
+
+
+def _value_to_excel_value(value: Any) -> _ExcelValue:
+    """Preserve native type so numeric-looking text is never normalized."""
+
     if value is None:
-        return None
+        return _ExcelValue(None, "blank")
+    if type(value) is bool:
+        return _ExcelValue(str(value), "boolean")
     if type(value) is int:
         unsigned = value & 0xFFFFFFFF
         if unsigned & 0xFFFF0000 == _EXCEL_ERROR_HRESULT_PREFIX:
-            return _EXCEL_ERROR_TEXT_BY_CODE.get(unsigned & 0xFFFF, "#ERROR")
-    return str(value)
+            return _ExcelValue(
+                _EXCEL_ERROR_TEXT_BY_CODE.get(unsigned & 0xFFFF, "#ERROR"),
+                "error",
+            )
+        return _ExcelValue(str(value), "number")
+    if type(value) is float or isinstance(value, Decimal):
+        return _ExcelValue(normalize_excel_number_text(str(value)), "number")
+    return _ExcelValue(str(value), "text")
+
+
+def _calculation_mode(excel: Any) -> str:
+    """Read Excel's calculation mode without making export availability depend on it."""
+
+    try:
+        value = int(excel.Calculation)
+    except Exception:  # noqa: BLE001 - additive metadata may be unavailable
+        return "unknown"
+    return {
+        XL_CALCULATION_AUTOMATIC: "automatic",
+        XL_CALCULATION_MANUAL: "manual",
+        XL_CALCULATION_SEMIAUTOMATIC: "semiautomatic",
+    }.get(value, "unknown")
+
+
+def _calculation_state(excel: Any) -> str:
+    """Read Excel's current calculation state without triggering recalculation."""
+
+    try:
+        value = int(excel.CalculationState)
+    except Exception:  # noqa: BLE001 - older COM bridges may not expose it
+        return "unknown"
+    return {
+        XL_CALCULATION_STATE_DONE: "done",
+        XL_CALCULATION_STATE_CALCULATING: "calculating",
+        XL_CALCULATION_STATE_PENDING: "pending",
+    }.get(value, "unknown")
 
 
 def _join_selection_cells(
-    values: tuple[str | None, ...],
+    values: tuple[_ExcelValue, ...],
     *,
     formula_cells: tuple[_FormulaMetadata, ...],
     row_count: int,
@@ -594,11 +697,12 @@ def _join_selection_cells(
         cells.append(
             ExcelSelectionCell(
                 address=address,
-                value=value,
+                value=value.text,
                 formula_a1=formula.formula_a1 if formula is not None else None,
                 formula_r1c1=(
                     formula.formula_r1c1 if formula is not None else None
                 ),
+                value_kind=value.kind,
             )
         )
     if formulas_by_address or len(cells) != row_count * column_count:

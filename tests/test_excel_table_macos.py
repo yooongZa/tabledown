@@ -9,10 +9,16 @@ import xml.etree.ElementTree as ET
 from Foundation import NSAppleScript
 
 from tablemark.converter.html_to_md import html_table_to_model
-from tablemark.converter.table_xml import model_to_xml
+from tablemark.converter.table_xml import (
+    TableXmlTooLargeError,
+    model_to_xml,
+    table_xml_to_model,
+)
 from tablemark.excel_formula import (
     _AE_LIST_DESCRIPTOR_TYPE,
     _descriptor_to_python,
+    AUTOMATION_DENIED,
+    NSAppleScriptExecutor,
     DISPLAY_OVERFLOW,
     EXCEL_NOT_RUNNING,
     EXECUTION_FAILED,
@@ -32,6 +38,8 @@ from tablemark.excel_table import (
     ExcelTableSelection,
     excel_table_selection_to_html,
     excel_table_selection_to_model,
+    excel_table_selection_to_model_with_sources,
+    excel_table_selection_xml_metadata,
     parse_excel_table_result,
     read_selected_excel_table,
     read_stable_selected_excel_table,
@@ -85,6 +93,114 @@ class FakeExecutor:
         if not self.payloads:
             raise AssertionError("unexpected executor call")
         return self.payloads.pop(0)
+
+
+class ExcelTableReadFailureClassificationTests(unittest.TestCase):
+    @staticmethod
+    def _script_result(*, read_error=None, capture_error=None,
+                       verification_error=None, changed=None):
+        # Execute the production AppleScript control flow with its Excel reads
+        # replaced by deterministic inputs. No tell/application statement or
+        # cell-reading handler remains, so this never contacts a running Excel.
+        start = EXCEL_TABLE_SCRIPT.index("        try\n            set workbookName")
+        end = EXCEL_TABLE_SCRIPT.index("\n    end tell\nend using terms from", start)
+        body = EXCEL_TABLE_SCRIPT[start:end]
+        read_start = body.index("            set compactValues")
+        read_end = body.index("\n        on error", read_start)
+        read_body = (
+            f"            error number {read_error}"
+            if read_error is not None else
+            '            set valueKinds to "vvvv"\n'
+            f'            set valueBlob to "H{_VALUE_DELIMITER}V{_VALUE_DELIMITER}A{_VALUE_DELIMITER}1"\n'
+            '            set mergedAddresses to {}'
+        )
+        body = body[:read_start] + read_body + body[read_end:]
+        replacements = {
+            "set workbookName to name of selectedWorkbook as text": (
+                f"error number {capture_error}" if capture_error is not None
+                else 'set workbookName to "Book.xlsx"'
+            ),
+            "set sheetName to name of selectedSheet as text": 'set sheetName to "Sheet1"',
+            "set selectionAddress to get address selectedRange row absolute true column absolute true reference style A1": 'set selectionAddress to "$A$1:$B$2"',
+            "set currentWorkbookName to name of active workbook as text": (
+                f"error number {verification_error}" if verification_error is not None
+                else 'set currentWorkbookName to "' + ("Other.xlsx" if changed == "workbook" else "Book.xlsx") + '"'
+            ),
+            "set currentSheetName to name of active sheet as text": 'set currentSheetName to "' + ("Other" if changed == "sheet" else "Sheet1") + '"',
+            "set currentRange to selection": 'set currentRange to "stub"',
+            "set currentAreas to get areas of currentRange": "set currentAreas to " + ("{1, 2}" if changed == "areas" else "{1}"),
+            "set currentAddress to get address currentRange row absolute true column absolute true reference style A1": 'set currentAddress to "' + ("$C$1:$D$2" if changed == "address" else "$A$1:$B$2") + '"',
+            "count of rows of currentRange": "3" if changed == "rows" else "2",
+            "count of columns of currentRange": "3" if changed == "columns" else "2",
+        }
+        for original, replacement in replacements.items():
+            if body.count(original) != 1:
+                raise AssertionError(f"production boundary changed: {original}")
+            body = body.replace(original, replacement)
+        if "tell application" in body or "using terms" in body:
+            raise AssertionError("unexpected native application access")
+        return NSAppleScriptExecutor().run(
+            "set selectedRowCount to 2\nset selectedColumnCount to 2\n" + body
+        )
+
+    def test_normal_read_retains_payload_and_two_snapshot_success(self):
+        payload = self._script_result()
+        executor = FakeExecutor([payload, payload])
+
+        selection = read_stable_selected_excel_table(executor)
+
+        self.assertEqual(selection.values, ("H", "V", "A", "1"))
+        self.assertEqual(len(executor.sources), 2)
+
+    def test_failed_read_with_confirmed_identity_change_is_retryable(self):
+        for changed in ("workbook", "sheet", "address", "areas", "rows", "columns"):
+            with self.subTest(changed=changed):
+                payload = self._script_result(read_error=-2700, changed=changed)
+                self.assertEqual(payload, ["error", SELECTION_CHANGED])
+                stable = self._script_result()
+                executor = FakeExecutor([payload, stable, stable])
+
+                selection = read_stable_selected_excel_table(executor)
+
+                self.assertEqual(selection.values, ("H", "V", "A", "1"))
+                self.assertEqual(len(executor.sources), 3)
+
+    def test_failed_read_with_same_identity_fails_without_retry(self):
+        payload = self._script_result(read_error=-2700)
+        executor = FakeExecutor([payload])
+
+        with self.assertRaisesRegex(ExcelFormulaError, EXECUTION_FAILED):
+            read_stable_selected_excel_table(executor)
+
+        self.assertEqual(len(executor.sources), 1)
+
+    def test_unknown_identity_keeps_original_failure_classification(self):
+        for arguments, expected in (
+            ({"capture_error": -2700}, EXECUTION_FAILED),
+            ({"read_error": -2700, "verification_error": -2700}, EXECUTION_FAILED),
+            ({"verification_error": -2700}, SELECTION_CHANGED),
+        ):
+            with self.subTest(arguments=arguments):
+                self.assertEqual(self._script_result(**arguments), ["error", expected])
+
+    def test_automation_denial_remains_fatal_at_each_read_stage(self):
+        for stage in ("capture_error", "read_error", "verification_error"):
+            with self.subTest(stage=stage):
+                with self.assertRaisesRegex(ExcelFormulaError, AUTOMATION_DENIED):
+                    self._script_result(**{stage: -1743})
+                executor = FakeExecutor(error=ExcelFormulaError(AUTOMATION_DENIED))
+                with self.assertRaisesRegex(ExcelFormulaError, AUTOMATION_DENIED):
+                    read_stable_selected_excel_table(executor)
+                self.assertEqual(len(executor.sources), 1)
+
+    def test_repeated_failed_reads_with_changed_identity_stop_after_three(self):
+        payload = self._script_result(read_error=-2700, changed="address")
+        executor = FakeExecutor([payload, payload, payload])
+
+        with self.assertRaisesRegex(ExcelFormulaError, SELECTION_CHANGED):
+            read_stable_selected_excel_table(executor)
+
+        self.assertEqual(len(executor.sources), 3)
 
 
 class ExcelTableReaderTests(unittest.TestCase):
@@ -413,6 +529,362 @@ class ExcelTableHtmlBridgeTests(unittest.TestCase):
             ["  ACME   Inc.  ", "literal <br> and <br/>", "첫째\n둘째"],
         )
         self.assertIn("literal &lt;br&gt; and &lt;br/&gt;", xml)
+
+    def test_model_source_grid_tracks_original_cells_after_header_inference(self):
+        selection = self._selection(
+            [
+                "그룹",
+                "항목",
+                "값",
+                "A",
+                "x",
+                "1",
+                None,
+                "y",
+                "2",
+            ],
+            address="$A$1:$C$3",
+            rows=3,
+            columns=3,
+        )
+
+        headers, rows, source_addresses = (
+            excel_table_selection_to_model_with_sources(selection)
+        )
+
+        self.assertEqual(headers, [["그룹", "항목", "값"]])
+        self.assertEqual(rows, [["A", "x", "1"], ["", "y", "2"]])
+        self.assertEqual(
+            source_addresses,
+            [
+                ["$A$2", "$B$2", "$C$2"],
+                ["$A$3", "$B$3", "$C$3"],
+            ],
+        )
+
+        titled = self._selection(
+            [
+                "2026 실적",
+                None,
+                None,
+                "그룹",
+                "항목",
+                "값",
+                "A",
+                "x",
+                "1",
+                None,
+                "y",
+                "2",
+            ],
+            address="$A$1:$C$4",
+            rows=4,
+            columns=3,
+            merges=("$A$1:$C$1",),
+        )
+        _, titled_rows, titled_sources = (
+            excel_table_selection_to_model_with_sources(titled)
+        )
+        self.assertEqual(titled_rows, [["A", "x", "1"], ["", "y", "2"]])
+        self.assertEqual(
+            titled_sources,
+            [
+                ["$A$3", "$B$3", "$C$3"],
+                ["$A$4", "$B$4", "$C$4"],
+            ],
+        )
+
+    def test_xml_metadata_preserves_source_title_and_exact_merge_topology(self):
+        selection = self._selection(
+            [
+                "2026 실적",
+                None,
+                None,
+                "직급",
+                "1분기",
+                None,
+                "부장",
+                "10",
+                "20",
+            ],
+            address="$A$1:$C$3",
+            rows=3,
+            columns=3,
+            merges=("$A$1:$C$1", "$B$2:$C$2"),
+        )
+        headers, rows = excel_table_selection_to_model(selection)
+
+        xml = model_to_xml(
+            headers,
+            rows,
+            metadata=excel_table_selection_xml_metadata(selection, headers),
+        )
+        root = ET.fromstring(xml)
+
+        self.assertEqual(root.attrib["형식버전"], "2")
+        self.assertEqual(root.attrib["통합문서"], "Book.xlsx")
+        self.assertEqual(root.attrib["시트"], "Sheet1")
+        self.assertEqual(root.attrib["주소"], "$A$1:$C$3")
+        self.assertEqual(root.attrib["헤더행수"], "1")
+        self.assertEqual(
+            root.attrib["병합범위"], "$A$1:$C$1 $B$2:$C$2"
+        )
+        self.assertEqual(root.attrib["제목수"], "1")
+        self.assertEqual(root.attrib["제목1주소"], "$A$1:$C$1")
+        self.assertEqual(root.attrib["제목1값"], "2026 실적")
+        self.assertEqual(root.attrib["빈칸채움"], "미적용")
+        self.assertEqual(root.attrib["빈칸채움수"], "0")
+        self.assertEqual(root.attrib["빈칸채움셀"], "")
+
+        repeated = self._selection(
+            selection.values,
+            address=selection.address,
+            rows=selection.row_count,
+            columns=selection.column_count,
+        )
+        repeated_headers, repeated_rows = excel_table_selection_to_model(repeated)
+        repeated_xml = model_to_xml(
+            repeated_headers,
+            repeated_rows,
+            metadata=excel_table_selection_xml_metadata(
+                repeated, repeated_headers
+            ),
+        )
+        self.assertNotEqual(xml, repeated_xml)
+        self.assertEqual(ET.fromstring(repeated_xml).attrib["병합범위"], "")
+
+        filled_xml = model_to_xml(
+            headers,
+            rows,
+            metadata=excel_table_selection_xml_metadata(
+                selection,
+                headers,
+                blank_fill_enabled=True,
+                blank_fill_cells=("$A$3",),
+            ),
+        )
+        filled_root = ET.fromstring(filled_xml)
+        self.assertEqual(filled_root.attrib["빈칸채움"], "적용")
+        self.assertEqual(
+            filled_root.attrib["빈칸채움기준"],
+            "왼쪽키열_위우선_좌측보완",
+        )
+        self.assertEqual(filled_root.attrib["빈칸채움수"], "1")
+        self.assertEqual(filled_root.attrib["빈칸채움셀"], "$A$3")
+
+    def test_blank_whitespace_and_duplicate_headers_roundtrip_exactly(self):
+        headers = [["", " ID ", "값", "값"]]
+        rows = [["A", "B", "10", "20"]]
+
+        xml = model_to_xml(headers, rows)
+        roundtrip = table_xml_to_model(xml)
+        root = ET.fromstring(xml)
+        cells = root.findall("행/열")
+
+        self.assertEqual(roundtrip, (headers, rows))
+        self.assertEqual(
+            [(cell.attrib.get("i"), cell.attrib["n"]) for cell in cells],
+            [("1", ""), (None, " ID "), ("3", "값"), ("4", "값")],
+        )
+
+    def test_multilevel_blank_leaf_does_not_inherit_group_name(self):
+        headers = [["ID", "Q1", "Q1"], ["ID", "Jan", ""]]
+        rows = [["A", "10", "20"]]
+
+        xml = model_to_xml(headers, rows)
+        roundtrip = table_xml_to_model(xml)
+        leaf_names = [
+            element.attrib["n"]
+            for element in ET.fromstring(xml).findall(".//열")
+        ]
+
+        self.assertEqual(leaf_names, ["Jan", ""])
+        self.assertEqual(roundtrip, (headers, rows))
+
+    def test_blank_upper_header_keeps_excel_quarter_groups_and_metadata(self):
+        selection = self._selection(
+            [
+                "항목", "", None, None, None,
+                None, "1분기", None, "2분기", None,
+                None, "매출", "비용", "매출", "비용",
+                "제품A", "10", "5", "20", "8",
+            ],
+            address="$A$1:$E$4",
+            rows=4,
+            columns=5,
+            merges=(
+                "$A$1:$A$3", "$B$1:$E$1",
+                "$B$2:$C$2", "$D$2:$E$2",
+            ),
+        )
+        headers, rows = excel_table_selection_to_model(selection)
+        metadata = excel_table_selection_xml_metadata(selection, headers)
+
+        xml = model_to_xml(headers, rows, metadata=metadata)
+        root = ET.fromstring(xml)
+        row = root.find("행")
+
+        self.assertEqual(row.attrib, {"항목": "제품A"})
+        self.assertEqual(
+            [group.attrib["이름"] for group in row.findall("열그룹")],
+            ["1분기", "2분기"],
+        )
+        self.assertEqual(
+            [(cell.attrib["i"], cell.attrib["n"], cell.text)
+             for cell in row.findall("열그룹/열")],
+            [("2", "매출", "10"), ("3", "비용", "5"),
+             ("4", "매출", "20"), ("5", "비용", "8")],
+        )
+        self.assertEqual(root.attrib["헤더행수"], "3")
+        self.assertEqual(root.attrib["병합범위"], " ".join(selection.merge_areas))
+        self.assertEqual(root.attrib["빈칸채움수"], "0")
+        # The unnamed upper level adds no semantic group; the source metadata
+        # still records all three original header rows and the exact merges.
+        roundtrip = table_xml_to_model(xml)
+        self.assertEqual(roundtrip, (headers[1:], rows))
+        self.assertEqual(model_to_xml(*roundtrip, metadata=metadata), xml)
+
+    def test_blank_intermediate_header_keeps_nested_groups_and_exact_leaves(self):
+        headers = [
+            ["항목", "실적", "실적", "실적", "실적", "예산", "예산"],
+            ["항목", "", "", " ", " ", "연간", "연간"],
+            ["항목", "1분기", "1분기", "2분기", "2분기", "합계", "합계"],
+            ["항목", "", "매출", "매출", " ", "계획", "실제"],
+        ]
+        rows = [["제품A", "10", "5", "20", "8", "50", "43"]]
+
+        xml = model_to_xml(headers, rows)
+        root = ET.fromstring(xml)
+        actual = root.find("행/열그룹[@이름='실적']")
+
+        self.assertEqual(
+            [group.attrib["이름"] for group in actual.findall("열그룹")],
+            ["1분기", "2분기"],
+        )
+        self.assertEqual(
+            [(cell.attrib["i"], cell.attrib["n"])
+             for cell in actual.findall("열그룹/열")],
+            [("2", ""), ("3", "매출"), ("4", "매출"), ("5", " ")],
+        )
+        self.assertEqual(
+            [cell.text for cell in root.findall(
+                "행/열그룹[@이름='예산']/열그룹[@이름='연간']/"
+                "열그룹[@이름='합계']/열"
+            )],
+            ["50", "43"],
+        )
+        roundtrip = table_xml_to_model(xml)
+        self.assertEqual(roundtrip[1], rows)
+        self.assertEqual(model_to_xml(*roundtrip), xml)
+
+    def test_blank_upper_header_does_not_join_groups_across_named_neighbor(self):
+        headers = [
+            ["", "", "별도", "", ""],
+            ["1분기", "1분기", "기타", "1분기", "1분기"],
+            ["매출", "비용", "금액", "매출", "비용"],
+        ]
+        rows = [["10", "5", "7", "20", "8"]]
+
+        xml = model_to_xml(headers, rows)
+        groups = ET.fromstring(xml).findall("행/열그룹")
+
+        self.assertEqual(
+            [group.attrib["이름"] for group in groups],
+            ["1분기", "별도", "1분기"],
+        )
+        self.assertEqual(
+            [[cell.text for cell in group.iter("열")] for group in groups],
+            [["10", "5"], ["7"], ["20", "8"]],
+        )
+        self.assertEqual(model_to_xml(*table_xml_to_model(xml)), xml)
+
+    def test_blank_upper_header_with_only_leaves_keeps_existing_xml(self):
+        headers = [["", " "], ["ID", "값"], ["ID", "값"]]
+        rows = [["제품A", "10"]]
+
+        self.assertEqual(
+            model_to_xml(headers, rows),
+            '<표>\n  <행>\n    <열 n="ID">제품A</열>\n'
+            '    <열 n="값">10</열>\n  </행>\n</표>',
+        )
+
+    def test_title_metadata_matches_one_column_and_multirow_merge_rules(self):
+        one_column = self._selection(
+            ["그룹", None, "값"],
+            address="$A$1:$A$3",
+            rows=3,
+            columns=1,
+            merges=("$A$1:$A$2",),
+        )
+        one_headers, one_rows = excel_table_selection_to_model(one_column)
+        one_metadata = excel_table_selection_xml_metadata(
+            one_column, one_headers
+        )
+
+        self.assertEqual(one_metadata.title_rows, ())
+        self.assertEqual(one_headers, [["그룹"]])
+        self.assertEqual(one_rows, [["그룹"], ["값"]])
+
+        multirow_title = self._selection(
+            [
+                "2026 실적",
+                None,
+                None,
+                None,
+                None,
+                None,
+                "항목",
+                "Q1",
+                "Q2",
+                "매출",
+                "10",
+                "20",
+            ],
+            address="$A$1:$C$4",
+            rows=4,
+            columns=3,
+            merges=("$A$1:$C$2",),
+        )
+        title_headers, title_rows = excel_table_selection_to_model(
+            multirow_title
+        )
+        title_metadata = excel_table_selection_xml_metadata(
+            multirow_title, title_headers
+        )
+
+        self.assertEqual(title_headers, [["항목", "Q1", "Q2"]])
+        self.assertEqual(title_rows, [["매출", "10", "20"]])
+        self.assertEqual(
+            [
+                (title.address, title.value)
+                for title in title_metadata.title_rows
+            ],
+            [("$A$1:$C$2", "2026 실적")],
+        )
+
+    def test_general_xml_byte_limit_stops_during_serialization(self):
+        headers = [["H" * 1000]]
+        rows = [[""] for _ in range(100)]
+
+        with self.assertRaises(TableXmlTooLargeError):
+            model_to_xml(headers, rows, max_bytes=5_000)
+
+        xml = model_to_xml([["한글"]], [["<&>"]], max_bytes=10_000)
+        encoded_size = len(xml.encode("utf-8"))
+        self.assertEqual(
+            model_to_xml(
+                [["한글"]],
+                [["<&>"]],
+                max_bytes=encoded_size,
+            ),
+            xml,
+        )
+        with self.assertRaises(TableXmlTooLargeError):
+            model_to_xml(
+                [["한글"]],
+                [["<&>"]],
+                max_bytes=encoded_size - 1,
+            )
 
 
 if __name__ == "__main__":

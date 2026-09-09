@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import contextlib
+from decimal import Decimal
 import importlib
 import sys
+import threading
 import types
 import unittest
 from pathlib import Path
 from unittest import mock
+
+from bs4 import BeautifulSoup
 
 
 WINDOWS_ROOT = Path(__file__).resolve().parents[1]
@@ -192,6 +196,51 @@ class WindowsPortTests(unittest.TestCase):
         self.assertEqual(result["text"], MARKDOWN_BASIC)
         self.assertIn("<table><tr><th>Name</th><th>Score</th></tr>", result["html"])
 
+    def test_markdown_unicode_survives_cf_html_bytes_and_preserves_text(self):
+        markdown = "\n| 상품 | 수량 |\n| --- | --- |\n| 한글 확인 😀 & <값> | 2 |\n"
+        result = converted_clipboard({"text": markdown})
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["text"], markdown)
+        fragment = result["html"]
+        fragment_bytes = fragment.encode("utf-8")
+        payload = build_cf_html(fragment)
+        offsets = {}
+        for line in payload.split(b"\r\n")[1:5]:
+            key, value = line.split(b":", 1)
+            offsets[key.decode("ascii")] = int(value)
+        self.assertGreaterEqual(offsets["StartHTML"], 0)
+        self.assertLessEqual(offsets["StartHTML"], offsets["StartFragment"])
+        self.assertLess(offsets["StartFragment"], offsets["EndFragment"])
+        self.assertLessEqual(offsets["EndFragment"], offsets["EndHTML"])
+        self.assertEqual(offsets["EndHTML"], len(payload))
+        document_bytes = payload[offsets["StartHTML"]:offsets["EndHTML"]]
+        self.assertTrue(document_bytes.startswith(b"<html>"))
+        self.assertTrue(document_bytes.endswith(b"</html>"))
+        self.assertGreater(len(fragment_bytes), len(fragment))
+        self.assertEqual(
+            payload[offsets["StartFragment"]:offsets["EndFragment"]], fragment_bytes
+        )
+        self.assertEqual(extract_cf_html(payload), fragment)
+
+        # The declared encoding must decode the actual multibyte payload, and
+        # HTML parsing must recover cell text rather than interpret it as tags.
+        declaration = BeautifulSoup(fragment, "html.parser").find("meta", charset=True)
+        self.assertIsNotNone(declaration)
+        decoded = fragment_bytes.decode(declaration["charset"])
+        table = BeautifulSoup(decoded, "html.parser").find("table")
+        self.assertIsNotNone(table)
+        rows = [
+            [cell.get_text() for cell in row.find_all(["th", "td"], recursive=False)]
+            for row in table.find_all("tr")
+        ]
+        self.assertEqual(rows, [["상품", "수량"], ["한글 확인 😀 & <값>", "2"]])
+        self.assertIn("&amp;", fragment)
+        self.assertIn("&lt;값&gt;", fragment)
+        self.assertIsNone(
+            converted_clipboard({"text": markdown, "html": extract_cf_html(payload)})
+        )
+
     def test_generated_clipboard_is_skipped(self):
         self.assertIsNone(converted_clipboard({"generated": True, "text": MARKDOWN_BASIC}))
 
@@ -219,14 +268,21 @@ class WindowsPortTests(unittest.TestCase):
     def test_excel_formula_export_translations_exist(self):
         self.assertEqual(
             t("menu.copy_excel_formulas", "ko"),
-            "표의 수식을 포함해 XML로 복사",
+            "셀 값·수식·참조를 XML로 복사",
         )
         self.assertEqual(
             t("menu.copy_excel_formulas", "en"),
-            "Copy table with formulas as XML",
+            "Copy cell values, formulas, and references as XML",
         )
         for lang in SUPPORTED_LANGUAGES:
             self.assertNotEqual(t("formula_export.success", lang), "formula_export.success")
+            for notice in (
+                "partial_references",
+                "calculation_incomplete",
+                "partial_references_and_calculation",
+            ):
+                key = f"formula_export.success.{notice}"
+                self.assertNotEqual(t(key, lang), key)
             self.assertIn("Ctrl+Alt+E", t("help.message", lang))
             for code in (
                 excel_formula.EXCEL_NOT_RUNNING,
@@ -238,6 +294,10 @@ class WindowsPortTests(unittest.TestCase):
                 excel_formula.TOO_MUCH_TEXT,
                 excel_formula.SELECTION_CHANGED,
                 excel_formula.COM_FAILURE,
+                "in_progress",
+                "clipboard_changed",
+                "clipboard_write_failed",
+                "output_too_large",
                 "export_failed",
             ):
                 key = f"formula_export.error.{code}"
@@ -300,8 +360,10 @@ class _ReferenceValueRange:
 class _ReferenceWorksheet:
     def __init__(self, ranges):
         self._ranges = ranges
+        self.range_calls = []
 
     def Range(self, address):
+        self.range_calls.append(address)
         return self._ranges[address]
 
 
@@ -431,6 +493,8 @@ class ExcelFormulaAdapterTests(unittest.TestCase):
         intersection=_DEFAULT_INTERSECTION,
         intersect_error=None,
         final_selection=_DEFAULT_INTERSECTION,
+        calculation=excel_formula.XL_CALCULATION_AUTOMATIC,
+        calculation_state=excel_formula.XL_CALCULATION_STATE_DONE,
     ):
         pythoncom = mock.Mock()
         client = mock.Mock()
@@ -448,6 +512,8 @@ class ExcelFormulaAdapterTests(unittest.TestCase):
 
                 def __init__(self):
                     self.Intersect = mock.Mock()
+                    self.Calculation = calculation
+                    self.CalculationState = calculation_state
 
                 @property
                 def Selection(self):
@@ -534,6 +600,8 @@ class ExcelFormulaAdapterTests(unittest.TestCase):
         self.assertEqual(result.selection.cells[0].address, "$B$2")
         self.assertEqual(result.selection.cells[0].formula_a1, "=A2#")
         self.assertEqual(result.selection.cells[0].formula_r1c1, "=RC[-1]#")
+        self.assertEqual(result.selection.calculation_mode, "automatic")
+        self.assertEqual(result.selection.calculation_state, "done")
         self.assertEqual(selection.special_cells_calls, [])
         client.GetActiveObject.return_value.Intersect.assert_not_called()
         client.GetActiveObject.assert_called_once_with("Excel.Application")
@@ -593,6 +661,203 @@ class ExcelFormulaAdapterTests(unittest.TestCase):
                 ("단가 표", "$D$6", "12"),
             ],
         )
+        self.assertEqual(
+            [
+                reference.cells[0].value_kind
+                for reference in formula_cell.references
+            ],
+            ["number", "number"],
+        )
+
+    def test_native_numbers_expand_exponents_without_changing_text(self):
+        cases = (
+            (315000.0, "315000"),
+            (1.2e-7, "0.00000012"),
+            (Decimal("3.15E+5"), "315000"),
+            ("3.15E+5", "3.15E+5"),
+            (True, "True"),
+        )
+
+        for value, expected in cases:
+            with self.subTest(value=value):
+                self.assertEqual(excel_formula._value_to_text(value), expected)
+
+    def test_calculation_metadata_is_normalized_without_triggering_calculation(self):
+        excel = types.SimpleNamespace(
+            Calculation=excel_formula.XL_CALCULATION_MANUAL,
+            CalculationState=excel_formula.XL_CALCULATION_STATE_PENDING,
+        )
+
+        self.assertEqual(excel_formula._calculation_mode(excel), "manual")
+        self.assertEqual(excel_formula._calculation_state(excel), "pending")
+        self.assertEqual(
+            excel_formula._calculation_mode(types.SimpleNamespace()),
+            "unknown",
+        )
+        self.assertEqual(
+            excel_formula._calculation_state(types.SimpleNamespace()),
+            "unknown",
+        )
+
+    def test_shared_reference_is_read_once_and_attached_to_every_owner(self):
+        cells = tuple(
+            excel_formula.ExcelSelectionCell(
+                f"$B${row}",
+                str(row),
+                "=$A$1",
+            )
+            for row in range(1, 10_001)
+        )
+        selection = excel_formula.ExcelFormulaSelection(
+            "Budget.xlsx",
+            "Sheet1",
+            "$B$1:$B$10000",
+            10_000,
+            1,
+            cells,
+        )
+        worksheet = _ReferenceWorksheet(
+            {
+                "$A$1": _ReferenceValueRange(
+                    "$A$1",
+                    7,
+                    row=1,
+                    column=1,
+                )
+            }
+        )
+        workbook = types.SimpleNamespace(
+            Worksheets=_ReferenceWorksheets({"Sheet1": worksheet})
+        )
+
+        enriched = excel_formula._enrich_formula_references(
+            workbook,
+            selection,
+            max_value_characters=100_000,
+        )
+
+        self.assertEqual(worksheet.range_calls, ["$A$1"])
+        self.assertEqual(len(enriched.cells), 10_000)
+        self.assertTrue(all(cell.references_complete for cell in enriched.cells))
+        self.assertTrue(
+            all(
+                cell.references[0].cells[0].value == "7"
+                for cell in enriched.cells
+            )
+        )
+
+    def test_reference_order_is_preserved_for_each_formula_owner(self):
+        selection = excel_formula.ExcelFormulaSelection(
+            "Budget.xlsx",
+            "Sheet1",
+            "$B$1:$B$2",
+            2,
+            1,
+            (
+                excel_formula.ExcelSelectionCell("$B$1", "4", "=$A$1+$C$1"),
+                excel_formula.ExcelSelectionCell("$B$2", "4", "=$C$1+$A$1"),
+            ),
+        )
+        worksheet = _ReferenceWorksheet(
+            {
+                "$A$1": _ReferenceValueRange("$A$1", 1, row=1, column=1),
+                "$C$1": _ReferenceValueRange("$C$1", 3, row=1, column=3),
+            }
+        )
+        workbook = types.SimpleNamespace(
+            Worksheets=_ReferenceWorksheets({"Sheet1": worksheet})
+        )
+
+        enriched = excel_formula._enrich_formula_references(
+            workbook,
+            selection,
+            max_value_characters=100,
+        )
+
+        self.assertEqual(worksheet.range_calls, ["$A$1", "$C$1"])
+        self.assertEqual(
+            [reference.address for reference in enriched.cells[0].references],
+            ["$A$1", "$C$1"],
+        )
+        self.assertEqual(
+            [reference.address for reference in enriched.cells[1].references],
+            ["$C$1", "$A$1"],
+        )
+
+    def test_shared_target_counts_once_at_unique_range_limit(self):
+        selection = excel_formula.ExcelFormulaSelection(
+            "Budget.xlsx",
+            "Sheet1",
+            "$B$1:$B$3",
+            3,
+            1,
+            (
+                excel_formula.ExcelSelectionCell("$B$1", "1", "=$A$1"),
+                excel_formula.ExcelSelectionCell("$B$2", "1", "=$A$1"),
+                excel_formula.ExcelSelectionCell("$B$3", "2", "=$C$1"),
+            ),
+        )
+        worksheet = _ReferenceWorksheet(
+            {
+                "$A$1": _ReferenceValueRange("$A$1", 1, row=1, column=1),
+                "$C$1": _ReferenceValueRange("$C$1", 2, row=1, column=3),
+            }
+        )
+        workbook = types.SimpleNamespace(
+            Worksheets=_ReferenceWorksheets({"Sheet1": worksheet})
+        )
+
+        with mock.patch.object(excel_formula, "MAX_REFERENCE_RANGES", 1):
+            enriched = excel_formula._enrich_formula_references(
+                workbook,
+                selection,
+                max_value_characters=100,
+            )
+
+        self.assertEqual(worksheet.range_calls, ["$A$1"])
+        self.assertTrue(enriched.cells[0].references_complete)
+        self.assertTrue(enriched.cells[1].references_complete)
+        self.assertFalse(enriched.cells[2].references_complete)
+        self.assertEqual(
+            enriched.cells[2].reference_issues,
+            ("range_count_limit",),
+        )
+
+    def test_reference_value_text_limit_is_not_reported_as_read_failure(self):
+        selection = excel_formula.ExcelFormulaSelection(
+            "Budget.xlsx",
+            "Sheet1",
+            "$B$1",
+            1,
+            1,
+            (
+                excel_formula.ExcelSelectionCell("$B$1", "0", "=$A$1"),
+            ),
+        )
+        worksheet = _ReferenceWorksheet(
+            {
+                "$A$1": _ReferenceValueRange(
+                    "$A$1",
+                    "12345",
+                    row=1,
+                    column=1,
+                )
+            }
+        )
+        workbook = types.SimpleNamespace(
+            Worksheets=_ReferenceWorksheets({"Sheet1": worksheet})
+        )
+
+        enriched = excel_formula._enrich_formula_references(
+            workbook,
+            selection,
+            max_value_characters=4,
+        )
+
+        formula_cell = enriched.cells[0]
+        self.assertEqual(formula_cell.references, ())
+        self.assertFalse(formula_cell.references_complete)
+        self.assertEqual(formula_cell.reference_issues, ("value_size_limit",))
 
     def test_dynamic_or_unavailable_reference_keeps_formula_and_marks_partial(self):
         selection = excel_formula.ExcelFormulaSelection(
@@ -620,6 +885,45 @@ class ExcelFormulaAdapterTests(unittest.TestCase):
         self.assertEqual(enriched.cells[0].formula_a1, '=INDIRECT("Sheet2!A1")+B1')
         self.assertEqual(enriched.cells[0].references, ())
         self.assertFalse(enriched.cells[0].references_complete)
+        self.assertEqual(
+            enriched.cells[0].reference_issues,
+            ("dynamic_reference", "read_failed"),
+        )
+
+    def test_reference_coordinate_read_failure_keeps_original_formula_and_result(self):
+        class FailingCoordinateRange(_ReferenceValueRange):
+            def __getattribute__(self, name):
+                if name == object.__getattribute__(self, "failing_property"):
+                    raise RuntimeError("simulated COM property failure")
+                return super().__getattribute__(name)
+
+        for property_name in ("Row", "Column"):
+            with self.subTest(property=property_name):
+                reference = object.__new__(FailingCoordinateRange)
+                reference.failing_property = property_name
+                _ReferenceValueRange.__init__(reference, "$A$1", 42)
+                cell = _FormulaCell(
+                    "$B$2", formula2="=A1", formula2_r1c1="=R[-1]C[-1]"
+                )
+                selection = _ExcelSelection(
+                    _FormulaRange(_FormulaArea([cell])),
+                    single_cell=cell,
+                    values=42,
+                )
+                selection.Worksheet.Parent.Worksheets = _ReferenceWorksheets(
+                    {"Summary": _ReferenceWorksheet({"$A$1": reference})}
+                )
+
+                result, _ = self._read(selection)
+
+                self.assertTrue(result.ok)
+                exported_cell = result.selection.cells[0]
+                self.assertEqual(exported_cell.value, "42")
+                self.assertEqual(exported_cell.formula_a1, "=A1")
+                self.assertEqual(exported_cell.formula_r1c1, "=R[-1]C[-1]")
+                self.assertEqual(exported_cell.references, ())
+                self.assertFalse(exported_cell.references_complete)
+                self.assertEqual(exported_cell.reference_issues, ("read_failed",))
 
     def test_reads_complete_table_row_major_with_values_blanks_and_formulas(self):
         formula = _FormulaCell(
@@ -647,6 +951,10 @@ class ExcelFormulaAdapterTests(unittest.TestCase):
         self.assertEqual(
             [cell.value for cell in result.selection.cells],
             ["10", "20.5", "30.5", None, "", "True"],
+        )
+        self.assertEqual(
+            [cell.value_kind for cell in result.selection.cells],
+            ["number", "number", "number", "blank", "text", "boolean"],
         )
         self.assertEqual(result.selection.cells[2].formula_a1, "=B2+C2")
         self.assertEqual(
@@ -1228,7 +1536,32 @@ class FormulaTextClipboardTests(unittest.TestCase):
                 },
             ):
                 clipboard = importlib.import_module(module_name)
+                fake_clipboard.GetClipboardData.side_effect = (
+                    lambda fmt: (
+                        "<수식범위 />"
+                        if fmt == fake_con.CF_UNICODETEXT
+                        else b"Tabledown"
+                    )
+                )
                 clipboard.write_text_only_clipboard("<수식범위 />")
+
+                with mock.patch.object(
+                    clipboard, "clipboard_change_count", return_value=12
+                ), self.assertRaises(clipboard.ClipboardChangedError):
+                    clipboard.write_text_only_clipboard(
+                        "<새범위 />",
+                        expected_change_count=11,
+                    )
+
+                fake_clipboard.GetClipboardData.side_effect = (
+                    lambda fmt: (
+                        "<다른범위 />"
+                        if fmt == fake_con.CF_UNICODETEXT
+                        else b"Tabledown"
+                    )
+                )
+                with self.assertRaises(clipboard.ClipboardWriteError):
+                    clipboard.write_text_only_clipboard("<수식범위 />")
         finally:
             sys.modules.pop(module_name, None)
             if original is not None:
@@ -1239,16 +1572,413 @@ class FormulaTextClipboardTests(unittest.TestCase):
             elif hasattr(package, "win_clipboard"):
                 del package.win_clipboard
 
-        fake_clipboard.EmptyClipboard.assert_called_once_with()
+        # The sequence-mismatch path above adds no EmptyClipboard; the separate
+        # read-back mismatch reaches a second write and fails closed.
+        self.assertEqual(fake_clipboard.EmptyClipboard.call_count, 2)
         self.assertEqual(
             fake_clipboard.SetClipboardData.call_args_list,
             [
                 mock.call(fake_con.CF_UNICODETEXT, "<수식범위 />"),
                 mock.call(49153, b"Tabledown"),
+                mock.call(fake_con.CF_UNICODETEXT, "<수식범위 />"),
+                mock.call(49153, b"Tabledown"),
             ],
         )
-        fake_clipboard.GetClipboardData.assert_not_called()
+        self.assertEqual(
+            fake_clipboard.GetClipboardData.call_args_list,
+            [
+                mock.call(fake_con.CF_UNICODETEXT),
+                mock.call(49153),
+                mock.call(fake_con.CF_UNICODETEXT),
+            ],
+        )
         fake_clipboard.EnumClipboardFormats.assert_not_called()
+
+
+class FormulaExportActionPortableTests(unittest.TestCase):
+    """Exercise the real export action without a tray, COM, or OS clipboard."""
+
+    @classmethod
+    def setUpClass(cls):
+        clipboard = types.ModuleType("tabledown_windows.win_clipboard")
+        clipboard.ClipboardChangedError = type("ClipboardChangedError", (Exception,), {})
+        clipboard.ClipboardWriteError = type("ClipboardWriteError", (Exception,), {})
+        for name in (
+            "clipboard_change_count",
+            "read_clipboard",
+            "write_clipboard",
+            "write_text_only_clipboard",
+        ):
+            setattr(clipboard, name, mock.Mock())
+        spec = importlib.util.spec_from_file_location(
+            "tabledown_windows._export_action_test",
+            WINDOWS_ROOT / "tabledown_windows" / "app.py",
+        )
+        cls.module = importlib.util.module_from_spec(spec)
+        with mock.patch.dict(
+            sys.modules,
+            {
+                "pystray": types.ModuleType("pystray"),
+                "tabledown_windows.win_clipboard": clipboard,
+            },
+        ):
+            spec.loader.exec_module(cls.module)
+
+    def _app(self, lang="ko"):
+        app = object.__new__(self.module.TabledownWindowsApp)
+        app.lang = lang
+        app._formula_export_lock = threading.Lock()
+        app._clipboard_operation_lock = threading.Lock()
+        app._stop_watcher = threading.Event()
+        app._show_message_box_async = mock.Mock()
+        return app
+
+    @staticmethod
+    def _selection(*, partial=False, state="done"):
+        return excel_formula.ExcelFormulaSelection(
+            "Book.xlsx", "Sheet1", "$A$1", 1, 1,
+            (
+                excel_formula.ExcelSelectionCell(
+                    "$A$1", "2", "=1+1", "=1+1",
+                    references_complete=not partial,
+                    reference_issues=("read_failed",) if partial else (),
+                ),
+            ),
+            calculation_state=state,
+        )
+
+    def _run(
+        self, app, selection, *, write_error=None, read_error=None,
+        stop_when=None, for_ai=False, serialize_error=None,
+    ):
+        class ImmediateThread:
+            def __init__(self, *, target, name, daemon):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        def read():
+            if read_error is not None:
+                raise read_error
+            if stop_when == "read":
+                app._stop_watcher.set()
+            return excel_formula.ExcelFormulaResult(
+                excel_formula.SUCCESS if selection is not None else excel_formula.NO_FORMULAS,
+                selection,
+            )
+
+        def write(*args, **kwargs):
+            if write_error is not None:
+                raise write_error
+            if stop_when == "write":
+                app._stop_watcher.set()
+
+        classifier = self.module.formula_copy_notice_key
+
+        def notice(snapshot):
+            # The real writer returns only after read-back verification.
+            self.assertTrue(writer.called)
+            if stop_when == "notice":
+                app._stop_watcher.set()
+            return classifier(snapshot)
+
+        if stop_when == "before":
+            app._stop_watcher.set()
+        with (
+            mock.patch.object(self.module.threading, "Thread", ImmediateThread),
+            mock.patch.object(self.module, "clipboard_change_count", return_value=31),
+            mock.patch.object(self.module, "read_stable_selected_excel_formulas", side_effect=read) as reader,
+            mock.patch.object(self.module, "write_text_only_clipboard", side_effect=write) as writer,
+            mock.patch.object(self.module, "formula_copy_notice_key", side_effect=notice) as classifier_mock,
+            mock.patch.object(self.module, "log"),
+            contextlib.ExitStack() as stack,
+        ):
+            if serialize_error is not None:
+                stack.enter_context(mock.patch.object(
+                    self.module,
+                    "formula_selection_to_ai_xml" if for_ai else "formula_selection_to_xml",
+                    side_effect=serialize_error,
+                ))
+            action = (
+                app.copy_selected_excel_formulas_for_ai
+                if for_ai else app.copy_selected_excel_formulas
+            )
+            action(None, None)
+        self.assertFalse(app._formula_export_lock.locked())
+        return reader, writer, classifier_mock
+
+    def test_success_uses_one_notice_after_verified_write(self):
+        cases = (
+            (False, "done", "formula_export.success"),
+            (True, "done", "formula_export.success.partial_references"),
+            (False, "pending", "formula_export.success.calculation_incomplete"),
+            (True, "calculating", "formula_export.success.partial_references_and_calculation"),
+        )
+        for lang in SUPPORTED_LANGUAGES:
+            for partial, state, key in cases:
+                with self.subTest(lang=lang, partial=partial, state=state):
+                    app = self._app(lang)
+                    snapshot = self._selection(partial=partial, state=state)
+                    _, writer, classifier = self._run(app, snapshot)
+                    self.assertIn('수식="=1+1"', writer.call_args.args[0])
+                    self.assertIn('값="2"', writer.call_args.args[0])
+                    self.assertEqual(writer.call_args.kwargs, {"expected_change_count": 31})
+                    classifier.assert_called_once_with(snapshot)
+                    app._show_message_box_async.assert_called_once_with(
+                        t(key, lang), t("help.title", lang)
+                    )
+
+    def test_read_failures_never_show_success_notice(self):
+        for error in (None, RuntimeError("reader unavailable")):
+            with self.subTest(error=type(error).__name__):
+                app = self._app()
+                _, writer, classifier = self._run(app, None, read_error=error)
+                writer.assert_not_called()
+                classifier.assert_not_called()
+                code = "export_failed" if error else "no_formulas"
+                app._show_message_box_async.assert_called_once_with(
+                    t(f"formula_export.error.{code}", app.lang), t("help.title", app.lang)
+                )
+
+    def test_write_failure_or_new_copy_never_show_success_notice(self):
+        for error_type, code in (
+            (self.module.ClipboardWriteError, "clipboard_write_failed"),
+            (self.module.ClipboardChangedError, "clipboard_changed"),
+        ):
+            with self.subTest(code=code):
+                app = self._app()
+                _, writer, classifier = self._run(
+                    app, self._selection(partial=True), write_error=error_type(code)
+                )
+                writer.assert_called_once()
+                classifier.assert_not_called()
+                app._show_message_box_async.assert_called_once_with(
+                    t(f"formula_export.error.{code}", app.lang), t("help.title", app.lang)
+                )
+
+    def test_quit_never_shows_success_notice(self):
+        for stop_when in ("before", "read", "write", "notice"):
+            with self.subTest(stop_when=stop_when):
+                app = self._app()
+                reader, writer, classifier = self._run(
+                    app, self._selection(partial=True), stop_when=stop_when
+                )
+                if stop_when == "before":
+                    reader.assert_not_called()
+                if stop_when in ("before", "read"):
+                    writer.assert_not_called()
+                if stop_when != "notice":
+                    classifier.assert_not_called()
+                app._show_message_box_async.assert_not_called()
+
+    def test_failed_export_can_retry_with_a_single_success_notice(self):
+        app = self._app()
+        snapshot = self._selection(partial=True)
+        self._run(app, snapshot, write_error=self.module.ClipboardWriteError("failed"))
+        app._show_message_box_async.reset_mock()
+        _, writer, classifier = self._run(app, snapshot)
+        writer.assert_called_once()
+        classifier.assert_called_once_with(snapshot)
+        app._show_message_box_async.assert_called_once_with(
+            t("formula_export.success.partial_references", app.lang), t("help.title", app.lang)
+        )
+
+    def test_ai_and_original_actions_use_their_serializer_and_one_stable_read(self):
+        for for_ai in (False, True):
+            with self.subTest(for_ai=for_ai):
+                app = self._app()
+                snapshot = self._selection()
+                with (
+                    mock.patch.object(self.module, "formula_selection_to_xml", return_value="original") as original,
+                    mock.patch.object(self.module, "formula_selection_to_ai_xml", return_value="compact") as compact,
+                ):
+                    reader, writer, classifier = self._run(app, snapshot, for_ai=for_ai)
+                reader.assert_called_once_with()
+                selected, unused = (compact, original) if for_ai else (original, compact)
+                selected.assert_called_once_with(snapshot)
+                unused.assert_not_called()
+                writer.assert_called_once_with(
+                    "compact" if for_ai else "original", expected_change_count=31,
+                )
+                classifier.assert_called_once_with(snapshot)
+
+    def test_ai_success_preserves_partial_reference_and_calculation_notices(self):
+        cases = (
+            (False, "done", "formula_export.success.ai"),
+            (True, "done", "formula_export.success.partial_references"),
+            (False, "pending", "formula_export.success.calculation_incomplete"),
+            (True, "calculating", "formula_export.success.partial_references_and_calculation"),
+        )
+        for lang in SUPPORTED_LANGUAGES:
+            for partial, state, key in cases:
+                with self.subTest(lang=lang, partial=partial, state=state):
+                    app = self._app(lang)
+                    snapshot = self._selection(partial=partial, state=state)
+                    reader, writer, classifier = self._run(app, snapshot, for_ai=True)
+                    reader.assert_called_once_with()
+                    writer.assert_called_once()
+                    classifier.assert_called_once_with(snapshot)
+                    app._show_message_box_async.assert_called_once_with(
+                        t(key, lang), t("help.title", lang),
+                    )
+
+    def test_ai_failures_release_gate_and_allow_manual_retry_without_false_success(self):
+        cases = (
+            ("no_formulas", None, {}, False),
+            ("export_failed", None, {"read_error": RuntimeError("read unavailable")}, False),
+            ("export_failed", self._selection(), {"serialize_error": ValueError("invalid")}, False),
+            ("output_too_large", self._selection(), {"serialize_error": self.module.FormulaXmlTooLargeError("limit")}, False),
+            ("clipboard_write_failed", self._selection(), {"write_error": self.module.ClipboardWriteError("failed")}, True),
+            ("clipboard_changed", self._selection(), {"write_error": self.module.ClipboardChangedError("changed")}, True),
+        )
+        for code, snapshot, kwargs, tried_write in cases:
+            with self.subTest(code=code, kwargs=tuple(kwargs)):
+                app = self._app()
+                _, writer, classifier = self._run(app, snapshot, for_ai=True, **kwargs)
+                self.assertEqual(writer.call_count, int(tried_write))
+                classifier.assert_not_called()
+                app._show_message_box_async.assert_called_once_with(
+                    t(f"formula_export.error.{code}", app.lang), t("help.title", app.lang),
+                )
+                app._show_message_box_async.reset_mock()
+                _, writer, classifier = self._run(app, self._selection(), for_ai=True)
+                writer.assert_called_once()
+                classifier.assert_called_once()
+                app._show_message_box_async.assert_called_once_with(
+                    t("formula_export.success.ai", app.lang), t("help.title", app.lang),
+                )
+
+    def test_ai_quit_skips_pending_write_and_success(self):
+        for stop_when in ("before", "read", "write", "notice"):
+            with self.subTest(stop_when=stop_when):
+                app = self._app()
+                reader, writer, classifier = self._run(
+                    app, self._selection(), for_ai=True, stop_when=stop_when,
+                )
+                if stop_when == "before":
+                    reader.assert_not_called()
+                if stop_when in ("before", "read"):
+                    writer.assert_not_called()
+                if stop_when != "notice":
+                    classifier.assert_not_called()
+                app._show_message_box_async.assert_not_called()
+
+    def test_ai_and_original_actions_share_gate_and_pause_watcher(self):
+        for ai_first in (False, True):
+            with self.subTest(ai_first=ai_first):
+                app = self._app()
+                workers = []
+
+                class HeldThread:
+                    def __init__(self, *, target, name, daemon):
+                        self.target = target
+                        workers.append(self)
+
+                    def start(self):
+                        pass
+
+                first, second = (
+                    (app.copy_selected_excel_formulas_for_ai, app.copy_selected_excel_formulas)
+                    if ai_first else
+                    (app.copy_selected_excel_formulas, app.copy_selected_excel_formulas_for_ai)
+                )
+                with (
+                    mock.patch.object(self.module.threading, "Thread", HeldThread),
+                    mock.patch.object(self.module, "clipboard_change_count", return_value=31) as count,
+                    mock.patch.object(self.module, "read_clipboard") as read_clipboard,
+                    mock.patch.object(self.module, "write_clipboard") as write_clipboard,
+                    mock.patch.object(self.module, "read_stable_selected_excel_formulas") as read_excel,
+                    mock.patch.object(self.module, "log"),
+                ):
+                    first(None, None)
+                    count.reset_mock()
+                    second(None, None)
+                    self.assertEqual(len(workers), 1)
+                    self.assertFalse(app._augment_clipboard())
+                    count.assert_not_called()
+                    read_clipboard.assert_not_called()
+                    write_clipboard.assert_not_called()
+                    read_excel.assert_not_called()
+                    app._show_message_box_async.assert_called_once_with(
+                        t("formula_export.error.in_progress", app.lang), t("help.title", app.lang),
+                    )
+                    app._stop_watcher.set()
+                    workers[0].target()
+                    self.assertFalse(app._formula_export_lock.locked())
+                    app._stop_watcher.clear()
+                    second(None, None)
+                    self.assertEqual(len(workers), 2)
+                    app._stop_watcher.set()
+                    workers[1].target()
+                    self.assertFalse(app._formula_export_lock.locked())
+
+    def test_ai_startup_failures_release_gate_for_retry(self):
+        class FailingThread:
+            def __init__(self, *, target, name, daemon):
+                pass
+
+            def start(self):
+                raise RuntimeError("thread unavailable")
+
+        for fail_at in ("clipboard_count", "thread"):
+            with self.subTest(fail_at=fail_at):
+                app = self._app()
+                with (
+                    mock.patch.object(self.module, "clipboard_change_count", return_value=31) as count,
+                    mock.patch.object(self.module.threading, "Thread", FailingThread),
+                    mock.patch.object(self.module, "read_stable_selected_excel_formulas") as reader,
+                    mock.patch.object(self.module, "write_text_only_clipboard") as writer,
+                    mock.patch.object(self.module, "log"),
+                ):
+                    if fail_at == "clipboard_count":
+                        count.side_effect = RuntimeError("count unavailable")
+                    app.copy_selected_excel_formulas_for_ai(None, None)
+                self.assertFalse(app._formula_export_lock.locked())
+                reader.assert_not_called()
+                writer.assert_not_called()
+                app._show_message_box_async.assert_called_once_with(
+                    t("formula_export.error.export_failed", app.lang), t("help.title", app.lang),
+                )
+                app._show_message_box_async.reset_mock()
+                _, writer, _ = self._run(app, self._selection(), for_ai=True)
+                writer.assert_called_once()
+                app._show_message_box_async.assert_called_once_with(
+                    t("formula_export.success.ai", app.lang), t("help.title", app.lang),
+                )
+
+    def test_ai_menu_is_additive_localized_and_keeps_original_hotkey(self):
+        class Menu(list):
+            SEPARATOR = object()
+
+            def __init__(self, *items):
+                super().__init__(items)
+
+        def menu_item(text, action, **kwargs):
+            return types.SimpleNamespace(text=text, action=action)
+
+        for lang in SUPPORTED_LANGUAGES:
+            with self.subTest(lang=lang):
+                app = self._app(lang)
+                app.login_supported = False
+                fake_pystray = types.SimpleNamespace(Menu=Menu, MenuItem=menu_item)
+                with mock.patch.object(self.module, "pystray", fake_pystray):
+                    menu = app._build_menu()
+                actions = {item.text: item.action for item in menu if item is not Menu.SEPARATOR}
+                self.assertEqual(actions[t("menu.copy_excel_formulas", lang)], app.copy_selected_excel_formulas)
+                self.assertEqual(actions[t("menu.copy_excel_formulas_ai", lang)], app.copy_selected_excel_formulas_for_ai)
+                self.assertEqual(t("menu.copy_excel_formulas_ai", lang), "AI용 간결 복사" if lang == "ko" else "Copy compact XML for AI")
+                for key in ("formula_export.success.ai", "help.message"):
+                    self.assertNotEqual(t(key, lang), key)
+                self.assertIn("추정" if lang == "ko" else "inferred", t("help.message", lang))
+                self.assertIn("제목·항목명" if lang == "ko" else "headers and item names", t("help.message", lang))
+                with (
+                    mock.patch.object(app, "copy_selected_excel_formulas") as original,
+                    mock.patch.object(app, "copy_selected_excel_formulas_for_ai") as compact,
+                ):
+                    app._copy_selected_excel_formulas_from_hotkey()
+                original.assert_called_once_with(None, None)
+                compact.assert_not_called()
 
 
 class _FakeWinrtTask:
@@ -1482,10 +2212,14 @@ class LoginMenuTests(unittest.TestCase):
              mock.patch.object(
                  app_module, "read_stable_selected_excel_formulas", return_value=result
              ), \
-             mock.patch.object(app, "_show_message_box_async"):
+             mock.patch.object(app, "_show_message_box_async") as show:
             app.copy_selected_excel_formulas(None, None)
             app.copy_selected_excel_formulas(None, None)
             self.assertEqual(len(created), 1)
+            show.assert_called_once_with(
+                t("formula_export.error.in_progress", app.lang),
+                t("help.title", app.lang),
+            )
 
             # Finishing the first worker releases the gate; a later click can
             # now create a fresh export worker.
@@ -1516,7 +2250,7 @@ class LoginMenuTests(unittest.TestCase):
         from tabledown_windows import app as app_module
 
         app = self._make_app(supported=False)
-        selection = object()
+        selection = StableExcelFormulaReaderTests._selection("2", "=1+1")
         result = types.SimpleNamespace(ok=True, selection=selection)
         shown = []
 
@@ -1528,6 +2262,7 @@ class LoginMenuTests(unittest.TestCase):
                 self.target()
 
         with mock.patch.object(app_module.threading, "Thread", ImmediateThread), \
+             mock.patch.object(app_module, "clipboard_change_count", return_value=31), \
              mock.patch.object(app_module, "read_stable_selected_excel_formulas", return_value=result), \
              mock.patch.object(app_module, "formula_selection_to_xml", return_value="<수식범위 />") as serialize, \
              mock.patch.object(app_module, "write_text_only_clipboard") as write, \
@@ -1539,8 +2274,94 @@ class LoginMenuTests(unittest.TestCase):
             app.copy_selected_excel_formulas(None, None)
 
         serialize.assert_called_once_with(selection)
-        write.assert_called_once_with("<수식범위 />")
+        write.assert_called_once_with(
+            "<수식범위 />",
+            expected_change_count=31,
+        )
         self.assertEqual(shown, [t("formula_export.success", app.lang)])
+
+    def test_excel_formula_export_reports_output_size_without_writing(self):
+        from tabledown_windows import app as app_module
+
+        app = self._make_app(supported=False)
+        result = types.SimpleNamespace(ok=True, selection=object())
+        shown = []
+
+        class ImmediateThread:
+            def __init__(self, *, target, name, daemon):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        with mock.patch.object(app_module.threading, "Thread", ImmediateThread), \
+             mock.patch.object(app_module, "clipboard_change_count", return_value=31), \
+             mock.patch.object(
+                 app_module,
+                 "read_stable_selected_excel_formulas",
+                 return_value=result,
+             ), \
+             mock.patch.object(
+                 app_module,
+                 "formula_selection_to_xml",
+                 side_effect=app_module.FormulaXmlTooLargeError("too large"),
+             ), \
+             mock.patch.object(app_module, "write_text_only_clipboard") as write, \
+             mock.patch.object(
+                 app,
+                 "_show_message_box_async",
+                 side_effect=lambda message, _title: shown.append(message),
+             ):
+            app.copy_selected_excel_formulas(None, None)
+
+        write.assert_not_called()
+        self.assertEqual(
+            shown,
+            [t("formula_export.error.output_too_large", app.lang)],
+        )
+
+    def test_excel_formula_export_reports_verified_write_failure(self):
+        from tabledown_windows import app as app_module
+
+        app = self._make_app(supported=False)
+        result = types.SimpleNamespace(ok=True, selection=object())
+        shown = []
+
+        class ImmediateThread:
+            def __init__(self, *, target, name, daemon):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        with mock.patch.object(app_module.threading, "Thread", ImmediateThread), \
+             mock.patch.object(app_module, "clipboard_change_count", return_value=31), \
+             mock.patch.object(
+                 app_module,
+                 "read_stable_selected_excel_formulas",
+                 return_value=result,
+             ), \
+             mock.patch.object(
+                 app_module,
+                 "formula_selection_to_xml",
+                 return_value="<수식범위 />",
+             ), \
+             mock.patch.object(
+                 app_module,
+                 "write_text_only_clipboard",
+                 side_effect=app_module.ClipboardWriteError("write failed"),
+             ), \
+             mock.patch.object(
+                 app,
+                 "_show_message_box_async",
+                 side_effect=lambda message, _title: shown.append(message),
+             ):
+            app.copy_selected_excel_formulas(None, None)
+
+        self.assertEqual(
+            shown,
+            [t("formula_export.error.clipboard_write_failed", app.lang)],
+        )
 
     def test_excel_formula_export_shows_localized_adapter_error(self):
         from tabledown_windows import app as app_module
@@ -1557,6 +2378,7 @@ class LoginMenuTests(unittest.TestCase):
                 self.target()
 
         with mock.patch.object(app_module.threading, "Thread", ImmediateThread), \
+             mock.patch.object(app_module, "clipboard_change_count", return_value=31), \
              mock.patch.object(app_module, "read_stable_selected_excel_formulas", return_value=result), \
              mock.patch.object(app_module, "write_text_only_clipboard") as write, \
              mock.patch.object(
@@ -1570,6 +2392,134 @@ class LoginMenuTests(unittest.TestCase):
         self.assertEqual(
             shown, [t("formula_export.error.no_formulas", app.lang)]
         )
+
+    def test_excel_formula_export_preserves_newer_clipboard(self):
+        from tabledown_windows import app as app_module
+
+        app = self._make_app(supported=False)
+        result = types.SimpleNamespace(ok=True, selection=object())
+        shown = []
+
+        class ImmediateThread:
+            def __init__(self, *, target, name, daemon):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        with mock.patch.object(app_module.threading, "Thread", ImmediateThread), \
+             mock.patch.object(app_module, "clipboard_change_count", return_value=31), \
+             mock.patch.object(
+                 app_module, "read_stable_selected_excel_formulas", return_value=result
+             ), \
+             mock.patch.object(
+                 app_module, "formula_selection_to_xml", return_value="<수식범위 />"
+             ), \
+             mock.patch.object(
+                 app_module,
+                 "write_text_only_clipboard",
+                 side_effect=app_module.ClipboardChangedError(
+                     "clipboard_changed"
+                 ),
+             ), \
+             mock.patch.object(
+                 app,
+                 "_show_message_box_async",
+                 side_effect=lambda message, _title: shown.append(message),
+             ):
+            app.copy_selected_excel_formulas(None, None)
+
+        self.assertEqual(
+            shown,
+            [t("formula_export.error.clipboard_changed", app.lang)],
+        )
+
+    def test_watcher_rechecks_export_gate_inside_clipboard_lock(self):
+        from tabledown_windows import app as app_module
+
+        app = self._make_app(supported=False)
+
+        class ExportStartsOnEnter:
+            def __enter__(inner_self):
+                self.assertTrue(
+                    app._formula_export_lock.acquire(blocking=False)
+                )
+                return inner_self
+
+            def __exit__(inner_self, exc_type, exc_value, traceback):
+                app._formula_export_lock.release()
+
+        app._clipboard_operation_lock = ExportStartsOnEnter()
+        with mock.patch.object(app_module, "clipboard_change_count") as count, \
+             mock.patch.object(app_module, "read_clipboard") as read, \
+             mock.patch.object(app_module, "write_clipboard") as write:
+            processed = app._augment_clipboard()
+
+        self.assertFalse(processed)
+        count.assert_not_called()
+        read.assert_not_called()
+        write.assert_not_called()
+
+    def test_watcher_keeps_generation_pending_after_clipboard_mismatch(self):
+        from tabledown_windows import app as app_module
+
+        app = self._make_app(supported=False)
+        app.enabled = True
+        app._last_change_count = 10
+
+        def stop_after_sleep(_seconds):
+            app._stop_watcher.set()
+
+        with mock.patch.object(
+            app_module.time,
+            "sleep",
+            side_effect=stop_after_sleep,
+        ), mock.patch.object(
+            app_module,
+            "clipboard_change_count",
+            return_value=11,
+        ), mock.patch.object(
+            app_module,
+            "read_clipboard",
+            return_value={"text": "source"},
+        ), mock.patch.object(
+            app_module,
+            "converted_clipboard",
+            return_value={"text": "updated"},
+        ), mock.patch.object(
+            app_module,
+            "write_clipboard",
+            side_effect=app_module.ClipboardChangedError("clipboard changed"),
+        ):
+            app._watch_clipboard()
+
+        self.assertEqual(app._last_change_count, 10)
+
+    def test_excel_formula_export_after_quit_skips_excel_and_clipboard(self):
+        from tabledown_windows import app as app_module
+
+        app = self._make_app(supported=False)
+        app._stop_watcher.set()
+
+        class ImmediateThread:
+            def __init__(self, *, target, name, daemon):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        with mock.patch.object(app_module.threading, "Thread", ImmediateThread), \
+             mock.patch.object(app_module, "clipboard_change_count", return_value=31), \
+             mock.patch.object(app_module, "read_stable_selected_excel_formulas") as read, \
+             mock.patch.object(app_module, "write_text_only_clipboard") as write, \
+             mock.patch.object(app, "_show_message_box_async") as show:
+            app.copy_selected_excel_formulas(None, None)
+
+        read.assert_not_called()
+        write.assert_not_called()
+        show.assert_not_called()
+        self.assertTrue(app._formula_export_lock.acquire(blocking=False))
+        app._formula_export_lock.release()
 
     def test_toggle_fill_blanks_flips_and_persists(self):
         app = self._make_app(supported=False)

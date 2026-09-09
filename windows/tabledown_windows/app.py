@@ -10,7 +10,12 @@ import time
 from PIL import Image, ImageChops, ImageDraw
 import pystray
 
-from tablemark.converter.formula_export import formula_selection_to_xml
+from tablemark.converter.formula_export import (
+    FormulaXmlTooLargeError,
+    formula_copy_notice_key,
+    formula_selection_to_ai_xml,
+    formula_selection_to_xml,
+)
 
 from . import diagnostics, single_instance, startup_task
 from .conversion import converted_clipboard
@@ -20,6 +25,8 @@ from .i18n import SUPPORTED_LANGUAGES, resolve_language, save_preferred_language
 from .logger import log
 from .settings import load_settings, save_setting
 from .win_clipboard import (
+    ClipboardChangedError,
+    ClipboardWriteError,
     clipboard_change_count,
     read_clipboard,
     write_clipboard,
@@ -135,6 +142,10 @@ class TabledownWindowsApp:
             pystray.MenuItem(
                 t("menu.copy_excel_formulas", self.lang),
                 self.copy_selected_excel_formulas,
+            ),
+            pystray.MenuItem(
+                t("menu.copy_excel_formulas_ai", self.lang),
+                self.copy_selected_excel_formulas_for_ai,
             ),
             pystray.Menu.SEPARATOR,
             # Preference: fill merged-header blanks in the Markdown conversion
@@ -260,12 +271,42 @@ class TabledownWindowsApp:
 
     def copy_selected_excel_formulas(self, _icon, _item) -> None:
         """Export the active Excel table values and formulas without blocking."""
+        self._copy_selected_excel_formula_xml(compact_for_ai=False)
+
+    def copy_selected_excel_formulas_for_ai(self, _icon, _item) -> None:
+        """Copy AI context and shared references from the same stable selection."""
+        self._copy_selected_excel_formula_xml(compact_for_ai=True)
+
+    def _copy_selected_excel_formula_xml(self, *, compact_for_ai: bool) -> None:
+        # Both actions share the reader, clipboard generation and export gate.
+        # The regular menu and its hotkey retain the original XML serializer.
+        serialize = formula_selection_to_ai_xml if compact_for_ai else formula_selection_to_xml
 
         if not self._formula_export_lock.acquire(blocking=False):
+            self._show_message_box_async(
+                t("formula_export.error.in_progress", self.lang),
+                t("help.title", self.lang),
+            )
+            return
+
+        try:
+            # Establish the clipboard generation this explicit request may
+            # replace after any in-flight watcher transaction has completed.
+            with self._clipboard_operation_lock:
+                expected_change_count = clipboard_change_count()
+        except Exception as exc:  # noqa: BLE001 - content-free startup failure
+            self._formula_export_lock.release()
+            log(f"excel formula export start failed: {type(exc).__name__}")
+            self._show_message_box_async(
+                t("formula_export.error.export_failed", self.lang),
+                t("help.title", self.lang),
+            )
             return
 
         def worker() -> None:
             try:
+                if self._stop_watcher.is_set():
+                    return
                 try:
                     result = read_stable_selected_excel_formulas()
                 except Exception as exc:  # noqa: BLE001 - guard daemon worker
@@ -290,9 +331,46 @@ class TabledownWindowsApp:
                     return
 
                 try:
-                    xml = formula_selection_to_xml(result.selection)
+                    xml = serialize(result.selection)
+                    if self._stop_watcher.is_set():
+                        return
                     with self._clipboard_operation_lock:
-                        write_text_only_clipboard(xml)
+                        if self._stop_watcher.is_set():
+                            return
+                        write_text_only_clipboard(
+                            xml,
+                            expected_change_count=expected_change_count,
+                        )
+                except ClipboardChangedError:
+                    log("excel formula export cancelled: clipboard_changed")
+                    self._show_message_box_async(
+                        t(
+                            "formula_export.error.clipboard_changed",
+                            self.lang,
+                        ),
+                        t("help.title", self.lang),
+                    )
+                    return
+                except FormulaXmlTooLargeError:
+                    log("excel formula export failed: output_too_large")
+                    self._show_message_box_async(
+                        t(
+                            "formula_export.error.output_too_large",
+                            self.lang,
+                        ),
+                        t("help.title", self.lang),
+                    )
+                    return
+                except ClipboardWriteError:
+                    log("excel formula clipboard write failed: clipboard_write_failed")
+                    self._show_message_box_async(
+                        t(
+                            "formula_export.error.clipboard_write_failed",
+                            self.lang,
+                        ),
+                        t("help.title", self.lang),
+                    )
+                    return
                 except Exception as exc:  # noqa: BLE001 - omit formula-bearing details
                     log(f"excel formula clipboard write failed: {type(exc).__name__}")
                     self._show_message_box_async(
@@ -301,9 +379,19 @@ class TabledownWindowsApp:
                     )
                     return
 
+                if self._stop_watcher.is_set():
+                    return
                 log("excel table-with-formulas export succeeded")
+                notice = formula_copy_notice_key(result.selection)
+                success_key = (
+                    f"formula_export.success.{notice}"
+                    if notice is not None
+                    else "formula_export.success.ai" if compact_for_ai else "formula_export.success"
+                )
+                if self._stop_watcher.is_set():
+                    return
                 self._show_message_box_async(
-                    t("formula_export.success", self.lang), t("help.title", self.lang)
+                    t(success_key, self.lang), t("help.title", self.lang)
                 )
             finally:
                 self._formula_export_lock.release()
@@ -423,33 +511,53 @@ class TabledownWindowsApp:
             time.sleep(0.1)
             if not self.enabled:
                 continue
+            # Do not consume or rewrite a new clipboard generation while an
+            # explicit formula export is reading Excel.  The export's final
+            # compare-and-write will cancel, then this watcher processes the
+            # still-latest generation on the next tick.
+            if self._formula_export_lock.locked():
+                continue
 
             current_change_count = clipboard_change_count()
             if current_change_count == self._last_change_count:
                 continue
 
-            self._last_change_count = current_change_count
-            self._augment_clipboard()
+            if self._augment_clipboard():
+                self._last_change_count = current_change_count
 
-    def _augment_clipboard(self) -> None:
+    def _augment_clipboard(self) -> bool:
+        if self._formula_export_lock.locked():
+            return False
         try:
             with self._clipboard_operation_lock:
+                # Close the window where export starts after the outer watcher
+                # check but before this clipboard transaction begins.
+                if self._formula_export_lock.locked():
+                    return False
+                source_change_count = clipboard_change_count()
                 content = read_clipboard()
                 updated = converted_clipboard(content, self.fill_blanks)
                 if updated is None:
-                    return
+                    return True
 
                 write_clipboard(
                     text=updated.get("text"),
                     html=updated.get("html"),
                     mark_generated=True,
                     drop_formats=updated.get("drop_formats"),
+                    expected_change_count=source_change_count,
                 )
             log("clipboard formats updated")
+            return True
+        except ClipboardChangedError:
+            # A newer external copy arrived during conversion. Do not consume
+            # its sequence number; the next watcher tick handles it.
+            return False
         except Exception as exc:  # noqa: BLE001 - tray app should keep watching
             # Type only — this processes clipboard content and exc messages can
             # carry table data we must never write to the shareable log.
             log(f"clipboard update failed: {type(exc).__name__}")
+            return True
 
     # --- Icon ---
 

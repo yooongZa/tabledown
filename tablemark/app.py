@@ -7,6 +7,8 @@ import rumps
 from PyObjCTools import AppHelper
 
 from .clipboard import (
+    ClipboardChangedError,
+    ClipboardWriteError,
     HTML_TYPES,
     RENDERED_TABLE_TYPES,
     clipboard_change_count,
@@ -14,7 +16,12 @@ from .clipboard import (
     write_clipboard,
     write_text_only_clipboard,
 )
-from .converter.formula_export import formula_selection_to_xml
+from .converter.formula_export import (
+    FormulaXmlTooLargeError,
+    formula_copy_notice_key,
+    formula_selection_to_ai_xml,
+    formula_selection_to_xml,
+)
 from .converter.html_to_md import (
     MultipleTablesError,
     convert_document_tables,
@@ -29,6 +36,7 @@ from .converter.md_to_tsv import (
     markdown_table_to_rows,
 )
 from .converter.table_xml import (
+    TableXmlTooLargeError,
     is_table_xml,
     model_to_xml,
     table_xml_to_model,
@@ -42,6 +50,8 @@ from .i18n import (
 from .excel_formula import ExcelFormulaError, read_stable_selected_excel_formulas
 from .excel_table import (
     excel_table_selection_to_model,
+    excel_table_selection_to_model_with_sources,
+    excel_table_selection_xml_metadata,
     read_stable_selected_excel_table,
 )
 from . import diagnostics
@@ -58,6 +68,17 @@ from .settings import (
 
 
 GITHUB_URL = "https://github.com/yooongZa/tabledown"
+_EXPORT_TABLE = "table"
+_EXPORT_FORMULAS = "formulas"
+_EXPORT_AI_FORMULAS = "ai_formulas"
+
+
+class _ExplicitExportError(RuntimeError):
+    """A content-free explicit-export failure safe to map to localized UI."""
+
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__(code)
 
 
 def _markdown_paste_block(markdown: str) -> str:
@@ -90,6 +111,12 @@ class TabledownApp(rumps.App):
         # Serializes read/convert/write with explicit clipboard exports so a
         # slow watcher conversion can never overwrite a newer manual result.
         self._clipboard_operation_lock = threading.Lock()
+        # Allow only one explicit XML export at a time so an older result can
+        # never finish after a newer request. NSAppleScript is main-thread-only,
+        # so the action first updates the busy UI and then defers the read to the
+        # next main-run-loop turn rather than executing inside the menu callback.
+        self._explicit_export_lock = threading.Lock()
+        self._explicit_export_active = None
 
         self.toggle_item = rumps.MenuItem(
             t("menu.toggle", self.lang),
@@ -110,6 +137,13 @@ class TabledownApp(rumps.App):
             key="e",
         )
         self._show_cmd_ctrl_shortcut(self.copy_excel_formulas_item)
+        self.copy_ai_formulas_item = rumps.MenuItem(
+            t("menu.copy_ai_formulas", self.lang),
+            callback=self.copy_selected_excel_formulas_for_ai,
+        )
+        self.copy_ai_formulas_item._menuitem.setToolTip_(
+            t("menu.copy_ai_formulas_tooltip", self.lang)
+        )
         self.fill_blanks_item = rumps.MenuItem(
             t("menu.fill_blanks", self.lang),
             callback=self.toggle_fill_blanks,
@@ -157,6 +191,7 @@ class TabledownApp(rumps.App):
             self.toggle_item,
             self.copy_xml_item,
             self.copy_excel_formulas_item,
+            self.copy_ai_formulas_item,
             None,  # separator
             self.settings_item,
             None,  # separator
@@ -275,10 +310,7 @@ class TabledownApp(rumps.App):
     def _apply_language(self):
         """Refresh every menu title for the current language."""
         self.toggle_item.title = t("menu.toggle", self.lang)
-        self.copy_xml_item.title = t("menu.copy_xml", self.lang)
-        self.copy_excel_formulas_item.title = t(
-            "menu.copy_excel_formulas", self.lang
-        )
+        self._update_explicit_export_menu()
         self.fill_blanks_item.title = t("menu.fill_blanks", self.lang)
         self.fill_blanks_item._menuitem.setToolTip_(t("menu.fill_blanks_tooltip", self.lang))
         self.settings_item.title = t("menu.settings", self.lang)
@@ -326,84 +358,291 @@ class TabledownApp(rumps.App):
         log(f"fill blanks {'enabled' if self.fill_blanks else 'disabled'}")
 
     def copy_as_xml(self, _sender):
-        """Copy the current Excel selection as merge-aware LLM-friendly XML.
+        """Schedule a merge-aware XML export of the Excel selection.
 
-        Like the formula action, this reads one rectangular Excel selection
-        directly — the user does not copy first.  Values plus merge rectangles
-        are checked as a stable snapshot before the clipboard is touched.  On
-        success it replaces every clipboard format with text-only XML so Excel
-        cannot prefer an old OLE/native table over the requested XML.
-        There is no automatic XML→table direction — XML is produced only by this
-        menu click, never inferred from clipboard contents by the watcher.
+        The established stable-snapshot reader and exact XML serializer remain
+        unchanged. The busy menu state is applied before the main-thread-only
+        NSAppleScript read starts, one export runs at a time, and a newer user
+        clipboard copy cancels the final write.
         """
-        try:
-            selection = read_stable_selected_excel_table()
-            header_levels, data_rows = excel_table_selection_to_model(selection)
-            if not data_rows:
-                log("copy selected Excel table as XML failed: no_table")
-                self._safe_alert(
-                    t("table.error_title", self.lang),
-                    t("table.error.no_table", self.lang),
-                )
-                return
-            if self.fill_blanks:
-                data_rows = forward_fill_key_columns(
-                    [header_levels[-1]] + data_rows
-                )[1:]
-            xml = model_to_xml(header_levels, data_rows)
-            with self._clipboard_operation_lock:
-                write_text_only_clipboard(xml, mark_generated=True)
-            log("copied selected Excel table as XML")
-            # Only permission-free feedback channel we have: a system
-            # notification would prompt for permission (breaking the
-            # zero-permissions design), so the menu bar icon itself confirms
-            # the conversion — essential for the global hotkey, which otherwise
-            # gives no visible sign of success.
-            self._flash_icon_success()
-        except ExcelFormulaError as exc:
-            # Shared Excel selection errors contain stable codes only; cell
-            # values and native AppleScript messages never enter the log.
-            log(f"copy selected Excel table as XML failed: {exc.code}")
-            key = f"table.error.{exc.code}"
-            message = t(key, self.lang)
-            if message == key:
-                message = t("table.error.execution_failed", self.lang)
-            self._safe_alert(
-                t("table.error_title", self.lang),
-                message,
-            )
-        except Exception as exc:  # noqa: BLE001 - surface failure to the user
-            # Type only: conversion exceptions may include workbook-derived
-            # values, which must stay out of the shareable diagnostics log.
-            log(f"copy selected Excel table as XML failed: {type(exc).__name__}")
-            self._safe_alert(
-                t("table.error_title", self.lang),
-                t("table.error.execution_failed", self.lang),
-            )
+        self._start_explicit_export(_EXPORT_TABLE)
 
     def copy_selected_excel_formulas(self, _sender):
-        """Copy every selected Excel value, blank, and formula as text-only XML."""
+        """Schedule a values/formulas/references XML export."""
+        self._start_explicit_export(_EXPORT_FORMULAS)
+
+    def copy_selected_excel_formulas_for_ai(self, _sender):
+        """Use the same stable read and export gate for compact AI XML."""
+        self._start_explicit_export(_EXPORT_AI_FORMULAS)
+
+    def _start_explicit_export(self, export_kind: str) -> None:
+        """Schedule one explicit XML action, or explain that one is already active."""
+        if not self._explicit_export_lock.acquire(blocking=False):
+            self._safe_alert(
+                t("export.error_title", self.lang),
+                t("export.error.in_progress", self.lang),
+            )
+            return
+
         try:
-            selection = read_stable_selected_excel_formulas()
-            xml = formula_selection_to_xml(selection)
+            # Let an in-flight watcher finish first, then establish the exact
+            # clipboard generation this explicit action is allowed to replace.
             with self._clipboard_operation_lock:
-                write_text_only_clipboard(xml, mark_generated=True)
-            log("copied selected Excel table with formulas as XML")
-            self._flash_icon_success()
+                # Publish the watcher-pause signal before releasing this lock.
+                # Otherwise an automatic rewrite can increment changeCount
+                # after the snapshot and falsely look like a new user copy.
+                self._explicit_export_active = export_kind
+                expected_change_count = clipboard_change_count()
+            fill_blanks = self.fill_blanks
+            self._set_explicit_export_busy(export_kind)
+            AppHelper.callAfter(
+                self._run_explicit_export,
+                export_kind,
+                expected_change_count,
+                fill_blanks,
+            )
+        except Exception as exc:  # noqa: BLE001 - scheduling failures are UI-safe
+            self._explicit_export_lock.release()
+            self._set_explicit_export_busy(None)
+            log(f"start explicit XML export failed: {type(exc).__name__}")
+            self._alert_explicit_export_error(export_kind, "execution_failed")
+
+    def _run_explicit_export(
+        self,
+        export_kind: str,
+        expected_change_count: int,
+        fill_blanks: bool,
+    ) -> None:
+        """Run the explicit export on the main thread where NSAppleScript is valid."""
+        outcome = "error"
+        error_code = "execution_failed"
+        try:
+            outcome, error_code = self._perform_explicit_export(
+                export_kind, expected_change_count, fill_blanks
+            )
+        except Exception as exc:  # noqa: BLE001 - gate/UI must always recover
+            log(f"explicit XML export failed: {type(exc).__name__}")
+        self._finish_explicit_export(export_kind, outcome, error_code)
+
+    def _perform_explicit_export(
+        self,
+        export_kind: str,
+        expected_change_count: int,
+        fill_blanks: bool,
+    ) -> tuple[str, str | None]:
+        """Read Excel and write XML, returning a content-free result."""
+        outcome = "success"
+        error_code = None
+        notice_key = None
+        stop_event = getattr(self, "_stop_watcher", None)
+        try:
+            if stop_event is not None and stop_event.is_set():
+                raise _ExplicitExportError("cancelled")
+            if export_kind == _EXPORT_TABLE:
+                selection = read_stable_selected_excel_table()
+                (
+                    header_levels,
+                    data_rows,
+                    data_source_addresses,
+                ) = excel_table_selection_to_model_with_sources(selection)
+                if not data_rows:
+                    raise _ExplicitExportError("no_table")
+                filled_cell_addresses: tuple[str, ...] = ()
+                if fill_blanks:
+                    original_rows = [list(row) for row in data_rows]
+                    fill_input = [
+                        list(header_levels[-1]),
+                        *[list(row) for row in data_rows],
+                    ]
+                    data_rows = forward_fill_key_columns(fill_input)[1:]
+                    filled_cell_addresses = tuple(
+                        dict.fromkeys(
+                            data_source_addresses[row_index][column_index]
+                            for row_index, (before, after) in enumerate(
+                                zip(original_rows, data_rows, strict=True)
+                            )
+                            for column_index, (old_value, new_value) in enumerate(
+                                zip(before, after, strict=True)
+                            )
+                            if old_value != new_value
+                        )
+                    )
+                metadata = excel_table_selection_xml_metadata(
+                    selection,
+                    header_levels,
+                    blank_fill_enabled=fill_blanks,
+                    blank_fill_cells=filled_cell_addresses,
+                )
+                xml = model_to_xml(
+                    header_levels,
+                    data_rows,
+                    metadata=metadata,
+                )
+            else:
+                selection = read_stable_selected_excel_formulas()
+                xml = (
+                    formula_selection_to_ai_xml(selection)
+                    if export_kind == _EXPORT_AI_FORMULAS
+                    else formula_selection_to_xml(selection)
+                )
+                notice_key = formula_copy_notice_key(selection)
+
+            if stop_event is not None and stop_event.is_set():
+                raise _ExplicitExportError("cancelled")
+
+            with self._clipboard_operation_lock:
+                if stop_event is not None and stop_event.is_set():
+                    raise _ExplicitExportError("cancelled")
+                write_text_only_clipboard(
+                    xml,
+                    mark_generated=True,
+                    expected_change_count=expected_change_count,
+                )
+
+            # A notice describes successfully copied, incomplete context. Never
+            # show it before the writer has verified the clipboard contents.
+            if notice_key is not None:
+                outcome, error_code = "notice", notice_key
+            if export_kind == _EXPORT_TABLE:
+                log("copied selected Excel table as XML")
+            else:
+                log("copied selected Excel table with formulas as XML")
+        except ClipboardChangedError:
+            outcome = "error"
+            error_code = "clipboard_changed"
+            if export_kind == _EXPORT_TABLE:
+                log("copy selected Excel table as XML failed: clipboard_changed")
+            else:
+                log("copy Excel table with formulas failed: clipboard_changed")
+        except ClipboardWriteError:
+            outcome = "error"
+            error_code = "clipboard_write_failed"
+            if export_kind == _EXPORT_TABLE:
+                log(
+                    "copy selected Excel table as XML failed: "
+                    "clipboard_write_failed"
+                )
+            else:
+                log(
+                    "copy Excel table with formulas failed: "
+                    "clipboard_write_failed"
+                )
+        except (TableXmlTooLargeError, FormulaXmlTooLargeError):
+            outcome = "error"
+            error_code = "output_too_large"
+            if export_kind == _EXPORT_TABLE:
+                log("copy selected Excel table as XML failed: output_too_large")
+            else:
+                log("copy Excel table with formulas failed: output_too_large")
         except ExcelFormulaError as exc:
-            # Error codes are stable and content-free. Formula text and native
-            # AppleScript messages must never enter the shareable log.
-            log(f"copy Excel table with formulas failed: {exc.code}")
-            self._safe_alert(
-                t("formula.error_title", self.lang),
-                t(f"formula.error.{exc.code}", self.lang),
-            )
-        except Exception:  # noqa: BLE001 - keep content out of logs
-            log("copy Excel table with formulas failed: execution_failed")
-            self._safe_alert(
-                t("formula.error_title", self.lang),
-                t("formula.error.execution_failed", self.lang),
-            )
+            outcome = "error"
+            error_code = exc.code
+            if export_kind == _EXPORT_TABLE:
+                log(f"copy selected Excel table as XML failed: {exc.code}")
+            else:
+                log(f"copy Excel table with formulas failed: {exc.code}")
+        except _ExplicitExportError as exc:
+            outcome = "cancelled" if exc.code == "cancelled" else "error"
+            error_code = exc.code
+            if exc.code != "cancelled":
+                if export_kind == _EXPORT_TABLE:
+                    log(f"copy selected Excel table as XML failed: {exc.code}")
+                else:
+                    log(f"copy Excel table with formulas failed: {exc.code}")
+        except Exception as exc:  # noqa: BLE001 - never log workbook content
+            outcome = "error"
+            error_code = "execution_failed"
+            if export_kind == _EXPORT_TABLE:
+                log(
+                    "copy selected Excel table as XML failed: "
+                    f"{type(exc).__name__}"
+                )
+            else:
+                log("copy Excel table with formulas failed: execution_failed")
+        return outcome, error_code
+
+    def _finish_explicit_export(
+        self, export_kind: str, outcome: str, error_code: str | None
+    ) -> None:
+        """Restore menu state and report the verified export on the main thread."""
+        try:
+            stop_event = getattr(self, "_stop_watcher", None)
+            if stop_event is not None and stop_event.is_set():
+                return
+            self._set_explicit_export_busy(None)
+            if outcome in {"success", "notice"}:
+                # A notification would request a new permission.  Keep the
+                # existing permission-free one-second menu icon confirmation.
+                self._flash_icon_success()
+                if outcome == "notice" and error_code is not None:
+                    self._safe_alert(
+                        t("formula.copy_notice_title", self.lang),
+                        t(f"formula.copy_notice.{error_code}", self.lang),
+                    )
+            elif outcome == "error" and error_code is not None:
+                self._alert_explicit_export_error(export_kind, error_code)
+        finally:
+            self._explicit_export_lock.release()
+
+    def _alert_explicit_export_error(self, export_kind: str, code: str) -> None:
+        prefix = "table" if export_kind == _EXPORT_TABLE else "formula"
+        key = f"{prefix}.error.{code}"
+        message = t(key, self.lang)
+        if message == key:
+            message = t(f"{prefix}.error.execution_failed", self.lang)
+        self._safe_alert(
+            t(f"{prefix}.error_title", self.lang),
+            message,
+        )
+
+    def _set_explicit_export_busy(self, export_kind: str | None) -> None:
+        """Expose progress in both the closed status item and its open menu."""
+        self._explicit_export_active = export_kind
+        # The menu closes before the main-thread Excel read begins, so a changed
+        # menu item alone is not visible during a long selection. Keep a small
+        # status-bar ellipsis beside the icon until success/failure restores it.
+        try:
+            self.title = "…" if export_kind is not None else None
+        except Exception as exc:  # noqa: BLE001 - progress text is best effort
+            log(f"explicit XML status title update failed: {type(exc).__name__}")
+        self._update_explicit_export_menu()
+        enabled = export_kind is None
+        for item in (
+            self.copy_xml_item,
+            self.copy_excel_formulas_item,
+            self.copy_ai_formulas_item,
+        ):
+            try:
+                item._menuitem.setEnabled_(enabled)
+            except Exception as exc:  # noqa: BLE001 - state text is best effort
+                log(f"explicit XML menu state update failed: {type(exc).__name__}")
+
+    def _update_explicit_export_menu(self) -> None:
+        """Apply localized normal/busy XML labels without losing active state."""
+        active = getattr(self, "_explicit_export_active", None)
+        self.copy_xml_item.title = t(
+            "menu.copy_xml_busy" if active == _EXPORT_TABLE else "menu.copy_xml",
+            self.lang,
+        )
+        self.copy_excel_formulas_item.title = t(
+            (
+                "menu.copy_excel_formulas_busy"
+                if active == _EXPORT_FORMULAS
+                else "menu.copy_excel_formulas"
+            ),
+            self.lang,
+        )
+        self.copy_ai_formulas_item.title = t(
+            (
+                "menu.copy_ai_formulas_busy"
+                if active == _EXPORT_AI_FORMULAS
+                else "menu.copy_ai_formulas"
+            ),
+            self.lang,
+        )
+        self.copy_ai_formulas_item._menuitem.setToolTip_(
+            t("menu.copy_ai_formulas_tooltip", self.lang)
+        )
 
     def _safe_alert(self, title: str, message: str):
         """rumps.alert that never lets a UI failure propagate into the run loop."""
@@ -562,23 +801,36 @@ class TabledownApp(rumps.App):
             time.sleep(0.1)
             if not self.enabled:
                 continue
+            if getattr(self, "_explicit_export_active", None) is not None:
+                continue
 
             current_change_count = clipboard_change_count()
             if current_change_count == self._last_change_count:
                 continue
 
-            self._last_change_count = current_change_count
-            self._augment_clipboard()
+            if self._augment_clipboard():
+                self._last_change_count = current_change_count
 
     def _augment_clipboard(self):
+        if getattr(self, "_explicit_export_active", None) is not None:
+            return False
         try:
             with self._clipboard_operation_lock:
+                # Recheck after acquiring the transaction lock to close the
+                # race where an export starts after the outer watcher check.
+                if getattr(self, "_explicit_export_active", None) is not None:
+                    return False
+                source_change_count = clipboard_change_count()
                 content = read_clipboard()
                 updated = self._converted_clipboard(content)
                 if updated is None:
-                    return
+                    return True
 
-                write_clipboard(**updated, mark_generated=True)
+                write_clipboard(
+                    **updated,
+                    mark_generated=True,
+                    expected_change_count=source_change_count,
+                )
             log("clipboard formats updated")
             # Make the otherwise-invisible background rewrite observable: a brief
             # icon checkmark so the user knows a table they copied was converted
@@ -588,10 +840,16 @@ class TabledownApp(rumps.App):
             # thread before touching the icon. The mark_generated write above
             # makes the next watcher tick a no-op, so this never flash-loops.
             AppHelper.callAfter(self._flash_icon_success, 0.5)
+            return True
+        except ClipboardChangedError:
+            # A newer external copy arrived while this generation was being
+            # converted. Leave it untouched and let the next tick process it.
+            return False
         except Exception as e:
             # Type only — this processes clipboard content and exc messages can
             # carry table data we must never write to the shareable log.
             log(f"clipboard update failed: {type(e).__name__}")
+            return True
 
     def _converted_clipboard(self, content):
         """Return clipboard formats to write, or None when no update is needed.

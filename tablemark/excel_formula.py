@@ -10,7 +10,7 @@ from dataclasses import dataclass, replace
 import re
 from typing import Protocol
 
-from AppKit import NSRunningApplication
+from AppKit import NSRunningApplication, NSWorkspace
 from Foundation import NSAppleScript
 
 from .converter.formula_export import (
@@ -24,7 +24,8 @@ from .converter.formula_export import (
     ExcelReferenceCell,
     ExcelSelectionCell,
     FormulaReferenceTarget,
-    extract_formula_reference_targets,
+    analyze_formula_references,
+    normalize_excel_number_text,
 )
 
 
@@ -219,7 +220,12 @@ using terms from application "Microsoft Excel"
         if formulaMaskText does not contain "1" then
             return {{"error", "{NO_FORMULAS}"}}
         end if
-        return {{"{MASK_RESULT_STATUS}", workbookName, sheetName, selectionAddress, selectedRowCount as text, selectedColumnCount as text, formulaMaskText}}
+        try
+            set calculationMode to calculation as text
+        on error
+            set calculationMode to "unknown"
+        end try
+        return {{"{MASK_RESULT_STATUS}", workbookName, sheetName, selectionAddress, selectedRowCount as text, selectedColumnCount as text, formulaMaskText, calculationMode}}
     end tell
 end using terms from
 '''
@@ -266,10 +272,17 @@ class NSAppleScriptExecutor:
     """Native executor backed by ``NSAppleScript`` and running-app lookup."""
 
     def is_excel_running(self) -> bool:
-        return bool(
-            NSRunningApplication.runningApplicationsWithBundleIdentifier_(
-                EXCEL_BUNDLE_ID
-            )
+        if NSRunningApplication.runningApplicationsWithBundleIdentifier_(
+            EXCEL_BUNDLE_ID
+        ):
+            return True
+        # Live hotkey exports have observed an empty bundle lookup while Excel
+        # remained running. Confirm through the workspace list before reporting
+        # it unavailable, without launching Excel or reentering the run loop.
+        return any(
+            application.bundleIdentifier() == EXCEL_BUNDLE_ID
+            and not application.isTerminated()
+            for application in NSWorkspace.sharedWorkspace().runningApplications()
         )
 
     def run(self, source: str) -> object:
@@ -316,12 +329,25 @@ class _FormulaReadPlan:
     mask: tuple[bool, ...]
     value_chunks: tuple[_FormulaChunk, ...]
     chunks: tuple[_FormulaChunk, ...]
+    calculation_mode: str = "unknown"
 
 
 @dataclass(frozen=True)
 class _ReferenceRequest:
-    owner_address: str
+    owner_addresses: tuple[str, ...]
     target: FormulaReferenceTarget
+
+    @property
+    def owner_address(self) -> str:
+        return self.owner_addresses[0]
+
+
+@dataclass(frozen=True)
+class _TaggedValue:
+    """One decoded Excel value plus its native type for safe formula display."""
+
+    text: str | None
+    kind: str | None
 
 
 def _positive_int(value: object) -> int:
@@ -509,12 +535,13 @@ def _raise_error_payload(payload: object) -> None:
 
 def _parse_mask_result(payload: object) -> _FormulaReadPlan:
     _raise_error_payload(payload)
-    if not isinstance(payload, (list, tuple)) or len(payload) != 7:
+    if not isinstance(payload, (list, tuple)) or len(payload) not in (7, 8):
         raise ExcelFormulaError(INVALID_RESPONSE)
     if payload[0] != MASK_RESULT_STATUS:
         raise ExcelFormulaError(INVALID_RESPONSE)
 
-    workbook, sheet, address, raw_rows, raw_columns, raw_mask = payload[1:]
+    workbook, sheet, address, raw_rows, raw_columns, raw_mask = payload[1:7]
+    raw_calculation_mode = payload[7] if len(payload) == 8 else "unknown"
     if not all(
         isinstance(value, str) and value for value in (workbook, sheet, address)
     ):
@@ -555,7 +582,25 @@ def _parse_mask_result(payload: object) -> _FormulaReadPlan:
         mask=mask,
         value_chunks=value_chunks,
         chunks=chunks,
+        calculation_mode=_normalize_calculation_mode(raw_calculation_mode),
     )
+
+
+def _normalize_calculation_mode(value: object) -> str:
+    """Normalize Excel's localized-enum text without rejecting old payloads."""
+
+    if not isinstance(value, str):
+        return "unknown"
+    normalized = value.strip().lower()
+    mapping = {
+        "calculation automatic": "automatic",
+        "automatic": "automatic",
+        "calculation manual": "manual",
+        "manual": "manual",
+        "calculation semiautomatic": "semiautomatic",
+        "semiautomatic": "semiautomatic",
+    }
+    return mapping.get(normalized, "unknown")
 
 
 def _codepoint_expression(value: str) -> str:
@@ -651,8 +696,17 @@ on taggedRangeValues(targetRange, expectedCellCount)
     set rawFormulaFlags to {{}}
     using terms from application "Microsoft Excel"
         tell application id "{EXCEL_BUNDLE_ID}"
-            set rawValues to get value of every cell of targetRange
-            set rawFormulaFlags to get has formula of every cell of targetRange
+            -- Excel's `every cell` form returns an empty string/false for a
+            -- one-cell Range even when that cell contains a formula result.
+            if expectedCellCount is 1 then
+                set rawValue to get value2 of targetRange
+                set rawFormulaFlag to get has formula of targetRange
+                set rawValues to {{rawValue}}
+                set rawFormulaFlags to {{rawFormulaFlag}}
+            else
+                set rawValues to get value2 of every cell of targetRange
+                set rawFormulaFlags to get has formula of every cell of targetRange
+            end if
         end tell
     end using terms from
     set flatRawValues to {{}}
@@ -676,14 +730,23 @@ on taggedRangeValues(targetRange, expectedCellCount)
                 -- Excel exposes formula errors as missing value through its
                 -- AppleScript bridge. ERROR.TYPE recovers a stable error name.
                 set valueText to my excelErrorText(targetRange, valueIndex)
+                set end of taggedValues to {{"error", valueText}}
             else
                 try
-                    set valueText to rawValue as text
+                    if (class of rawValue) is integer or (class of rawValue) is real then
+                        -- Keep the numeric Apple Event descriptor. Python
+                        -- expands any exponent without touching numeric-looking text.
+                        set end of taggedValues to {{"number", rawValue}}
+                    else if (class of rawValue) is boolean then
+                        set end of taggedValues to {{"boolean", rawValue as text}}
+                    else
+                        set end of taggedValues to {{"text", rawValue as text}}
+                    end if
                 on error
                     set valueText to my excelErrorText(targetRange, valueIndex)
+                    set end of taggedValues to {{"error", valueText}}
                 end try
             end if
-            set end of taggedValues to {{"value", valueText}}
         end if
     end repeat
     return taggedValues
@@ -848,30 +911,77 @@ end using terms from
 def _reference_requests(
     selection: ExcelFormulaSelection,
 ) -> tuple[tuple[_ReferenceRequest, ...], dict[str, bool]]:
-    """Plan bounded direct A1 reference reads for every formula cell."""
+    """Backward-compatible view of the shared-reference read plan."""
 
-    requests: list[_ReferenceRequest] = []
-    completeness: dict[str, bool] = {}
-    reference_cell_count = 0
+    requests, completeness, _issues = _reference_read_plan(selection)
+    return requests, completeness
+
+
+def _reference_read_plan(
+    selection: ExcelFormulaSelection,
+) -> tuple[
+    tuple[_ReferenceRequest, ...],
+    dict[str, bool],
+    dict[str, tuple[str, ...]],
+]:
+    """Plan bounded reads once per exact target and retain every owner."""
+
+    target_owners: dict[
+        tuple[str, str, int, int],
+        tuple[FormulaReferenceTarget, list[str], set[str]],
+    ] = {}
+    issue_lists: dict[str, list[str]] = {}
+    formula_addresses: list[str] = []
     for cell in selection.cells:
         if cell.formula_a1 is None:
             continue
-        targets, complete = extract_formula_reference_targets(
+        formula_addresses.append(cell.address)
+        targets, parser_issues = analyze_formula_references(
             cell.formula_a1, selection.sheet
         )
-        completeness[cell.address] = complete
+        issue_lists[cell.address] = list(parser_issues)
         for target in targets:
-            target_cell_count = target.row_count * target.column_count
-            if (
-                len(requests) >= MAX_REFERENCE_RANGES
-                or target_cell_count > MAX_FORMULA_CHUNK_CELLS
-                or reference_cell_count + target_cell_count > MAX_REFERENCE_CELLS
-            ):
-                completeness[cell.address] = False
-                continue
-            requests.append(_ReferenceRequest(cell.address, target))
-            reference_cell_count += target_cell_count
-    return tuple(requests), completeness
+            key = (
+                target.sheet,
+                target.address,
+                target.row_count,
+                target.column_count,
+            )
+            if key not in target_owners:
+                target_owners[key] = (target, [], set())
+            _target, owners, owner_set = target_owners[key]
+            if cell.address not in owner_set:
+                owner_set.add(cell.address)
+                owners.append(cell.address)
+
+    requests: list[_ReferenceRequest] = []
+    reference_cell_count = 0
+    for target, owners, _owner_set in target_owners.values():
+        target_cell_count = target.row_count * target.column_count
+        issue = None
+        if len(requests) >= MAX_REFERENCE_RANGES:
+            issue = "range_count_limit"
+        elif target_cell_count > MAX_FORMULA_CHUNK_CELLS:
+            issue = "range_size_limit"
+        elif reference_cell_count + target_cell_count > MAX_REFERENCE_CELLS:
+            issue = "cell_count_limit"
+        if issue is not None:
+            for owner in owners:
+                if issue not in issue_lists[owner]:
+                    issue_lists[owner].append(issue)
+            continue
+        requests.append(_ReferenceRequest(tuple(owners), target))
+        reference_cell_count += target_cell_count
+
+    completeness = {
+        address: not issue_lists.get(address)
+        for address in formula_addresses
+    }
+    issues = {
+        address: tuple(issue_lists.get(address, ()))
+        for address in formula_addresses
+    }
+    return tuple(requests), completeness, issues
 
 
 def _reference_request_literal(request: _ReferenceRequest) -> str:
@@ -929,8 +1039,15 @@ on taggedReferenceValues(targetRange, expectedCellCount)
     set rawFormulaFlags to {{}}
     using terms from application "Microsoft Excel"
         tell application id "{EXCEL_BUNDLE_ID}"
-            set rawValues to get value of every cell of targetRange
-            set rawFormulaFlags to get has formula of every cell of targetRange
+            if expectedCellCount is 1 then
+                set rawValue to get value2 of targetRange
+                set rawFormulaFlag to get has formula of targetRange
+                set rawValues to {{rawValue}}
+                set rawFormulaFlags to {{rawFormulaFlag}}
+            else
+                set rawValues to get value2 of every cell of targetRange
+                set rawFormulaFlags to get has formula of every cell of targetRange
+            end if
         end tell
     end using terms from
     set flatRawValues to {{}}
@@ -950,14 +1067,21 @@ on taggedReferenceValues(targetRange, expectedCellCount)
         else
             if rawValue is missing value then
                 set valueText to my excelReferenceErrorText(targetRange, valueIndex)
+                set end of taggedValues to {{"error", valueText}}
             else
                 try
-                    set valueText to rawValue as text
+                    if (class of rawValue) is integer or (class of rawValue) is real then
+                        set end of taggedValues to {{"number", rawValue}}
+                    else if (class of rawValue) is boolean then
+                        set end of taggedValues to {{"boolean", rawValue as text}}
+                    else
+                        set end of taggedValues to {{"text", rawValue as text}}
+                    end if
                 on error
                     set valueText to my excelReferenceErrorText(targetRange, valueIndex)
+                    set end of taggedValues to {{"error", valueText}}
                 end try
             end if
-            set end of taggedValues to {{"value", valueText}}
         end if
     end repeat
     return taggedValues
@@ -1003,10 +1127,13 @@ using terms from application "Microsoft Excel"
                     set taggedValue to contents of taggedValueReference
                     set candidateCharacterCount to candidateCharacterCount + (length of ((item 2 of taggedValue) as text))
                 end repeat
-                if candidateCharacterCount > {MAX_VALUE_CHARACTERS} then error number -2700
-                set referenceValueCharacters to candidateCharacterCount
-                set actualReferenceAddress to get address referenceRange row absolute true column absolute true reference style A1
-                set end of referencePayloads to {{"ok", ownerAddress, referenceSheetName, actualReferenceAddress, expectedReferenceRows as text, expectedReferenceColumns as text, taggedValues}}
+                if candidateCharacterCount > {MAX_VALUE_CHARACTERS} then
+                    set end of referencePayloads to {{"too_large", ownerAddress, referenceSheetName, referenceAddress}}
+                else
+                    set referenceValueCharacters to candidateCharacterCount
+                    set actualReferenceAddress to get address referenceRange row absolute true column absolute true reference style A1
+                    set end of referencePayloads to {{"ok", ownerAddress, referenceSheetName, actualReferenceAddress, expectedReferenceRows as text, expectedReferenceColumns as text, taggedValues}}
+                end if
             on error errorMessage number errorNumber
                 if errorNumber is -1743 then error number errorNumber
                 set end of referencePayloads to {{"unresolved", ownerAddress, referenceSheetName, referenceAddress}}
@@ -1035,6 +1162,7 @@ def _parse_reference_result(
     selection: ExcelFormulaSelection,
     requests: tuple[_ReferenceRequest, ...],
     completeness: dict[str, bool],
+    issues: dict[str, tuple[str, ...]],
 ) -> ExcelFormulaSelection:
     _raise_error_payload(payload)
     if not isinstance(payload, (list, tuple)) or len(payload) != 5:
@@ -1051,7 +1179,20 @@ def _parse_reference_result(
     if not isinstance(raw_references, (list, tuple)) or len(raw_references) != len(requests):
         raise ExcelFormulaError(INVALID_RESPONSE)
 
-    references_by_owner: dict[str, list[ExcelFormulaReference]] = {}
+    references_by_target: dict[
+        tuple[str, str, int, int], ExcelFormulaReference
+    ] = {}
+    issue_lists = {
+        address: list(owner_issues)
+        for address, owner_issues in issues.items()
+    }
+
+    def add_issue(owner: str, issue: str) -> None:
+        owner_issues = issue_lists.setdefault(owner, [])
+        if issue not in owner_issues:
+            owner_issues.append(issue)
+        completeness[owner] = False
+
     value_character_count = sum(
         len(cell.value) for cell in selection.cells if cell.value is not None
     )
@@ -1059,14 +1200,20 @@ def _parse_reference_result(
         if not isinstance(raw_reference, (list, tuple)) or not raw_reference:
             raise ExcelFormulaError(INVALID_RESPONSE)
         target = request.target
-        if raw_reference[0] == "unresolved":
+        if raw_reference[0] in {"unresolved", "too_large"}:
             if list(raw_reference[1:]) != [
                 request.owner_address,
                 target.sheet,
                 target.address,
             ]:
                 raise ExcelFormulaError(INVALID_RESPONSE)
-            completeness[request.owner_address] = False
+            issue = (
+                "value_size_limit"
+                if raw_reference[0] == "too_large"
+                else "read_failed"
+            )
+            for owner in request.owner_addresses:
+                add_issue(owner, issue)
             continue
         if len(raw_reference) != 7 or raw_reference[0] != "ok":
             raise ExcelFormulaError(INVALID_RESPONSE)
@@ -1087,14 +1234,15 @@ def _parse_reference_result(
             or _positive_int(raw_columns) != target.column_count
         ):
             raise ExcelFormulaError(INVALID_RESPONSE)
-        values = _flatten_tagged_values(
+        tagged_values = _flatten_tagged_value_items(
             raw_values, target.row_count, target.column_count
         )
         candidate_character_count = value_character_count + sum(
-            len(value) for value in values if value is not None
+            len(value.text) for value in tagged_values if value.text is not None
         )
         if candidate_character_count > MAX_VALUE_CHARACTERS:
-            completeness[request.owner_address] = False
+            for owner in request.owner_addresses:
+                add_issue(owner, "value_size_limit")
             continue
         value_character_count = candidate_character_count
         start_row, start_column, _, _ = _rectangle_bounds(target.address)
@@ -1106,19 +1254,48 @@ def _parse_reference_result(
                     start_row + (index // target.column_count),
                     start_column + (index % target.column_count),
                 ),
-                value,
+                value.text,
+                value.kind,
             )
-            for index, value in enumerate(values)
+            for index, value in enumerate(tagged_values)
         )
-        references_by_owner.setdefault(owner_address, []).append(
-            ExcelFormulaReference(target.sheet, target.address, cells)
+        reference = ExcelFormulaReference(target.sheet, target.address, cells)
+        references_by_target[
+            (
+                target.sheet,
+                target.address,
+                target.row_count,
+                target.column_count,
+            )
+        ] = reference
+
+    def ordered_references(cell: ExcelSelectionCell) -> tuple[
+        ExcelFormulaReference, ...
+    ]:
+        if cell.formula_a1 is None:
+            return ()
+        targets, _parser_issues = analyze_formula_references(
+            cell.formula_a1, selection.sheet
         )
+        ordered: list[ExcelFormulaReference] = []
+        for target in targets:
+            key = (
+                target.sheet,
+                target.address,
+                target.row_count,
+                target.column_count,
+            )
+            reference = references_by_target.get(key)
+            if reference is not None:
+                ordered.append(reference)
+        return tuple(ordered)
 
     updated_cells = tuple(
         replace(
             cell,
-            references=tuple(references_by_owner.get(cell.address, ())),
+            references=ordered_references(cell),
             references_complete=completeness.get(cell.address, True),
+            reference_issues=tuple(issue_lists.get(cell.address, ())),
         )
         if cell.formula_a1 is not None
         else cell
@@ -1128,14 +1305,18 @@ def _parse_reference_result(
 
 
 def _mark_reference_completeness(
-    selection: ExcelFormulaSelection, completeness: dict[str, bool]
+    selection: ExcelFormulaSelection,
+    completeness: dict[str, bool],
+    issues: dict[str, tuple[str, ...]] | None = None,
 ) -> ExcelFormulaSelection:
+    issue_map = issues or {}
     return replace(
         selection,
         cells=tuple(
             replace(
                 cell,
                 references_complete=completeness.get(cell.address, True),
+                reference_issues=issue_map.get(cell.address, ()),
             )
             if cell.formula_a1 is not None
             else cell
@@ -1176,10 +1357,22 @@ def _flatten_tagged_values(
     raw_values: object, rows: int, columns: int
 ) -> list[str | None]:
     """Decode the stage-2 blank/value tags without conflating ``None`` and ``""``."""
+
+    return [
+        value.text
+        for value in _flatten_tagged_value_items(raw_values, rows, columns)
+    ]
+
+
+def _flatten_tagged_value_items(
+    raw_values: object, rows: int, columns: int
+) -> list[_TaggedValue]:
+    """Decode typed AppleScript values while preserving literal text exactly."""
+
     expected_count = rows * columns
     if not isinstance(raw_values, (list, tuple)) or len(raw_values) != expected_count:
         raise ExcelFormulaError(INVALID_RESPONSE)
-    values: list[str | None] = []
+    values: list[_TaggedValue] = []
     for raw_value in raw_values:
         if not isinstance(raw_value, (list, tuple)) or len(raw_value) != 2:
             raise ExcelFormulaError(INVALID_RESPONSE)
@@ -1187,9 +1380,17 @@ def _flatten_tagged_values(
         if not isinstance(text, str):
             raise ExcelFormulaError(INVALID_RESPONSE)
         if state == "blank" and text == "":
-            values.append(None)
+            values.append(_TaggedValue(None, "blank"))
+        elif state == "number":
+            values.append(
+                _TaggedValue(normalize_excel_number_text(text), "number")
+            )
+        elif state in {"text", "boolean", "error"}:
+            values.append(_TaggedValue(text, state))
         elif state == "value":
-            values.append(text)
+            # Backward compatibility for older test fixtures/payloads.  Live
+            # scripts always return an explicit native type now.
+            values.append(_TaggedValue(text, None))
         else:
             raise ExcelFormulaError(INVALID_RESPONSE)
     return values
@@ -1257,7 +1458,7 @@ def parse_excel_formula_result(
             for chunk in expected_plan.chunks
         }
 
-    value_coordinates: dict[tuple[int, int], str | None] = {}
+    value_coordinates: dict[tuple[int, int], _TaggedValue] = {}
     seen_value_chunks: set[tuple[str, int, int]] = set()
     for raw_area in raw_value_areas:
         if not isinstance(raw_area, (list, tuple)) or len(raw_area) != 4:
@@ -1284,7 +1485,7 @@ def parse_excel_formula_result(
         if expected_value_chunks is not None and chunk_key not in expected_value_chunks:
             raise ExcelFormulaError(INVALID_RESPONSE)
 
-        values = _flatten_tagged_values(raw_values, rows, columns)
+        values = _flatten_tagged_value_items(raw_values, rows, columns)
         for index, value in enumerate(values):
             row_offset, column_offset = divmod(index, columns)
             coordinate = (
@@ -1310,7 +1511,9 @@ def parse_excel_formula_result(
     ):
         raise ExcelFormulaError(INVALID_RESPONSE)
     value_character_count = sum(
-        len(value) for value in value_coordinates.values() if value is not None
+        len(value.text)
+        for value in value_coordinates.values()
+        if value.text is not None
     )
     if value_character_count > MAX_VALUE_CHARACTERS:
         raise ExcelFormulaError(TOO_MUCH_TEXT)
@@ -1403,9 +1606,10 @@ def parse_excel_formula_result(
             cells.append(
                 ExcelSelectionCell(
                     address=f"${_column_name(cell_column)}${cell_row}",
-                    value=value_coordinates[coordinate],
+                    value=value_coordinates[coordinate].text,
                     formula_a1=formula_a1,
                     formula_r1c1=formula_r1c1,
+                    value_kind=value_coordinates[coordinate].kind,
                 )
             )
     return ExcelFormulaSelection(
@@ -1415,6 +1619,12 @@ def parse_excel_formula_result(
         row_count=selection_rows,
         column_count=selection_columns,
         cells=tuple(cells),
+        calculation_mode=(
+            expected_plan.calculation_mode
+            if expected_plan is not None
+            else "unknown"
+        ),
+        calculation_state="unavailable",
     )
 
 
@@ -1430,15 +1640,21 @@ def read_selected_excel_formulas(
         plan = _parse_mask_result(mask_payload)
         formula_payload = active_executor.run(_build_formula_read_script(plan))
         selection = parse_excel_formula_result(formula_payload, expected_plan=plan)
-        requests, completeness = _reference_requests(selection)
+        requests, completeness, issues = _reference_read_plan(selection)
         if not requests:
-            return _mark_reference_completeness(selection, completeness)
+            return _mark_reference_completeness(
+                selection, completeness, issues
+            )
         try:
             reference_payload = active_executor.run(
                 _build_reference_read_script(plan, requests)
             )
             return _parse_reference_result(
-                reference_payload, selection, requests, completeness
+                reference_payload,
+                selection,
+                requests,
+                completeness,
+                issues,
             )
         except ExcelFormulaError as exc:
             if exc.code == SELECTION_CHANGED:
@@ -1446,19 +1662,41 @@ def read_selected_excel_formulas(
             # Reference enrichment is additive. Keep the established formula
             # export available, but make incompleteness explicit in the XML.
             failed_completeness = dict(completeness)
-            failed_completeness.update(
-                {request.owner_address: False for request in requests}
-            )
+            failed_issues = {
+                address: list(owner_issues)
+                for address, owner_issues in issues.items()
+            }
+            for request in requests:
+                for owner in request.owner_addresses:
+                    failed_completeness[owner] = False
+                    if "read_failed" not in failed_issues.setdefault(owner, []):
+                        failed_issues[owner].append("read_failed")
             return _mark_reference_completeness(
-                selection, failed_completeness
+                selection,
+                failed_completeness,
+                {
+                    address: tuple(owner_issues)
+                    for address, owner_issues in failed_issues.items()
+                },
             )
         except Exception:
             failed_completeness = dict(completeness)
-            failed_completeness.update(
-                {request.owner_address: False for request in requests}
-            )
+            failed_issues = {
+                address: list(owner_issues)
+                for address, owner_issues in issues.items()
+            }
+            for request in requests:
+                for owner in request.owner_addresses:
+                    failed_completeness[owner] = False
+                    if "read_failed" not in failed_issues.setdefault(owner, []):
+                        failed_issues[owner].append("read_failed")
             return _mark_reference_completeness(
-                selection, failed_completeness
+                selection,
+                failed_completeness,
+                {
+                    address: tuple(owner_issues)
+                    for address, owner_issues in failed_issues.items()
+                },
             )
     except ExcelFormulaError:
         raise

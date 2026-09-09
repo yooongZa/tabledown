@@ -44,6 +44,14 @@ DROP_FORMAT_NAME_TO_ID = {
 }
 
 
+class ClipboardChangedError(RuntimeError):
+    """The clipboard changed after an explicit export started."""
+
+
+class ClipboardWriteError(OSError):
+    """A text-only clipboard export could not be verified."""
+
+
 def clipboard_change_count() -> int:
     """Return the current Windows clipboard sequence number."""
     return int(ctypes.windll.user32.GetClipboardSequenceNumber())
@@ -83,8 +91,10 @@ def write_clipboard(
     html: str | None = None,
     mark_generated: bool = False,
     drop_formats: Iterable[str] | None = None,
+    *,
+    expected_change_count: int | None = None,
 ) -> None:
-    """Update text/html formats while preserving restorable clipboard formats."""
+    """Update formats only if the watcher still owns the source generation."""
     drop_format_names = set(drop_formats or ())
     drop_format_ids = {DROP_FORMAT_NAME_TO_ID[name] for name in drop_format_names if name in DROP_FORMAT_NAME_TO_ID}
 
@@ -97,6 +107,14 @@ def write_clipboard(
         replaced_format_ids.add(GENERATED_FORMAT_ID)
 
     with _open_clipboard():
+        # OpenClipboard excludes other writers for the preserved-read→empty
+        # transaction. Checking immediately after opening is therefore the
+        # Windows compare-before-write boundary.
+        if (
+            expected_change_count is not None
+            and clipboard_change_count() != expected_change_count
+        ):
+            raise ClipboardChangedError("clipboard_changed")
         preserved = []
         for fmt in _enum_formats():
             if fmt in replaced_format_ids or fmt in drop_format_ids:
@@ -126,21 +144,47 @@ def write_clipboard(
             win32clipboard.SetClipboardData(GENERATED_FORMAT_ID, GENERATED_MARKER_VALUE.encode("utf-8"))
 
 
-def write_text_only_clipboard(text: str) -> None:
+def write_text_only_clipboard(
+    text: str,
+    *,
+    expected_change_count: int | None = None,
+) -> None:
     """Replace the clipboard with generated Unicode text and its marker only.
 
     This deliberately does not preserve Excel's native formats.  It is used
     only by the explicit formula-export command, whose output is an XML text
     document.  The normal watcher continues to use :func:`write_clipboard` and
     therefore keeps its existing preservation semantics unchanged.
+
+    ``expected_change_count`` prevents a slow Excel read from overwriting newer
+    user clipboard content.  The write is successful only when both the text
+    and private generated marker read back exactly while the clipboard remains
+    open.  Windows clipboard writes are not transactional after
+    ``EmptyClipboard``; a failed partial write is reported, never retried or
+    rolled back over potentially newer content.
     """
 
     with _open_clipboard():
-        win32clipboard.EmptyClipboard()
-        win32clipboard.SetClipboardData(win32con.CF_UNICODETEXT, text)
-        win32clipboard.SetClipboardData(
-            GENERATED_FORMAT_ID, GENERATED_MARKER_VALUE.encode("utf-8")
-        )
+        if (
+            expected_change_count is not None
+            and clipboard_change_count() != expected_change_count
+        ):
+            raise ClipboardChangedError("clipboard_changed")
+        try:
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardData(win32con.CF_UNICODETEXT, text)
+            win32clipboard.SetClipboardData(
+                GENERATED_FORMAT_ID, GENERATED_MARKER_VALUE.encode("utf-8")
+            )
+            if win32clipboard.GetClipboardData(win32con.CF_UNICODETEXT) != text:
+                raise ClipboardWriteError("clipboard_write_failed")
+            marker = win32clipboard.GetClipboardData(GENERATED_FORMAT_ID)
+            if _decode_marker(marker) != GENERATED_MARKER_VALUE:
+                raise ClipboardWriteError("clipboard_write_failed")
+        except Exception as exc:
+            if isinstance(exc, (ClipboardChangedError, ClipboardWriteError)):
+                raise
+            raise ClipboardWriteError("clipboard_write_failed") from None
 
 
 @contextmanager

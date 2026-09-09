@@ -13,6 +13,7 @@ from typing import Protocol
 
 from .converter.formula_export import MAX_SNAPSHOT_READS, MAX_VALUE_CHARACTERS
 from .converter.html_to_md import html_table_to_model
+from .converter.table_xml import TableXmlMetadata, TableXmlTitle
 from .excel_formula import (
     EXCEL_BUNDLE_ID,
     EXCEL_NOT_RUNNING,
@@ -28,6 +29,7 @@ from .excel_formula import (
     TOO_MUCH_TEXT,
     ExcelFormulaError,
     NSAppleScriptExecutor,
+    _absolute_address,
     _positive_int,
     _raise_error_payload,
     _rectangle_bounds,
@@ -251,6 +253,13 @@ using terms from application "Microsoft Excel"
             set workbookName to name of selectedWorkbook as text
             set sheetName to name of selectedSheet as text
             set selectionAddress to get address selectedRange row absolute true column absolute true reference style A1
+        on error errorMessage number errorNumber
+            if errorNumber is -1743 then error number errorNumber
+            return {{"error", "{EXECUTION_FAILED}"}}
+        end try
+
+        set readFailed to false
+        try
             set compactValues to my taggedRangeValues(selectedRange, selectedRowCount, selectedColumnCount)
             if item 1 of compactValues is false then
                 return {{"error", "{DISPLAY_OVERFLOW}"}}
@@ -286,7 +295,9 @@ using terms from application "Microsoft Excel"
             end repeat
         on error errorMessage number errorNumber
             if errorNumber is -1743 then error number errorNumber
-            return {{"error", "{EXECUTION_FAILED}"}}
+            -- A selection change can invalidate an in-flight value/merge read.
+            -- Verify the current identity before classifying that failure.
+            set readFailed to true
         end try
 
         try
@@ -303,8 +314,10 @@ using terms from application "Microsoft Excel"
             if (count of columns of currentRange) is not selectedColumnCount then return {{"error", "{SELECTION_CHANGED}"}}
         on error errorMessage number errorNumber
             if errorNumber is -1743 then error number errorNumber
+            if readFailed then return {{"error", "{EXECUTION_FAILED}"}}
             return {{"error", "{SELECTION_CHANGED}"}}
         end try
+        if readFailed then return {{"error", "{EXECUTION_FAILED}"}}
 
         return {{"{TABLE_RESULT_STATUS}", workbookName, sheetName, selectionAddress, selectedRowCount as text, selectedColumnCount as text, valueKinds, valueBlob, mergedAddresses}}
     end tell
@@ -569,7 +582,53 @@ def excel_table_selection_to_model(
     selected cell is represented by an opaque token during structural parsing,
     then the exact original string is restored into the resulting model.
     """
-    tokens = tuple(f"TABLEDOWN_DIRECT_CELL_{index:08X}" for index in range(len(selection.values)))
+    token_headers, token_rows, originals, _ = _tokenized_selection_model(selection)
+
+    def restore(rows: list[list[str]]) -> list[list[str]]:
+        return [[originals.get(value, value) for value in row] for row in rows]
+
+    return restore(token_headers), restore(token_rows)
+
+
+def excel_table_selection_to_model_with_sources(
+    selection: ExcelTableSelection,
+) -> tuple[list[list[str]], list[list[str]], list[list[str]]]:
+    """Return the semantic model plus each data cell's exact source A1 address.
+
+    The address grid follows ``data_rows`` after title/header inference. It lets
+    the explicit export identify which original blank cells were synthesized
+    by the opt-in forward-fill without guessing row offsets from that inference.
+    """
+    token_headers, token_rows, originals, source_addresses = (
+        _tokenized_selection_model(selection)
+    )
+
+    def restore(rows: list[list[str]]) -> list[list[str]]:
+        return [[originals.get(value, value) for value in row] for row in rows]
+
+    try:
+        data_sources = [
+            [source_addresses[value] for value in row]
+            for row in token_rows
+        ]
+    except KeyError:
+        raise ExcelFormulaError(INVALID_RESPONSE) from None
+    return restore(token_headers), restore(token_rows), data_sources
+
+
+def _tokenized_selection_model(
+    selection: ExcelTableSelection,
+) -> tuple[
+    list[list[str]],
+    list[list[str]],
+    dict[str, str],
+    dict[str, str],
+]:
+    """Run structural inference on opaque values and retain source identity."""
+    tokens = tuple(
+        f"TABLEDOWN_DIRECT_CELL_{index:08X}"
+        for index in range(len(selection.values))
+    )
     token_selection = ExcelTableSelection(
         workbook=selection.workbook,
         sheet=selection.sheet,
@@ -586,8 +645,114 @@ def excel_table_selection_to_model(
         token: "" if value is None else value
         for token, value in zip(tokens, selection.values, strict=True)
     }
+    start_row, start_column, _, _ = _rectangle_bounds(selection.address)
+    source_addresses = {
+        token: _absolute_address(
+            start_row + index // selection.column_count,
+            start_column + index % selection.column_count,
+            start_row + index // selection.column_count,
+            start_column + index % selection.column_count,
+        )
+        for index, token in enumerate(tokens)
+    }
+    return token_headers, token_rows, originals, source_addresses
 
-    def restore(rows: list[list[str]]) -> list[list[str]]:
-        return [[originals.get(value, value) for value in row] for row in rows]
 
-    return restore(token_headers), restore(token_rows)
+def excel_table_selection_xml_metadata(
+    selection: ExcelTableSelection,
+    header_levels: list[list[str]],
+    *,
+    blank_fill_enabled: bool = False,
+    blank_fill_cells: tuple[str, ...] = (),
+) -> TableXmlMetadata:
+    """Build additive XML metadata from the same immutable Excel snapshot.
+
+    The semantic v2 model intentionally omits leading full-width title rows and
+    expands merged cells.  Keep those inference-friendly semantics unchanged,
+    while recording the exact source range and merge topology on the root so
+    users and LLMs can distinguish a real merge from repeated values.
+    """
+
+    start_row, start_column, end_row, end_column = _rectangle_bounds(
+        selection.address
+    )
+    full_width_merges: dict[int, tuple[str, int]] = {}
+    for address in selection.merge_areas:
+        merge_start_row, merge_start_column, merge_end_row, merge_end_column = (
+            _rectangle_bounds(address)
+        )
+        if (
+            selection.column_count > 1
+            and merge_start_column == start_column
+            and merge_end_column == end_column
+        ):
+            full_width_merges[merge_start_row] = (address, merge_end_row)
+
+    title_records: list[TableXmlTitle] = []
+    title_source_row_count = 0
+    row = start_row
+    while row <= end_row and row in full_width_merges:
+        title_address, title_end_row = full_width_merges[row]
+        row_offset = row - start_row
+        value = selection.values[row_offset * selection.column_count]
+        title_records.append(
+            TableXmlTitle(
+                address=title_address,
+                value="" if value is None else value,
+            )
+        )
+        title_source_row_count += title_end_row - row + 1
+        row = title_end_row + 1
+    # Match ``html_table_to_model``: when every row looks like a title block,
+    # preserve the table instead of deleting the complete selection.
+    if title_source_row_count == selection.row_count:
+        title_records = []
+        title_source_row_count = 0
+
+    header_row_count = len(header_levels)
+    if (
+        header_row_count <= 0
+        or title_source_row_count + header_row_count > selection.row_count
+    ):
+        raise ExcelFormulaError(INVALID_RESPONSE)
+
+    # Validate that metadata is anchored to the selected rectangle.  The
+    # parser already performed these checks, but keeping this helper defensive
+    # prevents future callers from pairing a model with unrelated metadata.
+    expected_address = _absolute_address(
+        start_row,
+        start_column,
+        end_row,
+        end_column,
+    )
+    if expected_address != selection.address:
+        raise ExcelFormulaError(INVALID_RESPONSE)
+    for address in blank_fill_cells:
+        (
+            fill_start_row,
+            fill_start_column,
+            fill_end_row,
+            fill_end_column,
+        ) = _rectangle_bounds(address)
+        if (
+            fill_start_row != fill_end_row
+            or fill_start_column != fill_end_column
+            or fill_start_row < start_row
+            or fill_start_column < start_column
+            or fill_end_row > end_row
+            or fill_end_column > end_column
+        ):
+            raise ExcelFormulaError(INVALID_RESPONSE)
+
+    return TableXmlMetadata(
+        workbook=selection.workbook,
+        sheet=selection.sheet,
+        address=selection.address,
+        row_count=selection.row_count,
+        column_count=selection.column_count,
+        header_row_count=header_row_count,
+        merge_areas=selection.merge_areas,
+        title_rows=tuple(title_records),
+        blank_fill_enabled=blank_fill_enabled,
+        blank_fill_cells=blank_fill_cells,
+    )

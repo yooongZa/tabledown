@@ -46,14 +46,16 @@ def markdown_table_to_tsv(md: str) -> str:
 
 
 def markdown_table_to_html(md: str) -> str:
-    """Convert markdown table text to a minimal HTML table."""
+    """Convert Markdown to a table with an explicit clipboard HTML encoding."""
     rows = markdown_table_to_rows(md)
     html_rows = []
     for row_index, row in enumerate(rows):
         tag = "th" if row_index == 0 else "td"
         cells = "".join(f"<{tag}>{escape(cell)}</{tag}>" for cell in row)
         html_rows.append(f"<tr>{cells}</tr>")
-    return "<table>" + "".join(html_rows) + "</table>"
+    # Rich-text importers such as Apple Notes can guess a legacy encoding for
+    # UTF-8 clipboard bytes unless the generated HTML declares its charset.
+    return '<meta charset="utf-8"><table>' + "".join(html_rows) + "</table>"
 
 
 def markdown_table_to_rows(md: str) -> list[list[str]]:

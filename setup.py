@@ -49,8 +49,8 @@ OPTIONS = {
         "LSMinimumSystemVersion": "12.0",
         "NSHumanReadableCopyright": "© 2026 Tabledown",
         "NSAppleEventsUsageDescription": (
-            "Tabledown accesses Microsoft Excel only when you choose "
-            "Copy selected table as XML or Copy table with formulas as XML."
+            "Tabledown reads the cells you select in Excel when you copy "
+            "a table or prepare its values and calculations to share with AI."
         ),
         # The app makes no network connections and uses only exempt encryption
         # (none of its own). Declaring this here answers TestFlight's export-

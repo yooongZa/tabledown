@@ -29,6 +29,14 @@ RENDERED_TABLE_TYPES = {
 }
 
 
+class ClipboardChangedError(RuntimeError):
+    """The clipboard changed after an explicit export started."""
+
+
+class ClipboardWriteError(OSError):
+    """A text-only clipboard export could not be verified."""
+
+
 def clipboard_change_count() -> int:
     """Return the current clipboard change counter."""
     return int(NSPasteboard.generalPasteboard().changeCount())
@@ -73,9 +81,22 @@ def write_clipboard(
     html: str | None = None,
     mark_generated: bool = False,
     drop_types: set[str] | None = None,
+    *,
+    expected_change_count: int | None = None,
 ) -> None:
-    """Update text/html formats while preserving existing clipboard formats."""
+    """Update formats only while the watcher still owns the source generation.
+
+    NSPasteboard has no atomic compare-and-swap.  Checking both before reading
+    preserved formats and immediately before ``clearContents`` narrows the
+    unavoidable check→clear window and prevents an older conversion from
+    normally being mixed into a newer external copy.
+    """
     pb = NSPasteboard.generalPasteboard()
+    if (
+        expected_change_count is not None
+        and int(pb.changeCount()) != expected_change_count
+    ):
+        raise ClipboardChangedError("clipboard_changed")
     drop_types = drop_types or set()
     existing_data = {}
     for pb_type in pb.types() or []:
@@ -108,6 +129,11 @@ def write_clipboard(
         if pb_type not in declared_types:
             declared_types.append(pb_type)
 
+    if (
+        expected_change_count is not None
+        and int(pb.changeCount()) != expected_change_count
+    ):
+        raise ClipboardChangedError("clipboard_changed")
     pb.clearContents()
     pb.declareTypes_owner_(declared_types, None)
 
@@ -125,21 +151,56 @@ def write_clipboard(
             pb.setString_forType_(value, pb_type)
 
 
-def write_text_only_clipboard(text: str, mark_generated: bool = True) -> None:
+def write_text_only_clipboard(
+    text: str,
+    mark_generated: bool = True,
+    *,
+    expected_change_count: int | None = None,
+) -> None:
     """Replace the clipboard with plain text and Tabledown's marker only.
 
     Unlike :func:`write_clipboard`, this intentionally preserves no native,
     HTML, image, or rich-text formats.  It is reserved for explicit exports
     where the requested result is text, and is never used by the watcher.
+
+    ``expected_change_count`` prevents a slow Excel read from overwriting
+    something the user copied while the export was running.  Success is only
+    returned after every declared text/marker value reads back exactly.  The OS
+    pasteboard is not transactional; after ``clearContents`` a failed write is
+    reported but never "rolled back", because another app may already own newer
+    clipboard content by then.
     """
     pb = NSPasteboard.generalPasteboard()
+    if (
+        expected_change_count is not None
+        and int(pb.changeCount()) != expected_change_count
+    ):
+        raise ClipboardChangedError("clipboard_changed")
+
     text_types = [str(NSPasteboardTypeString), LEGACY_STRING_TYPE]
     marker_types = list(GENERATED_MARKER_TYPES) if mark_generated else []
 
-    pb.clearContents()
-    pb.declareTypes_owner_(text_types + marker_types, None)
-    for pb_type in text_types:
-        pb.setString_forType_(text, pb_type)
-    if mark_generated:
-        for pb_type, value in GENERATED_MARKER_TYPES.items():
-            pb.setString_forType_(value, pb_type)
+    try:
+        pb.clearContents()
+        pb.declareTypes_owner_(text_types + marker_types, None)
+        for pb_type in text_types:
+            if pb.setString_forType_(text, pb_type) is False:
+                raise ClipboardWriteError("clipboard_write_failed")
+        if mark_generated:
+            for pb_type, value in GENERATED_MARKER_TYPES.items():
+                if pb.setString_forType_(value, pb_type) is False:
+                    raise ClipboardWriteError("clipboard_write_failed")
+
+        for pb_type in text_types:
+            actual = pb.stringForType_(pb_type)
+            if actual is None or str(actual) != text:
+                raise ClipboardWriteError("clipboard_write_failed")
+        if mark_generated:
+            for pb_type, expected in GENERATED_MARKER_TYPES.items():
+                actual = pb.stringForType_(pb_type)
+                if actual is None or str(actual) != expected:
+                    raise ClipboardWriteError("clipboard_write_failed")
+    except Exception as exc:
+        if isinstance(exc, ClipboardWriteError):
+            raise
+        raise ClipboardWriteError("clipboard_write_failed") from None

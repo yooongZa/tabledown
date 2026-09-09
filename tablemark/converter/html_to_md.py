@@ -108,16 +108,22 @@ def html_table_to_model(html: str) -> tuple[list[list[str]], list[list[str]]]:
     # than guessing that the complete table is a title block.
     leading_titles: list[int] = []
     if ncols > 1:
-        for index, origins in enumerate(row_meta):
+        index = 0
+        while index < len(row_meta):
+            origins = row_meta[index]
             is_title = (
                 len(origins) == 1
                 and origins[0][0] >= ncols
                 and origins[0][0] > 1
-                and not origins[0][1]
+                and not origins[0][2]
             )
             if not is_title:
                 break
-            leading_titles.append(index)
+            rowspan = max(origins[0][1], 1)
+            leading_titles.extend(
+                range(index, min(index + rowspan, len(grid)))
+            )
+            index += rowspan
     title_rows = set(leading_titles) if len(leading_titles) < len(grid) else set()
     kept = [index for index in range(len(grid)) if index not in title_rows]
     if not kept:
@@ -231,8 +237,11 @@ def _fill_header_frame(table, rows: list[list[str]]) -> list[list[str]]:
         if index >= len(meta):
             continue
         origins = meta[index]
-        is_title = len(origins) == 1 and origins[0][0] >= ncols
-        if is_title or not any(colspan > 1 for colspan, _ in origins):
+        is_title = (
+            len(origins) == 1
+            and origins[0][0] >= ncols
+        )
+        if is_title or not any(colspan > 1 for colspan, _, _ in origins):
             continue
         last = ""
         for col in range(len(rows[index])):
@@ -261,7 +270,10 @@ def _fill_header_frame(table, rows: list[list[str]]) -> list[list[str]]:
     return rows
 
 
-def _detect_header_rows(kept: list[int], row_meta: list[list[tuple[int, bool]]]) -> list[int]:
+def _detect_header_rows(
+    kept: list[int],
+    row_meta: list[list[tuple[int, int, bool]]],
+) -> list[int]:
     """Pick which (kept) rows make up the header.
 
     Priority:
@@ -277,14 +289,17 @@ def _detect_header_rows(kept: list[int], row_meta: list[list[tuple[int, bool]]])
     explicit = [
         index
         for index in kept
-        if row_meta[index] and all(is_header for _, is_header in row_meta[index])
+        if row_meta[index]
+        and all(is_header for _, _, is_header in row_meta[index])
     ]
     if explicit:
         return explicit
 
     group_rows = 0
     for index in kept:
-        if row_meta[index] and any(colspan > 1 for colspan, _ in row_meta[index]):
+        if row_meta[index] and any(
+            colspan > 1 for colspan, _, _ in row_meta[index]
+        ):
             group_rows += 1
         else:
             break
@@ -294,16 +309,19 @@ def _detect_header_rows(kept: list[int], row_meta: list[list[tuple[int, bool]]])
     return kept[:header_count]
 
 
-def _table_to_filled_grid(table) -> tuple[list[list[str]], list[list[tuple[int, bool]]]]:
+def _table_to_filled_grid(
+    table,
+) -> tuple[list[list[str]], list[list[tuple[int, int, bool]]]]:
     """Expand spans into a grid, filling merged positions with the origin value.
 
-    Returns the grid plus, per source row, the ``(colspan, is_header)`` of each
-    origin cell (used to spot title rows and header rows). ``rowspan`` repeats
-    the value downward and ``colspan`` to the right, so merged cells carry their
-    value into every position they cover.
+    Returns the grid plus, per source row, the
+    ``(colspan, rowspan, is_header)`` of each origin cell (used to spot title
+    rows and header rows). ``rowspan`` repeats the value downward and
+    ``colspan`` to the right, so merged cells carry their value into every
+    position they cover.
     """
     grid: list[list[str]] = []
-    meta: list[list[tuple[int, bool]]] = []
+    meta: list[list[tuple[int, int, bool]]] = []
     occupied: dict[tuple[int, int], tuple[str, bool]] = {}
 
     for row_index, tr in enumerate(table.find_all("tr")):
@@ -313,7 +331,7 @@ def _table_to_filled_grid(table) -> tuple[list[list[str]], list[list[tuple[int, 
 
         is_thead = tr.find_parent("thead") is not None
         row: list[str] = []
-        origins: list[tuple[int, bool]] = []
+        origins: list[tuple[int, int, bool]] = []
         col = 0
 
         for cell in cells:
@@ -326,7 +344,7 @@ def _table_to_filled_grid(table) -> tuple[list[list[str]], list[list[tuple[int, 
             colspan = _span_value(cell.get("colspan"))
             value = _cell_text_plain(cell)
             is_header = is_thead or cell.name == "th"
-            origins.append((colspan, is_header))
+            origins.append((colspan, rowspan, is_header))
 
             for _ in range(colspan):
                 row.append(value)
