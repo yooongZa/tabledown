@@ -75,7 +75,7 @@ Markdown represents merged cells as separate grid cells. Colors, fonts, column w
 
 This uses the same stable Excel selection reader as regular XML: up to 10,000 cells and 5,000,000 value characters, with a combined UTF-8 Markdown+HTML limit of 10 MB. Read, conversion, and size failures stop before writing. Copying something new while the export is being prepared cancels its write. Success replaces older Excel-specific formats with Markdown and HTML from the same selection.
 
-All three manual commands require the Excel desktop app. **Markdown focuses on the table’s presentation in documents; both XML commands organize information for AI.** Existing automatic Excel/Google Sheets ↔ Markdown copy and paste remains available. These menu descriptions reflect development source as of September 10, 2026; they have not been released yet.
+All three manual commands require the Excel desktop app. **Markdown focuses on the table’s presentation in documents; both XML commands organize information for AI.** Existing automatic Excel/Google Sheets ↔ Markdown copy and paste remains available. These menu descriptions reflect TestFlight 0.6.1/build 0.6.5 as of September 10, 2026.
 
 ## Copy as XML (for AI)
 
@@ -253,6 +253,8 @@ Tabledown does not use account creation, analytics, ad tracking, location data, 
 Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.log` for behavior checks. Logs are not sent externally and can be deleted by the user.
 
 ## Changelog
+
+- 2026-09-10: **macOS 0.6.1 / TestFlight build 0.6.5 is available to internal group `22`.** The three copy commands passed 375 candidate checks; 27 Windows-only tests were skipped. App and installer signatures, Apple validation and upload, VALID processing, and IN_BETA_TESTING were verified. Korean and English build notes explain how to move tables into documents and ask AI about data; the existing app description was preserved. No App Store review submission or public GitHub release was made in this step.
 
 - 2026-09-10 (development source, unreleased): Unified the macOS actions as “Copy Markdown,” “Copy as XML,” and “Copy as XML with Formulas.” Formula XML now includes inferred context and shared references. Added direct Markdown copying and improved special-character and line-break round trips. Defaults, existing shortcuts, and automatic copy/paste remain available.
 
