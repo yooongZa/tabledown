@@ -254,6 +254,8 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 
 ## Changelog
 
+- 2026-09-10 (release preparation): Preserve cell line breaks, leading/trailing/repeated spaces, and merged-cell positions when pasting Markdown tables into Excel. Improve cancellation during large formula reads. All 350 automated checks and native Excel paste checks passed on the iMac; cancellation after a new copy took 1.7–3.9 seconds across five runs. Existing XML, automatic conversion, defaults, and size limits remain unchanged. Signing, store upload, and public release status will be recorded when completed.
+
 - 2026-09-10: **macOS 0.6.1 / TestFlight build 0.6.5 is available to internal group `22`.** The three copy commands passed 375 candidate checks; 27 Windows-only tests were skipped. App and installer signatures, Apple validation and upload, VALID processing, and IN_BETA_TESTING were verified. Korean and English build notes explain how to move tables into documents and ask AI about data; the existing app description was preserved. No App Store review submission or public GitHub release was made in this step.
 
 - 2026-09-10 (development source, unreleased): Unified the macOS actions as “Copy Markdown,” “Copy as XML,” and “Copy as XML with Formulas.” Formula XML now includes inferred context and shared references. Added direct Markdown copying and improved special-character and line-break round trips. Defaults, existing shortcuts, and automatic copy/paste remain available.

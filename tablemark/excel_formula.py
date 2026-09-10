@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 import re
-from typing import Protocol
+from typing import Callable, Protocol
 
 from AppKit import NSRunningApplication, NSWorkspace
 from Foundation import NSAppleScript
@@ -35,6 +35,12 @@ MAX_FORMULA_RECTANGLES = 64
 # Bounds one Excel Formula2/R1C1 materialization while keeping a dense 10,000
 # cell export responsive (five chunks for a 100x100 range in current Excel).
 MAX_FORMULA_CHUNK_CELLS = 2_048
+# Internal scheduling bounds; the existing global reference limits stay intact.
+MAX_REFERENCE_BATCH_RANGES = 16
+MAX_REFERENCE_BATCH_CELLS = MAX_FORMULA_CHUNK_CELLS
+# Scheduling only: a small read includes values plus both formula arrays.
+MAX_FORMULA_READ_BATCH_WORK_CELLS = MAX_FORMULA_CHUNK_CELLS
+MAX_FORMULA_READ_BATCH_CHUNKS = 16
 MASK_RESULT_STATUS = "ok_mask_v2"
 AREA_RESULT_STATUS = "ok_areas_v2"
 REFERENCE_RESULT_STATUS = "ok_references_v1"
@@ -52,6 +58,9 @@ EXECUTION_FAILED = "execution_failed"
 INVALID_RESPONSE = "invalid_response"
 PARTIAL_MERGE = "partial_merge"
 DISPLAY_OVERFLOW = "display_overflow"
+CANCELLED = "cancelled"
+CLIPBOARD_CHANGED = "clipboard_changed"
+CANCELLATION_ERROR_CODES = frozenset({CANCELLED, CLIPBOARD_CHANGED})
 
 KNOWN_ERROR_CODES = frozenset(
     {
@@ -68,6 +77,8 @@ KNOWN_ERROR_CODES = frozenset(
         INVALID_RESPONSE,
         PARTIAL_MERGE,
         DISPLAY_OVERFLOW,
+        CANCELLED,
+        CLIPBOARD_CHANGED,
     }
 )
 
@@ -78,6 +89,23 @@ class ExcelFormulaError(RuntimeError):
     def __init__(self, code: str):
         self.code = code if code in KNOWN_ERROR_CODES else EXECUTION_FAILED
         super().__init__(self.code)
+
+
+class _CancellationCheckError(ExcelFormulaError):
+    """A failed cancellation check must never degrade to partial references."""
+
+
+def _check_cancellation(check_cancelled: Callable[[], None] | None) -> None:
+    if check_cancelled is None:
+        return
+    try:
+        check_cancelled()
+    except ExcelFormulaError as exc:
+        if exc.code in CANCELLATION_ERROR_CODES:
+            raise
+        raise _CancellationCheckError(EXECUTION_FAILED) from None
+    except Exception:
+        raise _CancellationCheckError(EXECUTION_FAILED) from None
 
 
 class ExcelFormulaExecutor(Protocol):
@@ -613,7 +641,43 @@ def _chunk_literal(chunk: _FormulaChunk) -> str:
     return f'{{"{chunk.address}", "{chunk.row_count}", "{chunk.column_count}"}}'
 
 
-def _build_formula_read_script(plan: _FormulaReadPlan) -> str:
+def _formula_read_batches(
+    plan: _FormulaReadPlan,
+) -> tuple[tuple[tuple[_FormulaChunk, ...], tuple[_FormulaChunk, ...]], ...]:
+    """Schedule original chunks without changing sparse ranges or read limits."""
+    work_cells = plan.row_count * plan.column_count + 2 * sum(plan.mask)
+    if (
+        work_cells <= MAX_FORMULA_READ_BATCH_WORK_CELLS
+        and len(plan.value_chunks) + len(plan.chunks) <= MAX_FORMULA_READ_BATCH_CHUNKS
+    ):
+        return ((plan.value_chunks, plan.chunks),)
+    return (
+        *(((chunk,), ()) for chunk in plan.value_chunks),
+        *(((), (chunk,)) for chunk in plan.chunks),
+    )
+
+
+def _build_formula_read_script(
+    plan: _FormulaReadPlan,
+    *,
+    value_chunks: tuple[_FormulaChunk, ...] | None = None,
+    formula_chunks: tuple[_FormulaChunk, ...] | None = None,
+    initial_value_characters: int = 0,
+    initial_formula_characters: int = 0,
+    include_character_counts: bool = False,
+) -> str:
+    for count, limit in (
+        (initial_value_characters, MAX_VALUE_CHARACTERS),
+        (initial_formula_characters, MAX_FORMULA_CHARACTERS),
+    ):
+        if type(count) is not int or not 0 <= count <= limit:
+            raise ExcelFormulaError(INVALID_RESPONSE)
+    read_value_chunks = plan.value_chunks if value_chunks is None else value_chunks
+    read_formula_chunks = plan.chunks if formula_chunks is None else formula_chunks
+    character_counts_return = (
+        ", valueCharacterCount as text, formulaCharacterCount as text"
+        if include_character_counts else ""
+    )
     expected_mask_text = "".join("1" if flag else "0" for flag in plan.mask)
     expected_formula_count = sum(plan.mask)
     # Excel's Evaluate command rejects expressions near its legacy 255-character
@@ -640,9 +704,9 @@ def _build_formula_read_script(plan: _FormulaReadPlan) -> str:
     # AppleScript does not accept a physical newline after a list comma unless
     # it carries an explicit continuation character. Keep this generated list
     # on one line; at the 10,000-cell limit it remains comfortably bounded.
-    chunk_literals = ", ".join(_chunk_literal(chunk) for chunk in plan.chunks)
+    chunk_literals = ", ".join(_chunk_literal(chunk) for chunk in read_formula_chunks)
     value_chunk_literals = ", ".join(
-        _chunk_literal(chunk) for chunk in plan.value_chunks
+        _chunk_literal(chunk) for chunk in read_value_chunks
     )
     return f'''
 on flattenedText(rawValues)
@@ -814,7 +878,7 @@ using terms from application "Microsoft Excel"
         end try
 
         set valueAreaPayloads to {{}}
-        set valueCharacterCount to 0
+        set valueCharacterCount to {initial_value_characters}
         repeat with valueChunkSpecReference in valueChunkSpecs
             set valueChunkSpec to contents of valueChunkSpecReference
             set valueAreaAddress to (item 1 of valueChunkSpec) as text
@@ -840,7 +904,7 @@ using terms from application "Microsoft Excel"
         end repeat
 
         set formulaAreaPayloads to {{}}
-        set formulaCharacterCount to 0
+        set formulaCharacterCount to {initial_formula_characters}
         repeat with formulaChunkSpecReference in formulaChunkSpecs
             set formulaChunkSpec to contents of formulaChunkSpecReference
             -- Coerce list items before passing them back to Excel. Otherwise
@@ -898,11 +962,27 @@ using terms from application "Microsoft Excel"
             set end of formulaAreaPayloads to {{formulaAreaAddress, expectedRowCount as text, expectedColumnCount as text, formulaA1Values, formulaR1C1State, formulaR1C1Values}}
         end repeat
 
-        -- Recheck after all reads to reject a topology change that happened
-        -- during this Apple Event instead of exporting a partial mixed state.
-        if (my formulaTopologyMatches(selectedRange, {plan.row_count}, {plan.column_count}, expectedFormulaCount, plannedFormulaCountExpressions, expectedMaskText)) is false then return {{"error", "{SELECTION_CHANGED}"}}
+        -- Recheck the active selection as well as its original full topology
+        -- after every batch. Never accept a chunk from a changed selection.
+        try
+            set currentWorkbookName to name of active workbook as text
+            set currentSheetName to name of active sheet as text
+            set currentRange to selection
+            set currentAreas to get areas of currentRange
+            if (count of currentAreas) is not 1 then return {{"error", "{SELECTION_CHANGED}"}}
+            if currentWorkbookName is not expectedWorkbookName then return {{"error", "{SELECTION_CHANGED}"}}
+            if currentSheetName is not expectedSheetName then return {{"error", "{SELECTION_CHANGED}"}}
+            set currentSelectionAddress to get address currentRange row absolute true column absolute true reference style A1
+            if currentSelectionAddress is not expectedSelectionAddress then return {{"error", "{SELECTION_CHANGED}"}}
+            if (count of rows of currentRange) is not {plan.row_count} then return {{"error", "{SELECTION_CHANGED}"}}
+            if (count of columns of currentRange) is not {plan.column_count} then return {{"error", "{SELECTION_CHANGED}"}}
+            if (my formulaTopologyMatches(currentRange, {plan.row_count}, {plan.column_count}, expectedFormulaCount, plannedFormulaCountExpressions, expectedMaskText)) is false then return {{"error", "{SELECTION_CHANGED}"}}
+        on error errorMessage number errorNumber
+            if errorNumber is -1743 then error number errorNumber
+            return {{"error", "{SELECTION_CHANGED}"}}
+        end try
 
-        return {{"{AREA_RESULT_STATUS}", expectedWorkbookName, expectedSheetName, expectedSelectionAddress, "{plan.row_count}", "{plan.column_count}", valueAreaPayloads, formulaAreaPayloads}}
+        return {{"{AREA_RESULT_STATUS}", expectedWorkbookName, expectedSheetName, expectedSelectionAddress, "{plan.row_count}", "{plan.column_count}", valueAreaPayloads, formulaAreaPayloads{character_counts_return}}}
     end tell
 end using terms from
 '''
@@ -992,11 +1072,47 @@ def _reference_request_literal(request: _ReferenceRequest) -> str:
     )
 
 
-def _build_reference_read_script(
-    plan: _FormulaReadPlan, requests: tuple[_ReferenceRequest, ...]
-) -> str:
-    """Build one non-UI Apple Event that reads all bounded reference ranges."""
+def _reference_batches(
+    requests: tuple[_ReferenceRequest, ...],
+) -> tuple[tuple[_ReferenceRequest, ...], ...]:
+    """Partition the already globally bounded plan without reordering targets."""
+    batches: list[tuple[_ReferenceRequest, ...]] = []
+    current: list[_ReferenceRequest] = []
+    cells = 0
+    for request in requests:
+        target_cells = request.target.row_count * request.target.column_count
+        if target_cells > MAX_REFERENCE_BATCH_CELLS:
+            raise ExcelFormulaError(INVALID_RESPONSE)
+        if current and (
+            len(current) >= MAX_REFERENCE_BATCH_RANGES
+            or cells + target_cells > MAX_REFERENCE_BATCH_CELLS
+        ):
+            batches.append(tuple(current))
+            current = []
+            cells = 0
+        current.append(request)
+        cells += target_cells
+    if current:
+        batches.append(tuple(current))
+    return tuple(batches)
 
+
+def _build_reference_read_script(
+    plan: _FormulaReadPlan,
+    requests: tuple[_ReferenceRequest, ...],
+    *,
+    initial_reference_characters: int = 0,
+    include_character_count: bool = False,
+) -> str:
+    """Read one ordered batch and optionally return its cumulative native budget."""
+    if (
+        type(initial_reference_characters) is not int
+        or not 0 <= initial_reference_characters <= MAX_VALUE_CHARACTERS
+    ):
+        raise ExcelFormulaError(INVALID_RESPONSE)
+    character_count_return = (
+        ", referenceValueCharacters as text" if include_character_count else ""
+    )
     request_literals = ", ".join(
         _reference_request_literal(request) for request in requests
     )
@@ -1108,7 +1224,7 @@ using terms from application "Microsoft Excel"
         end try
 
         set referencePayloads to {{}}
-        set referenceValueCharacters to 0
+        set referenceValueCharacters to {initial_reference_characters}
         repeat with referenceSpecReference in referenceSpecs
             set referenceSpec to contents of referenceSpecReference
             set ownerAddress to (item 1 of referenceSpec) as text
@@ -1151,7 +1267,7 @@ using terms from application "Microsoft Excel"
             if errorNumber is -1743 then error number errorNumber
             return {{"error", "{SELECTION_CHANGED}"}}
         end try
-        return {{"{REFERENCE_RESULT_STATUS}", expectedWorkbookName, expectedSheetName, expectedSelectionAddress, referencePayloads}}
+        return {{"{REFERENCE_RESULT_STATUS}", expectedWorkbookName, expectedSheetName, expectedSelectionAddress, referencePayloads{character_count_return}}}
     end tell
 end using terms from
 '''
@@ -1628,17 +1744,177 @@ def parse_excel_formula_result(
     )
 
 
+def _execute_checked(
+    executor: ExcelFormulaExecutor,
+    source: str,
+    check_cancelled: Callable[[], None] | None,
+) -> object:
+    # NSAppleScript remains synchronous on its caller's main thread. A running
+    # native call finishes before cancellation is checked; no worker is created.
+    _check_cancellation(check_cancelled)
+    try:
+        return executor.run(source)
+    finally:
+        _check_cancellation(check_cancelled)
+
+
+
+def _validate_batch_areas(
+    raw_areas: object, chunks: tuple[_FormulaChunk, ...], fields: int,
+) -> list[object]:
+    if not isinstance(raw_areas, (list, tuple)) or len(raw_areas) != len(chunks):
+        raise ExcelFormulaError(INVALID_RESPONSE)
+    for raw_area, chunk in zip(raw_areas, chunks, strict=True):
+        if not isinstance(raw_area, (list, tuple)) or len(raw_area) != fields:
+            raise ExcelFormulaError(INVALID_RESPONSE)
+        if (
+            raw_area[0],
+            _positive_int(raw_area[1]),
+            _positive_int(raw_area[2]),
+        ) != (chunk.address, chunk.row_count, chunk.column_count):
+            raise ExcelFormulaError(INVALID_RESPONSE)
+    return list(raw_areas)
+
+
+def _read_formula_batches(
+    executor: ExcelFormulaExecutor,
+    plan: _FormulaReadPlan,
+    check_cancelled: Callable[[], None] | None,
+) -> object:
+    batches = _formula_read_batches(plan)
+    if len(batches) == 1:
+        return _execute_checked(
+            executor, _build_formula_read_script(plan), check_cancelled,
+        )
+    combined_values: list[object] = []
+    combined_formulas: list[object] = []
+    value_characters = formula_characters = 0
+    for value_chunks, formula_chunks in batches:
+        payload = _execute_checked(
+            executor,
+            _build_formula_read_script(
+                plan,
+                value_chunks=value_chunks,
+                formula_chunks=formula_chunks,
+                initial_value_characters=value_characters,
+                initial_formula_characters=formula_characters,
+                include_character_counts=True,
+            ),
+            check_cancelled,
+        )
+        _raise_error_payload(payload)
+        if not isinstance(payload, (list, tuple)) or len(payload) != 10:
+            raise ExcelFormulaError(INVALID_RESPONSE)
+        if payload[0] != AREA_RESULT_STATUS:
+            raise ExcelFormulaError(INVALID_RESPONSE)
+        if (
+            payload[1], payload[2], payload[3],
+            _positive_int(payload[4]), _positive_int(payload[5]),
+        ) != (
+            plan.workbook, plan.sheet, plan.address,
+            plan.row_count, plan.column_count,
+        ):
+            raise ExcelFormulaError(SELECTION_CHANGED)
+        next_counts = []
+        for raw_count, previous, limit in (
+            (payload[8], value_characters, MAX_VALUE_CHARACTERS),
+            (payload[9], formula_characters, MAX_FORMULA_CHARACTERS),
+        ):
+            if not isinstance(raw_count, str) or not raw_count.isdecimal():
+                raise ExcelFormulaError(INVALID_RESPONSE)
+            count = int(raw_count)
+            if not previous <= count <= limit:
+                raise ExcelFormulaError(INVALID_RESPONSE)
+            next_counts.append(count)
+        combined_values.extend(_validate_batch_areas(payload[6], value_chunks, 4))
+        combined_formulas.extend(_validate_batch_areas(payload[7], formula_chunks, 6))
+        value_characters, formula_characters = next_counts
+    # Only the completed original plan becomes a snapshot. The existing parser
+    # checks all coordinates, mask coverage and both character limits globally.
+    return [
+        AREA_RESULT_STATUS, plan.workbook, plan.sheet, plan.address,
+        str(plan.row_count), str(plan.column_count),
+        combined_values, combined_formulas,
+    ]
+
+
+def _read_reference_batches(
+    executor: ExcelFormulaExecutor,
+    plan: _FormulaReadPlan,
+    selection: ExcelFormulaSelection,
+    requests: tuple[_ReferenceRequest, ...],
+    check_cancelled: Callable[[], None] | None,
+) -> object:
+    batches = _reference_batches(requests)
+    if len(batches) == 1:
+        # Preserve the existing native result shape for the common small export.
+        return _execute_checked(
+            executor, _build_reference_read_script(plan, batches[0]), check_cancelled
+        )
+    combined: list[object] = []
+    reference_characters = 0
+    for batch in batches:
+        payload = _execute_checked(
+            executor,
+            _build_reference_read_script(
+                plan,
+                batch,
+                initial_reference_characters=reference_characters,
+                include_character_count=True,
+            ),
+            check_cancelled,
+        )
+        _raise_error_payload(payload)
+        if not isinstance(payload, (list, tuple)) or len(payload) != 6:
+            raise ExcelFormulaError(INVALID_RESPONSE)
+        status, workbook, sheet, address, raw_references, raw_count = payload
+        if status != REFERENCE_RESULT_STATUS:
+            raise ExcelFormulaError(INVALID_RESPONSE)
+        if (workbook, sheet, address) != (
+            selection.workbook, selection.sheet, selection.address
+        ):
+            raise ExcelFormulaError(SELECTION_CHANGED)
+        if not isinstance(raw_references, (list, tuple)) or len(raw_references) != len(batch):
+            raise ExcelFormulaError(INVALID_RESPONSE)
+        if not isinstance(raw_count, str) or not raw_count.isdecimal():
+            raise ExcelFormulaError(INVALID_RESPONSE)
+        next_count = int(raw_count)
+        if not reference_characters <= next_count <= MAX_VALUE_CHARACTERS:
+            raise ExcelFormulaError(INVALID_RESPONSE)
+        reference_characters = next_count
+        combined.extend(raw_references)
+    # Validate values, owners, total characters and each owner's source order
+    # once over the complete snapshot; batches never become partial snapshots.
+    return [
+        REFERENCE_RESULT_STATUS,
+        selection.workbook,
+        selection.sheet,
+        selection.address,
+        combined,
+    ]
+
+
 def read_selected_excel_formulas(
     executor: ExcelFormulaExecutor | None = None,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> ExcelFormulaSelection:
-    """Read every cell from Excel's single rectangular current selection."""
+    """Read one complete snapshot, with optional cooperative cancellation.
+
+    The callback may raise ExcelFormulaError with cancelled or
+    clipboard_changed. Checks bracket synchronous native calls; an
+    in-flight AppleScript must finish before the next check can run.
+    """
+    _check_cancellation(check_cancelled)
     active_executor = executor or NSAppleScriptExecutor()
     if not active_executor.is_excel_running():
         raise ExcelFormulaError(EXCEL_NOT_RUNNING)
     try:
-        mask_payload = active_executor.run(EXCEL_MASK_SCRIPT)
+        mask_payload = _execute_checked(active_executor, EXCEL_MASK_SCRIPT, check_cancelled)
         plan = _parse_mask_result(mask_payload)
-        formula_payload = active_executor.run(_build_formula_read_script(plan))
+        formula_payload = _read_formula_batches(
+            active_executor, plan, check_cancelled
+        )
         selection = parse_excel_formula_result(formula_payload, expected_plan=plan)
         requests, completeness, issues = _reference_read_plan(selection)
         if not requests:
@@ -1646,8 +1922,8 @@ def read_selected_excel_formulas(
                 selection, completeness, issues
             )
         try:
-            reference_payload = active_executor.run(
-                _build_reference_read_script(plan, requests)
+            reference_payload = _read_reference_batches(
+                active_executor, plan, selection, requests, check_cancelled
             )
             return _parse_reference_result(
                 reference_payload,
@@ -1656,8 +1932,10 @@ def read_selected_excel_formulas(
                 completeness,
                 issues,
             )
+        except _CancellationCheckError:
+            raise
         except ExcelFormulaError as exc:
-            if exc.code == SELECTION_CHANGED:
+            if exc.code == SELECTION_CHANGED or exc.code in CANCELLATION_ERROR_CODES:
                 raise
             # Reference enrichment is additive. Keep the established formula
             # export available, but make incompleteness explicit in the XML.
@@ -1709,6 +1987,7 @@ def read_stable_selected_excel_formulas(
     executor: ExcelFormulaExecutor | None = None,
     *,
     max_reads: int = MAX_SNAPSHOT_READS,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> ExcelFormulaSelection:
     """Return two matching snapshots, with at most one bounded retry.
 
@@ -1723,8 +2002,11 @@ def read_stable_selected_excel_formulas(
 
     previous: ExcelFormulaSelection | None = None
     for attempt in range(max_reads):
+        _check_cancellation(check_cancelled)
         try:
-            current = read_selected_excel_formulas(executor)
+            current = read_selected_excel_formulas(
+                executor, check_cancelled=check_cancelled
+            )
         except ExcelFormulaError as exc:
             if exc.code == SELECTION_CHANGED and attempt + 1 < max_reads:
                 # A failed read breaks consecutiveness. Do not accept the next
@@ -1733,6 +2015,7 @@ def read_stable_selected_excel_formulas(
                 continue
             raise
 
+        _check_cancellation(check_cancelled)
         if previous is not None and current == previous:
             return current
         previous = current
