@@ -151,6 +151,60 @@ def write_clipboard(
             pb.setString_forType_(value, pb_type)
 
 
+def write_table_clipboard(
+    text: str,
+    html: str,
+    mark_generated: bool = True,
+    *,
+    expected_change_count: int | None = None,
+) -> None:
+    """Replace an explicit selection export with verified text and HTML only.
+
+    Both formats describe the same Excel snapshot. Old native, image, and rich
+    text formats are discarded so a destination cannot paste an older copy.
+    The final generation check immediately precedes clearing the pasteboard,
+    but macOS offers no atomic compare-and-swap for that check and clear.
+    A failure after clearing is reported without retrying or restoring old
+    contents, because another app may already own newer clipboard content.
+    """
+    try:
+        pb = NSPasteboard.generalPasteboard()
+        if (
+            expected_change_count is not None
+            and int(pb.changeCount()) != expected_change_count
+        ):
+            raise ClipboardChangedError("clipboard_changed")
+
+        values = [
+            (str(NSPasteboardTypeString), text),
+            (LEGACY_STRING_TYPE, text),
+            (str(NSPasteboardTypeHTML), html),
+            (LEGACY_HTML_TYPE, html),
+        ]
+        if mark_generated:
+            values.extend(GENERATED_MARKER_TYPES.items())
+        declared_types = [pb_type for pb_type, _ in values]
+
+        if (
+            expected_change_count is not None
+            and int(pb.changeCount()) != expected_change_count
+        ):
+            raise ClipboardChangedError("clipboard_changed")
+        pb.clearContents()
+        pb.declareTypes_owner_(declared_types, None)
+        for pb_type, value in values:
+            if pb.setString_forType_(value, pb_type) is False:
+                raise ClipboardWriteError("clipboard_write_failed")
+        for pb_type, expected in values:
+            actual = pb.stringForType_(pb_type)
+            if actual is None or str(actual) != expected:
+                raise ClipboardWriteError("clipboard_write_failed")
+    except Exception as exc:
+        if isinstance(exc, (ClipboardChangedError, ClipboardWriteError)):
+            raise
+        raise ClipboardWriteError("clipboard_write_failed") from None
+
+
 def write_text_only_clipboard(
     text: str,
     mark_generated: bool = True,

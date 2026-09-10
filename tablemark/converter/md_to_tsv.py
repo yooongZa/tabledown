@@ -1,6 +1,15 @@
 """Convert Markdown table to spreadsheet-friendly formats."""
-from html import escape
+from html import escape, unescape
 import re
+from string import punctuation
+
+
+_CELL_ESCAPE = re.compile(
+    r"\\[" + re.escape(punctuation) + r"]"
+    r"|<br\s*/?>"
+    r"|&(?:\#[xX][0-9a-fA-F]+|\#[0-9]+|[a-zA-Z][a-zA-Z0-9]+);",
+    re.IGNORECASE,
+)
 
 
 def is_markdown_table(text: str, *, strict: bool = True) -> bool:
@@ -31,12 +40,7 @@ def is_markdown_table(text: str, *, strict: bool = True) -> bool:
 
 def _cell_count(line: str) -> int:
     """Count cells in a markdown table row, ignoring leading/trailing pipes."""
-    stripped = line.strip()
-    if stripped.startswith("|"):
-        stripped = stripped[1:]
-    if stripped.endswith("|"):
-        stripped = stripped[:-1]
-    return len(_split_cells(stripped))
+    return len(_split_cells(_strip_outer_pipes(line)))
 
 
 def markdown_table_to_tsv(md: str) -> str:
@@ -51,7 +55,8 @@ def markdown_table_to_html(md: str) -> str:
     html_rows = []
     for row_index, row in enumerate(rows):
         tag = "th" if row_index == 0 else "td"
-        cells = "".join(f"<{tag}>{escape(cell)}</{tag}>" for cell in row)
+        escaped_cells = (escape(cell).replace("\n", "<br>") for cell in row)
+        cells = "".join(f"<{tag}>{cell}</{tag}>" for cell in escaped_cells)
         html_rows.append(f"<tr>{cells}</tr>")
     # Rich-text importers such as Apple Notes can guess a legacy encoding for
     # UTF-8 clipboard bytes unless the generated HTML declares its charset.
@@ -72,15 +77,8 @@ def markdown_table_to_rows(md: str) -> list[list[str]]:
 
     rows = []
     for line in data_lines:
-        line = line.strip()
-        # Strip leading/trailing pipes
-        if line.startswith("|"):
-            line = line[1:]
-        if line.endswith("|"):
-            line = line[:-1]
-
         # Split on unescaped pipes
-        cells = _split_cells(line)
+        cells = _split_cells(_strip_outer_pipes(line))
         cells = [_unescape(c.strip()) for c in cells]
         rows.append(cells)
 
@@ -95,14 +93,41 @@ def _is_separator_line(line: str) -> bool:
     return all(c in "-:" for c in stripped)
 
 
+def _strip_outer_pipes(line: str) -> str:
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|"):
+        preceding = stripped[:-1]
+        backslashes = len(preceding) - len(preceding.rstrip("\\"))
+        if backslashes % 2 == 0:
+            stripped = preceding
+    return stripped
+
+
 def _split_cells(line: str) -> list[str]:
-    """Split on |, but respect escaped \\| inside cells."""
-    # Replace escaped pipe with placeholder, split, then restore
-    PLACEHOLDER = "\x00ESCAPED_PIPE\x00"
-    line = line.replace("\\|", PLACEHOLDER)
-    cells = line.split("|")
-    return [c.replace(PLACEHOLDER, "|") for c in cells]
+    """Split delimiters while retaining escapes for one later decoding pass."""
+    cells = []
+    start = 0
+    backslashes = 0
+    for index, character in enumerate(line):
+        if character == "|" and backslashes % 2 == 0:
+            cells.append(line[start:index])
+            start = index + 1
+        backslashes = backslashes + 1 if character == "\\" else 0
+    cells.append(line[start:])
+    return cells
 
 
 def _unescape(text: str) -> str:
-    return text.replace("\\|", "|")
+    """Decode table-cell escapes once, leaving other Markdown text intact."""
+    def decode(match: re.Match[str]) -> str:
+        token = match.group()
+        if token.startswith("\\"):
+            return token[1:]
+        if token.startswith("<"):
+            return "\n"
+        return unescape(token)
+
+    # A single pass keeps &lt;br&gt; literal and &amp;lt; decoded only once.
+    return _CELL_ESCAPE.sub(decode, text)

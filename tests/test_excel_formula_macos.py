@@ -1389,9 +1389,11 @@ class AppFormulaActionTests(unittest.TestCase):
             _stop_watcher=threading.Event(),
             copy_xml_item=SimpleNamespace(title="", _menuitem=Mock()),
             copy_excel_formulas_item=SimpleNamespace(title="", _menuitem=Mock()),
-            copy_ai_formulas_item=SimpleNamespace(title="", _menuitem=Mock()),
+            copy_markdown_item=SimpleNamespace(title="", _menuitem=Mock()),
         )
         for name in (
+            "copy_as_markdown",
+            "copy_as_xml",
             "copy_selected_excel_formulas",
             "_start_explicit_export",
             "_run_explicit_export",
@@ -1436,11 +1438,21 @@ class AppFormulaActionTests(unittest.TestCase):
         self.assertEqual(app.copy_excel_formulas_item._menuitem.keyEquivalent(), "e")
         self.assertEqual(
             app.copy_xml_item.title,
-            "Copy table structure and displayed values as XML",
+            "Copy as XML",
         )
         self.assertEqual(app.copy_xml_item._menuitem.keyEquivalent(), "x")
-        self.assertEqual(app.copy_ai_formulas_item.title, "Copy compact XML for AI")
-        self.assertEqual(app.copy_ai_formulas_item._menuitem.keyEquivalent(), "")
+        self.assertEqual(app.copy_markdown_item.title, "Copy Markdown")
+        self.assertEqual(app.copy_excel_formulas_item.title, "Copy as XML with Formulas")
+        self.assertEqual(app.copy_markdown_item._menuitem.keyEquivalent(), "")
+        menu_titles = [getattr(item, "title", None) for item in app.menu.values()]
+        copy_titles = [title for title in menu_titles if title and title.startswith("Copy")]
+        self.assertEqual(
+            copy_titles,
+            ["Copy Markdown", "Copy as XML", "Copy as XML with Formulas"],
+        )
+        self.assertNotIn("Copy compact XML for AI", menu_titles)
+        self.assertFalse(hasattr(app, "copy_ai_formulas_item"))
+        self.assertFalse(hasattr(app, "copy_selected_excel_formulas_for_ai"))
         self.assertEqual(
             app.copy_xml_item._menuitem.keyEquivalentModifierMask(),
             NSCommandKeyMask | NSControlKeyMask,
@@ -1464,14 +1476,17 @@ class AppFormulaActionTests(unittest.TestCase):
         hotkey_class.return_value.register.assert_called_once_with()
 
     def test_formula_menu_and_error_translations_exist(self):
-        self.assertEqual(
-            t("menu.copy_excel_formulas", "ko"),
-            "셀 값·수식·참조를 XML로 복사",
-        )
-        self.assertEqual(
-            t("menu.copy_excel_formulas", "en"),
-            "Copy cell values, formulas, and references as XML",
-        )
+        menu_labels = {
+            "ko": ("마크다운 복사", "XML 변환 복사", "수식 포함 XML 변환 복사"),
+            "en": ("Copy Markdown", "Copy as XML", "Copy as XML with Formulas"),
+        }
+        for language, expected in menu_labels.items():
+            self.assertEqual(
+                tuple(t(key, language) for key in (
+                    "menu.copy_markdown", "menu.copy_xml", "menu.copy_excel_formulas",
+                )),
+                expected,
+            )
         error_codes = (
             EXCEL_NOT_RUNNING,
             NO_SELECTION,
@@ -1673,7 +1688,7 @@ class AppFormulaActionTests(unittest.TestCase):
                 return_value=selection,
             ),
             patch(
-                "tablemark.app.formula_selection_to_xml",
+                "tablemark.app.formula_selection_to_ai_xml",
                 side_effect=FormulaXmlTooLargeError("content-free"),
             ),
             patch("tablemark.app.write_text_only_clipboard") as writer,

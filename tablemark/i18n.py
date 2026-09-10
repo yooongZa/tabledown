@@ -13,16 +13,22 @@ DEFAULT_LANGUAGE = "en"
 
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "ko": {
+        "menu.copy_markdown": "마크다운 복사",
+        "menu.copy_markdown_busy": "마크다운 복사 중…",
+        "menu.copy_markdown_tooltip": "Excel에서 표를 선택한 뒤 누르세요. 열 배치·표시값·줄바꿈을 살려 노트와 문서에 붙여넣습니다.",
+        "menu.copy_xml_tooltip": "Excel에서 제목을 포함한 표를 선택한 뒤 누르세요. 표의 값과 그룹 구조를 AI에 전달하기 좋게 복사합니다.",
+        "menu.copy_excel_formulas_tooltip": "Excel에서 제목·항목명과 수식이 포함된 영역을 선택하세요. 현재 값·수식·연결된 값을 함께 담고 반복 참조는 묶어 AI에 전달합니다.",
+        "markdown.error.no_selection": "Excel 워크시트에서 마크다운으로 복사할 셀 범위를 선택한 뒤 다시 시도하세요.",
+        "markdown.error.clipboard_changed": "표를 준비하는 동안 새 내용이 복사되어 보호를 위해 복사를 취소했습니다. 필요하면 마크다운 복사를 다시 실행하세요.",
+        "markdown.error.clipboard_write_failed": "표는 준비했지만 클립보드에 기록하지 못했습니다. 클립보드 내용이 완전하지 않을 수 있으니 마크다운 복사를 다시 실행하세요.",
+        "markdown.error.output_too_large": "복사할 표가 10MB를 넘습니다. 더 작은 범위를 선택하세요.",
         "menu.toggle": "Tabledown 사용",
-        "menu.copy_xml": "표 구조·표시값을 XML로 복사",
-        "menu.copy_xml_busy": "표 구조 XML 복사 중…",
-        "menu.copy_excel_formulas": "셀 값·수식·참조를 XML로 복사",
-        "menu.copy_excel_formulas_busy": "수식 분석 XML 복사 중…",
-        "menu.copy_ai_formulas": "AI용 간결 복사",
-        "menu.copy_ai_formulas_busy": "AI용 XML 복사 중…",
-        "menu.copy_ai_formulas_tooltip": "Excel에서 제목과 항목명을 함께 선택하세요. 선택 안의 제목 후보와 수식·현재값을 포함하고 반복 참조를 묶어 복사합니다.",
+        "menu.copy_xml": "XML 변환 복사",
+        "menu.copy_xml_busy": "XML 복사 중…",
+        "menu.copy_excel_formulas": "수식 포함 XML 변환 복사",
+        "menu.copy_excel_formulas_busy": "수식 포함 XML 복사 중…",
         "export.error_title": "Tabledown",
-        "export.error.in_progress": "XML 내보내기가 이미 진행 중입니다. 완료될 때까지 기다려 주세요.",
+        "export.error.in_progress": "복사가 이미 진행 중입니다. 완료될 때까지 기다려 주세요.",
         "table.error_title": "Tabledown",
         "table.error.excel_not_running": "Microsoft Excel이 실행 중이 아닙니다.",
         "table.error.no_selection": "Excel 워크시트에서 XML로 복사할 셀 범위를 선택한 뒤 다시 시도하세요.",
@@ -73,40 +79,44 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "welcome.title": "Tabledown 에 오신 것을 환영합니다!",
         "welcome.intro": "Tabledown 이 메뉴바에서 실행 중입니다 — 화면 오른쪽 위의 표 모양 아이콘을 찾아보세요.",
         "help.message": (
-            "Excel ↔ Markdown 표 변환기\n\n"
-            "사용법:\n"
-            "1. Excel/스프레드시트 또는 마크다운 표를 복사 (Cmd+C)\n"
-            "2. 원하는 앱에서 그대로 붙여넣기 (Cmd+V)\n\n"
-            "Excel 표를 복사하면 마크다운 에디터에서 Markdown 표로 붙고,\n"
-            "Markdown 표를 복사하면 Excel에서 셀에 분리되어 붙습니다.\n"
-            "표가 변환되면 메뉴바 아이콘이 잠깐 체크 표시로 바뀝니다.\n\n"
-            "XML:\n"
-            "• Excel에서 표 영역 하나를 선택한 뒤 ‘표 구조·표시값을 XML로 복사’ 를 누르거나 ⌘⌃X 를 누릅니다.\n"
-            "• Cmd+C 없이 표시값·빈칸·실제 병합 범위·출처를 LLM 친화적 XML로 복사합니다. 헤더 행까지 선택하세요. 수식 자체는 포함하지 않습니다.\n"
-            "• ‘빈칸을 자동 채우기’ 를 켜면 병합 없이 비워둔 그룹 열(직급 등)의 빈칸을 바로 위 값으로 채웁니다.\n\n"
-            "Excel 수식:\n"
-            "• Excel에서 수식이 포함된 한 영역을 선택한 뒤 ‘셀 값·수식·참조를 XML로 복사’ 를 누르거나 ⌘⌃E 를 누릅니다.\n"
-            "• Cmd+C 없이 모든 셀의 주소·값 타입·원시값·계산 상태·A1/R1C1 수식과 직접 A1 참조값을 셀 그리드 XML로 복사합니다. 병합 계층·표시 서식은 포함하지 않으며 XML에 그 제한을 표시합니다.\n"
-            "• XML을 읽는 동안 메뉴에 ‘복사 중…’이 표시됩니다. 그사이 다른 내용을 복사하면 새 클립보드를 보호하기 위해 XML 쓰기를 취소합니다.\n\n"
-            "AI용 간결 복사:\n"
-            "• 제목과 항목명을 함께 선택한 뒤 ‘AI용 간결 복사’를 누르세요. 선택 안의 제목 후보를 추정으로 표시하고, 여러 수식이 공유하는 참조값은 한 번 기록합니다. 원본 수식·현재 결과·참조 누락 표시는 유지합니다.\n\n"
-            "메뉴의 ‘Tabledown 사용’ 항목 왼쪽 체크 표시가 현재 상태입니다.\n"
-            "체크가 켜져 있으면 변환이 동작하고, 꺼져 있으면 변환이 멈춥니다.\n"
-            "메뉴바 아이콘에 사선이 그어져 있으면 변환이 꺼져 있는 상태입니다.\n"
-            "단축키 ⌘⌃T 로 변환을 켜고 끌 수 있습니다."
+            "Excel ↔ Markdown 표 변환기\n"
+            "\n"
+            "자동 변환:\n"
+            "1. Excel/Google Sheets 또는 Markdown 표를 복사 (Cmd+C)\n"
+            "2. 원하는 앱에 붙여넣기 (Cmd+V)\n"
+            "Excel 표는 Markdown 표로, Markdown 표는 Excel 셀로 옮겨집니다.\n"
+            "\n"
+            "메뉴로 복사:\n"
+            "Excel에서 제목과 항목명을 포함한 영역 하나를 선택한 뒤 메뉴를 누르세요. Cmd+C 없이 복사하고, 원하는 앱에 붙여넣습니다.\n"
+            "\n"
+            "• 마크다운 복사: 열 배치·표시값·줄바꿈을 살려 노트와 문서로 옮깁니다. Markdown은 색상·글꼴·열 너비·병합 모양을 표현하지 못합니다. 첫 행은 제목 행이며 병합 빈칸은 설정에 따라 유지하거나 채웁니다.\n"
+            "• XML 변환 복사 (⌘⌃X): AI가 표를 읽기 좋게 표시값·빈칸·그룹 구조·실제 병합 범위·출처를 담습니다. 수식 자체는 포함하지 않습니다.\n"
+            "• 수식 포함 XML 변환 복사 (⌘⌃E): AI가 계산을 설명할 수 있도록 현재 값·값 타입·계산 상태·A1/R1C1 수식·직접 A1 참조값을 담습니다. 선택 안의 제목·항목 후보를 추정으로 연결하고 반복 참조는 한 번 기록합니다. 병합 계층·표시 서식은 포함하지 않습니다. 연결된 값을 읽을 수 있도록 XML 전체를 붙여넣으세요.\n"
+            "\n"
+            "‘빈칸을 자동 채우기’는 Markdown·일반 XML의 그룹/헤더 빈칸만 채우며 데이터 빈칸은 유지합니다.\n"
+            "복사 중에는 세 메뉴가 잠시 비활성화됩니다. 큰 범위는 수십 초 걸릴 수 있습니다. 그사이 다른 내용을 복사하면 새 클립보드를 보호합니다.\n"
+            "복사가 완료되면 메뉴바 아이콘이 잠깐 체크 표시로 바뀝니다.\n"
+            "\n"
+            "‘Tabledown 사용’의 체크는 자동 변환 상태입니다. 사선 아이콘이면 일시정지 상태이며 ⌘⌃T로 켜고 끌 수 있습니다."
         ),
     },
     "en": {
+        "menu.copy_markdown": "Copy Markdown",
+        "menu.copy_markdown_busy": "Copying Markdown…",
+        "menu.copy_markdown_tooltip": "Select a table in Excel, then click to copy its column layout, displayed values, and line breaks into notes and documents.",
+        "menu.copy_xml_tooltip": "Select a table including its headers in Excel. Copy its values and grouped structure to share with AI.",
+        "menu.copy_excel_formulas_tooltip": "Select headers, item names, and formula cells in Excel. Share current values, formulas, and their inputs with AI, with repeated references grouped together.",
+        "markdown.error.no_selection": "Select the Excel cell range you want to copy as Markdown, then try again.",
+        "markdown.error.clipboard_changed": "New content was copied while the table was being prepared, so copying was cancelled to protect it. Run Copy Markdown again if needed.",
+        "markdown.error.clipboard_write_failed": "The table was prepared but could not be written to the clipboard. The clipboard may be incomplete; run Copy Markdown again.",
+        "markdown.error.output_too_large": "The copied table would exceed 10 MB. Select a smaller range.",
         "menu.toggle": "Use Tabledown",
-        "menu.copy_ai_formulas": "Copy compact XML for AI",
-        "menu.copy_ai_formulas_busy": "Copying XML for AI…",
-        "menu.copy_ai_formulas_tooltip": "Include headers and item names in your Excel selection. Copies title candidates, formulas, and current values with shared references listed once.",
-        "menu.copy_xml": "Copy table structure and displayed values as XML",
-        "menu.copy_xml_busy": "Copying table-structure XML…",
-        "menu.copy_excel_formulas": "Copy cell values, formulas, and references as XML",
-        "menu.copy_excel_formulas_busy": "Copying formula-analysis XML…",
+        "menu.copy_xml": "Copy as XML",
+        "menu.copy_xml_busy": "Copying XML…",
+        "menu.copy_excel_formulas": "Copy as XML with Formulas",
+        "menu.copy_excel_formulas_busy": "Copying XML with Formulas…",
         "export.error_title": "Tabledown",
-        "export.error.in_progress": "An XML export is already in progress. Wait for it to finish.",
+        "export.error.in_progress": "A copy is already in progress. Wait for it to finish.",
         "table.error_title": "Tabledown",
         "table.error.excel_not_running": "Microsoft Excel isn't running.",
         "table.error.no_selection": "Select the Excel cell range you want to copy as XML, then try again.",
@@ -157,27 +167,25 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "welcome.title": "Welcome to Tabledown!",
         "welcome.intro": "Tabledown is running in your menu bar — look for the table icon near the top-right of your screen.",
         "help.message": (
-            "Excel ↔ Markdown table converter\n\n"
-            "How to use:\n"
-            "1. Copy a table from Excel/Sheets or a Markdown table (Cmd+C)\n"
-            "2. Paste in any app (Cmd+V)\n\n"
-            "Excel tables paste as Markdown in a Markdown editor,\n"
-            "and Markdown tables paste into separate cells in Excel.\n"
-            "When a table is converted, the menu bar icon briefly shows a checkmark.\n\n"
-            "XML:\n"
-            "• Select one table range in Excel, then click ‘Copy table structure and displayed values as XML’ or press ⌘⌃X.\n"
-            "• Without Cmd+C, it copies displayed values, blanks, exact merge ranges, and source metadata as LLM-friendly XML. Include the header row. Formula text is not included.\n"
-            "• ‘Auto-fill blank cells’ fills blanks in left grouping columns (e.g. rank) from the value above.\n\n"
-            "Excel formulas:\n"
-            "• Select one formula range in Excel, then click ‘Copy cell values, formulas, and references as XML’ or press ⌘⌃E.\n"
-            "• Without Cmd+C, it copies every cell address, value type, raw value, calculation state, A1/R1C1 formula, and direct A1 reference value as cell-grid XML. The XML explicitly says that merge hierarchy and display formatting are not included.\n"
-            "• The menu shows ‘Copying…’ while Excel is being read. If you copy something else meanwhile, Tabledown cancels the XML write to protect the newer clipboard content.\n\n"
-            "Compact XML for AI:\n"
-            "• Include headers and item names, then click ‘Copy compact XML for AI’. Title candidates within the selection are marked as inferred, and reference values shared by formulas are listed once. Original formulas, current results, and missing-reference notices are preserved.\n\n"
-            "The checkmark next to ‘Use Tabledown’ shows the current state.\n"
-            "When checked, conversion is on. When unchecked, conversion pauses.\n"
-            "A slash through the menu bar icon means conversion is off.\n"
-            "The global shortcut ⌘⌃T toggles conversion on and off."
+            "Excel ↔ Markdown table converter\n"
+            "\n"
+            "Automatic conversion:\n"
+            "1. Copy a table from Excel/Google Sheets or Markdown (Cmd+C).\n"
+            "2. Paste into your preferred app (Cmd+V).\n"
+            "Excel tables become Markdown tables; Markdown tables paste into separate Excel cells.\n"
+            "\n"
+            "Copy from the menu:\n"
+            "Select one range in Excel including headers and item names, then click a copy command. Without Cmd+C, it copies the selection for pasting into another app.\n"
+            "\n"
+            "• Copy Markdown: keep column layout, displayed values, and line breaks for notes and documents. Markdown cannot reproduce colors, fonts, column widths, or merged-cell shapes. The first row becomes the header; merged blanks follow your fill setting.\n"
+            "• Copy as XML (⌘⌃X): share displayed values, blanks, grouped structure, exact merge ranges, and source information with AI. Formula text is not included.\n"
+            "• Copy as XML with Formulas (⌘⌃E): share current values, value types, calculation state, A1/R1C1 formulas, and direct A1 reference values with AI. Headers and item names within the selection are linked as inferred context; repeated references are listed once. Merge hierarchy and display formatting are not included. Paste the complete XML so the reference values remain available.\n"
+            "\n"
+            "‘Auto-fill blank cells’ fills grouping/header blanks in Markdown and general XML while preserving data blanks.\n"
+            "All three commands pause while copying. Large selections can take tens of seconds. New clipboard content copied during this time is protected.\n"
+            "The menu bar icon briefly shows a checkmark after successful copying.\n"
+            "\n"
+            "The checkmark next to ‘Use Tabledown’ shows automatic conversion state. A slash means it is paused. Toggle it with ⌘⌃T."
         ),
     },
 }

@@ -3,10 +3,12 @@
 > 확정: 2026-06-08 · `copy_as_xml` / `model_to_xml` 가 생성하는 형식.
 > 기존 v1(`<dataset><row><cell name>`)을 대체. 사용자 확정 형식.
 
-이 문서는 **‘표 구조·표시값을 XML로 복사’의 일반 XML v2**를 정의한다. 수식 XML과 AI용 간결 XML은
-`tablemark/converter/formula_export.py`가 만드는 별도 형식이다. 사용 방법·정보 범위는
-[README](../README.md)의 ‘셀 값·수식·참조를 XML로 복사’와 ‘AI용 간결 복사’ 절을 따른다. 세 형식 모두 메뉴로 내보내며,
-자동 XML→표 역변환은 제공하지 않는다. (문서 범위 확인: 2026-09-09, macOS 0.6.0/build 0.6.4)
+이 문서는 **‘XML 변환 복사’의 일반 XML v2**를 정의한다. macOS의 두 XML 메뉴는 AI에게 표를
+전달하는 목적이며, ‘수식 포함 XML 변환 복사’는 `formula_selection_to_ai_xml`의
+`<표범위 형식="AI간결수식" 형식버전="1">` 출력을 사용한다. 제목·항목 맥락과 공통 참조를 이 수식 메뉴에
+통합했으며 별도 AI 메뉴는 두지 않는다. 사용 방법·정보 범위는 [README](../README.md)를 따른다.
+공유 `formula_selection_to_xml`의 기존 형식과 Windows 메뉴는 유지한다. 두 XML 명령은 명시적으로
+내보내며 자동 XML→표 역변환은 제공하지 않는다. (문서 범위 확인: 2026-09-10 개발 소스, 미배포)
 
 ## 1. 목표
 다단 헤더(가로·세로 양방향 그룹)를 XML **중첩 계층**으로 보존한다. **flatten 금지.**

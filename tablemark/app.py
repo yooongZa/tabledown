@@ -15,12 +15,13 @@ from .clipboard import (
     read_clipboard,
     write_clipboard,
     write_text_only_clipboard,
+    write_table_clipboard,
 )
 from .converter.formula_export import (
     FormulaXmlTooLargeError,
     formula_copy_notice_key,
     formula_selection_to_ai_xml,
-    formula_selection_to_xml,
+    MAX_XML_BYTES,
 )
 from .converter.html_to_md import (
     MultipleTablesError,
@@ -49,6 +50,7 @@ from .i18n import (
 )
 from .excel_formula import ExcelFormulaError, read_stable_selected_excel_formulas
 from .excel_table import (
+    excel_table_selection_to_html,
     excel_table_selection_to_model,
     excel_table_selection_to_model_with_sources,
     excel_table_selection_xml_metadata,
@@ -70,7 +72,8 @@ from .settings import (
 GITHUB_URL = "https://github.com/yooongZa/tabledown"
 _EXPORT_TABLE = "table"
 _EXPORT_FORMULAS = "formulas"
-_EXPORT_AI_FORMULAS = "ai_formulas"
+_EXPORT_MARKDOWN = "markdown"
+MAX_MARKDOWN_EXPORT_BYTES = MAX_XML_BYTES
 
 
 class _ExplicitExportError(RuntimeError):
@@ -137,12 +140,9 @@ class TabledownApp(rumps.App):
             key="e",
         )
         self._show_cmd_ctrl_shortcut(self.copy_excel_formulas_item)
-        self.copy_ai_formulas_item = rumps.MenuItem(
-            t("menu.copy_ai_formulas", self.lang),
-            callback=self.copy_selected_excel_formulas_for_ai,
-        )
-        self.copy_ai_formulas_item._menuitem.setToolTip_(
-            t("menu.copy_ai_formulas_tooltip", self.lang)
+        self.copy_markdown_item = rumps.MenuItem(
+            t("menu.copy_markdown", self.lang),
+            callback=self.copy_as_markdown,
         )
         self.fill_blanks_item = rumps.MenuItem(
             t("menu.fill_blanks", self.lang),
@@ -189,9 +189,9 @@ class TabledownApp(rumps.App):
         # Order: actions, then preferences, then help/support/quit.
         menu_items = [
             self.toggle_item,
+            self.copy_markdown_item,
             self.copy_xml_item,
             self.copy_excel_formulas_item,
-            self.copy_ai_formulas_item,
             None,  # separator
             self.settings_item,
             None,  # separator
@@ -371,12 +371,12 @@ class TabledownApp(rumps.App):
         """Schedule a values/formulas/references XML export."""
         self._start_explicit_export(_EXPORT_FORMULAS)
 
-    def copy_selected_excel_formulas_for_ai(self, _sender):
-        """Use the same stable read and export gate for compact AI XML."""
-        self._start_explicit_export(_EXPORT_AI_FORMULAS)
+    def copy_as_markdown(self, _sender):
+        """Copy the selected Excel table with its displayed values and layout."""
+        self._start_explicit_export(_EXPORT_MARKDOWN)
 
     def _start_explicit_export(self, export_kind: str) -> None:
-        """Schedule one explicit XML action, or explain that one is already active."""
+        """Schedule one explicit copy action, or explain that one is already active."""
         if not self._explicit_export_lock.acquire(blocking=False):
             self._safe_alert(
                 t("export.error_title", self.lang),
@@ -430,15 +430,33 @@ class TabledownApp(rumps.App):
         expected_change_count: int,
         fill_blanks: bool,
     ) -> tuple[str, str | None]:
-        """Read Excel and write XML, returning a content-free result."""
+        """Read Excel and write the requested table format, returning a content-free result."""
         outcome = "success"
         error_code = None
         notice_key = None
+        output_html = None
+        output_name = "Markdown" if export_kind == _EXPORT_MARKDOWN else "XML"
         stop_event = getattr(self, "_stop_watcher", None)
         try:
             if stop_event is not None and stop_event.is_set():
                 raise _ExplicitExportError("cancelled")
-            if export_kind == _EXPORT_TABLE:
+            if export_kind == _EXPORT_MARKDOWN:
+                selection = read_stable_selected_excel_table()
+                table_html = excel_table_selection_to_html(selection)
+                xml = _markdown_paste_block(html_table_to_markdown(
+                    table_html,
+                    fill_merged_headers=fill_blanks,
+                    preserve_layout=True,
+                ))
+                output_html = (
+                    '<html><head><meta charset="utf-8">'
+                    '<style>td{white-space:pre-wrap}</style></head><body>'
+                    + table_html + '</body></html>'
+                )
+                output_bytes = len(xml.encode("utf-8")) + len(output_html.encode("utf-8"))
+                if output_bytes > MAX_MARKDOWN_EXPORT_BYTES:
+                    raise _ExplicitExportError("output_too_large")
+            elif export_kind == _EXPORT_TABLE:
                 selection = read_stable_selected_excel_table()
                 (
                     header_levels,
@@ -480,11 +498,7 @@ class TabledownApp(rumps.App):
                 )
             else:
                 selection = read_stable_selected_excel_formulas()
-                xml = (
-                    formula_selection_to_ai_xml(selection)
-                    if export_kind == _EXPORT_AI_FORMULAS
-                    else formula_selection_to_xml(selection)
-                )
+                xml = formula_selection_to_ai_xml(selection)
                 notice_key = formula_copy_notice_key(selection)
 
             if stop_event is not None and stop_event.is_set():
@@ -493,33 +507,39 @@ class TabledownApp(rumps.App):
             with self._clipboard_operation_lock:
                 if stop_event is not None and stop_event.is_set():
                     raise _ExplicitExportError("cancelled")
-                write_text_only_clipboard(
-                    xml,
-                    mark_generated=True,
-                    expected_change_count=expected_change_count,
-                )
+                if output_html is not None:
+                    write_table_clipboard(
+                        xml, output_html, mark_generated=True,
+                        expected_change_count=expected_change_count,
+                    )
+                else:
+                    write_text_only_clipboard(
+                        xml,
+                        mark_generated=True,
+                        expected_change_count=expected_change_count,
+                    )
 
             # A notice describes successfully copied, incomplete context. Never
             # show it before the writer has verified the clipboard contents.
             if notice_key is not None:
                 outcome, error_code = "notice", notice_key
-            if export_kind == _EXPORT_TABLE:
-                log("copied selected Excel table as XML")
+            if export_kind != _EXPORT_FORMULAS:
+                log(f"copied selected Excel table as {output_name}")
             else:
                 log("copied selected Excel table with formulas as XML")
         except ClipboardChangedError:
             outcome = "error"
             error_code = "clipboard_changed"
-            if export_kind == _EXPORT_TABLE:
-                log("copy selected Excel table as XML failed: clipboard_changed")
+            if export_kind != _EXPORT_FORMULAS:
+                log(f"copy selected Excel table as {output_name} failed: clipboard_changed")
             else:
                 log("copy Excel table with formulas failed: clipboard_changed")
         except ClipboardWriteError:
             outcome = "error"
             error_code = "clipboard_write_failed"
-            if export_kind == _EXPORT_TABLE:
+            if export_kind != _EXPORT_FORMULAS:
                 log(
-                    "copy selected Excel table as XML failed: "
+                    f"copy selected Excel table as {output_name} failed: "
                     "clipboard_write_failed"
                 )
             else:
@@ -530,31 +550,31 @@ class TabledownApp(rumps.App):
         except (TableXmlTooLargeError, FormulaXmlTooLargeError):
             outcome = "error"
             error_code = "output_too_large"
-            if export_kind == _EXPORT_TABLE:
-                log("copy selected Excel table as XML failed: output_too_large")
+            if export_kind != _EXPORT_FORMULAS:
+                log(f"copy selected Excel table as {output_name} failed: output_too_large")
             else:
                 log("copy Excel table with formulas failed: output_too_large")
         except ExcelFormulaError as exc:
             outcome = "error"
             error_code = exc.code
-            if export_kind == _EXPORT_TABLE:
-                log(f"copy selected Excel table as XML failed: {exc.code}")
+            if export_kind != _EXPORT_FORMULAS:
+                log(f"copy selected Excel table as {output_name} failed: {exc.code}")
             else:
                 log(f"copy Excel table with formulas failed: {exc.code}")
         except _ExplicitExportError as exc:
             outcome = "cancelled" if exc.code == "cancelled" else "error"
             error_code = exc.code
             if exc.code != "cancelled":
-                if export_kind == _EXPORT_TABLE:
-                    log(f"copy selected Excel table as XML failed: {exc.code}")
+                if export_kind != _EXPORT_FORMULAS:
+                    log(f"copy selected Excel table as {output_name} failed: {exc.code}")
                 else:
                     log(f"copy Excel table with formulas failed: {exc.code}")
         except Exception as exc:  # noqa: BLE001 - never log workbook content
             outcome = "error"
             error_code = "execution_failed"
-            if export_kind == _EXPORT_TABLE:
+            if export_kind != _EXPORT_FORMULAS:
                 log(
-                    "copy selected Excel table as XML failed: "
+                    f"copy selected Excel table as {output_name} failed: "
                     f"{type(exc).__name__}"
                 )
             else:
@@ -585,8 +605,12 @@ class TabledownApp(rumps.App):
             self._explicit_export_lock.release()
 
     def _alert_explicit_export_error(self, export_kind: str, code: str) -> None:
-        prefix = "table" if export_kind == _EXPORT_TABLE else "formula"
+        prefix = "formula" if export_kind == _EXPORT_FORMULAS else "table"
         key = f"{prefix}.error.{code}"
+        if export_kind == _EXPORT_MARKDOWN:
+            markdown_key = f"markdown.error.{code}"
+            if t(markdown_key, self.lang) != markdown_key:
+                key = markdown_key
         message = t(key, self.lang)
         if message == key:
             message = t(f"{prefix}.error.execution_failed", self.lang)
@@ -608,9 +632,9 @@ class TabledownApp(rumps.App):
         self._update_explicit_export_menu()
         enabled = export_kind is None
         for item in (
+            self.copy_markdown_item,
             self.copy_xml_item,
             self.copy_excel_formulas_item,
-            self.copy_ai_formulas_item,
         ):
             try:
                 item._menuitem.setEnabled_(enabled)
@@ -618,7 +642,7 @@ class TabledownApp(rumps.App):
                 log(f"explicit XML menu state update failed: {type(exc).__name__}")
 
     def _update_explicit_export_menu(self) -> None:
-        """Apply localized normal/busy XML labels without losing active state."""
+        """Apply localized normal/busy copy labels without losing active state."""
         active = getattr(self, "_explicit_export_active", None)
         self.copy_xml_item.title = t(
             "menu.copy_xml_busy" if active == _EXPORT_TABLE else "menu.copy_xml",
@@ -632,17 +656,16 @@ class TabledownApp(rumps.App):
             ),
             self.lang,
         )
-        self.copy_ai_formulas_item.title = t(
-            (
-                "menu.copy_ai_formulas_busy"
-                if active == _EXPORT_AI_FORMULAS
-                else "menu.copy_ai_formulas"
-            ),
+        self.copy_markdown_item.title = t(
+            "menu.copy_markdown_busy" if active == _EXPORT_MARKDOWN else "menu.copy_markdown",
             self.lang,
         )
-        self.copy_ai_formulas_item._menuitem.setToolTip_(
-            t("menu.copy_ai_formulas_tooltip", self.lang)
-        )
+        for item, key in (
+            (self.copy_markdown_item, "menu.copy_markdown_tooltip"),
+            (self.copy_xml_item, "menu.copy_xml_tooltip"),
+            (self.copy_excel_formulas_item, "menu.copy_excel_formulas_tooltip"),
+        ):
+            item._menuitem.setToolTip_(t(key, self.lang))
 
     def _safe_alert(self, title: str, message: str):
         """rumps.alert that never lets a UI failure propagate into the run loop."""

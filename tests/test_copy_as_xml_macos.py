@@ -49,10 +49,11 @@ class CopyAsXmlActionTests(unittest.TestCase):
             _safe_alert=Mock(),
             copy_xml_item=SimpleNamespace(title="", _menuitem=Mock()),
             copy_excel_formulas_item=SimpleNamespace(title="", _menuitem=Mock()),
-            copy_ai_formulas_item=SimpleNamespace(title="", _menuitem=Mock()),
+            copy_markdown_item=SimpleNamespace(title="", _menuitem=Mock()),
         )
         for name in (
             "copy_as_xml",
+            "copy_as_markdown",
             "_start_explicit_export",
             "_run_explicit_export",
             "_perform_explicit_export",
@@ -268,11 +269,11 @@ class CopyAsXmlActionTests(unittest.TestCase):
 
     def test_menu_help_and_all_selection_errors_are_translated(self):
         self.assertEqual(
-            t("menu.copy_xml", "ko"), "표 구조·표시값을 XML로 복사"
+            t("menu.copy_xml", "ko"), "XML 변환 복사"
         )
         self.assertEqual(
             t("menu.copy_xml", "en"),
-            "Copy table structure and displayed values as XML",
+            "Copy as XML",
         )
         for language in ("ko", "en"):
             help_text = t("help.message", language)

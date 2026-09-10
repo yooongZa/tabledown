@@ -1,5 +1,6 @@
 """Convert HTML <table> (e.g. from Excel) to Markdown table."""
 from bs4 import BeautifulSoup, NavigableString
+from html import escape
 
 
 _BLOCK_TAGS = {
@@ -13,7 +14,9 @@ class MultipleTablesError(ValueError):
     """The clipboard HTML contains more than one table and is ambiguous."""
 
 
-def html_table_to_markdown(html: str, fill_merged_headers: bool = False) -> str:
+def html_table_to_markdown(
+    html: str, fill_merged_headers: bool = False, *, preserve_layout: bool = False
+) -> str:
     """Parse HTML and return a markdown table string.
 
     Merged cells become blanks (Markdown cannot draw a span). When
@@ -24,6 +27,11 @@ def html_table_to_markdown(html: str, fill_merged_headers: bool = False) -> str:
     value stays empty (the user-controlled "빈칸을 자동 채우기" option). See
     _fill_header_frame.
 
+    ``preserve_layout`` is reserved for explicit Excel selection copies. It
+    retains selected empty rows/columns and literal cell whitespace, escaping
+    Markdown/HTML syntax so displayed values stay literal. The automatic
+    conversion path keeps its established normalization by default.
+
     Raises:
         ValueError: if no table is found or it's empty.
     """
@@ -32,7 +40,7 @@ def html_table_to_markdown(html: str, fill_merged_headers: bool = False) -> str:
     if not table:
         raise ValueError("HTML에 <table>이 없습니다")
 
-    rows = _table_to_grid(table)
+    rows = _table_to_grid(table, preserve_layout=preserve_layout)
 
     if not rows:
         raise ValueError("표가 비어있습니다")
@@ -40,7 +48,8 @@ def html_table_to_markdown(html: str, fill_merged_headers: bool = False) -> str:
     # Pad rows to equal column count
     max_cols = max(len(r) for r in rows)
     rows = [r + [" "] * (max_cols - len(r)) for r in rows]
-    rows = _trim_trailing_empty_columns(rows)
+    if not preserve_layout:
+        rows = _trim_trailing_empty_columns(rows)
     max_cols = max(len(r) for r in rows)
 
     if fill_merged_headers:
@@ -378,7 +387,7 @@ def _cell_text_plain(cell) -> str:
     return "\n".join(lines)
 
 
-def _table_to_grid(table) -> list[list[str]]:
+def _table_to_grid(table, *, preserve_layout: bool = False) -> list[list[str]]:
     """Expand rowspan/colspan into a rectangular grid.
 
     Markdown tables cannot represent merged cells, so merged positions become
@@ -391,7 +400,7 @@ def _table_to_grid(table) -> list[list[str]]:
         row = []
         col_index = 0
         cells = tr.find_all(["td", "th"])
-        if not cells and row_index not in occupied:
+        if not cells and not preserve_layout and row_index not in occupied:
             continue
 
         for cell in cells:
@@ -401,7 +410,8 @@ def _table_to_grid(table) -> list[list[str]]:
 
             rowspan = _span_value(cell.get("rowspan"))
             colspan = _span_value(cell.get("colspan"))
-            row.append(_clean_cell(_cell_text(cell)))
+            clean = _clean_selected_cell if preserve_layout else _clean_cell
+            row.append(clean(_cell_text(cell)))
 
             for offset in range(1, colspan):
                 row.append(" ")
@@ -485,6 +495,19 @@ def _cell_text(cell) -> str:
     for br in cell.find_all("br"):
         br.replace_with("\n")
     return cell.get_text()
+
+
+def _clean_selected_cell(text: str) -> str:
+    """Keep selected-cell spacing and distinguish literal HTML from newlines.
+
+    Used only by explicit Excel selection copying. Automatic clipboard
+    conversion retains its existing normalization and trimming behavior.
+    """
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = escape(text, quote=False)
+    for character in "\\`*_[]|~":
+        text = text.replace(character, "\\" + character)
+    return text.replace("\n", "<br>") or " "
 
 
 def _clean_cell(text: str) -> str:

@@ -53,6 +53,10 @@ Tabledown 은 macOS 메뉴바 앱으로, 클립보드를 감시하며 **Excel/Sh
 - **2026-09-09 추가 회귀 테스트**: `tests/test_formula_ai_export.py`(간결 출력·핵심 정보 보존),
   `tests/test_ai_formula_action_macos.py`(실패·취소·재시도),
   `tests/test_markdown_html_encoding_macos.py`(Apple 메모 한글 인코딩).
+- **2026-09-10 메뉴 통합 회귀 테스트**: `tests/test_copy_as_markdown_macos.py`(선택 모양·세 메뉴 실행 제한·
+  실패/취소/재시도), `tests/test_markdown_roundtrip.py`(escape·문자참조·줄바꿈의 왕복 복원).
+  `test_ai_formula_action_macos.py`는 주 수식 메뉴의 간결 출력 통합을, `test_markdown_html_encoding_macos.py`는
+  독립 pasteboard에서 새 text+HTML 기록기 및 UTF-8 AppKit 가져오기까지 확인한다.
 
 ### 자주 쓰는 명령 포인터
 - 로컬 실행: `.venv/bin/python run.py` (Windows 포트는 `windows/run_windows.py`).
@@ -138,6 +142,20 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
 - text 슬롯: `convert_document_tables` 로 **표 부분만 마크다운 표**로, 나머지는 plain text 로 보강.
 - html 슬롯: **원본 유지** (PNG/PDF/RTF 등 RENDERED 이미지 형식만 drop, html 은 절대 drop 금지).
 - 결과: 마크다운 에디터는 마크다운 표를, Word·Excel 은 원본 표 형식을 받는다. **양쪽 동시 만족.**
+
+### 4-M. 명시적 Markdown 복사 (macOS, 2026-09-10)
+- `copy_as_markdown`은 일반 XML과 같은 안정된 Excel 선택을 한 번 읽고 `excel_table_selection_to_html`에서
+  Markdown과 UTF-8 HTML을 함께 만든다. `Cmd+C`나 과거 clipboard로 대체하지 않는다.
+- `html_table_to_markdown(..., preserve_layout=True)`에서만 선택한 빈 마지막 열·병합으로 덮인 빈 행·
+  원문 공백·표시값·줄바꿈을 보존한다. 기본값 False인 자동 변환의 평면 구조와 빈 마지막 열 정리는 유지한다.
+  Markdown은 병합·색·글꼴·열 너비를 직접 표현할 수 없다. 문자 그대로의 `<br>`는 entity(문자참조)로,
+  실제 줄바꿈은 `<br>`로 기록한다. 역변환은 escape·entity를 한 번만 풀어 특수문자가 값에 남지 않게 하며,
+  실제 `<br>`만 줄바꿈으로 바꾸고 생성 HTML에서도 줄바꿈을 보존한다. strict 표 판정은 유지한다.
+- `write_table_clipboard`는 같은 선택의 text+HTML+marker만 기록하고 과거 native/image 형식을 비운다.
+  자동 변환의 기존 HTML 유지 및 두 XML 명령의 text-only 계약은 그대로다. 기존 실행 gate·설정 snapshot·
+  generation 확인·검증 기록·실패/종료/재시도 경로를 공유한다. 새 내용을 복사한 뒤 자동 재시도하거나
+  OS clear 이후 쓰기 실패를 복구했다고 주장하지 않는다. Markdown+HTML 합계 UTF-8 10MB 상한을 쓰기 전에
+  검사하고 Excel 선택 10,000셀·값 5,000,000자·표시 overflow 차단은 기존 reader의 한도를 유지한다.
 
 ### 5. XML 표 변환 — 표→XML은 명시적 메뉴 클릭 전용, 자동 역변환은 없음 (0.3.0)
 - **형식 (v2 — 다단 헤더 중첩, 방안1: 일반 태그)**: LLM 친화 XML. 다단 헤더(가로·세로 양방향)를
@@ -239,9 +257,13 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   XML byte 한도 재시도에서 설명용 `값대입수식`만 생략할 수 있고 이때 루트에
   `값대입수식상태="omitted_xml_size_limit"`을 반드시 기록한다. `값종류`·계산 상태·참조 누락 사유를
   조용히 제거해 성공시키지 말 것.
-- **‘AI용 간결 복사’는 같은 수식 snapshot의 별도 출력 (2026-09-09)**:
-  `formula_selection_to_ai_xml`은 `<표범위 형식="AI간결수식" 형식버전="1">`을 생성하며, 기존
-  `formula_selection_to_xml`의 출력·단축키·기본 설정·읽기/크기 한도를 유지한다. 원본 선택 셀·값·
+- **macOS 수식 XML에 AI용 간결 출력을 통합 (2026-09-10)**:
+  macOS 복사 메뉴는 ‘마크다운 복사’·‘XML 변환 복사’·‘수식 포함 XML 변환 복사’ 3개다. 별도
+  ‘AI용 간결 복사’ 메뉴는 제거하고 기존 수식 메뉴·⌘⌃E에서 `formula_selection_to_ai_xml`을 호출한다.
+  일반 XML은 기존 v2 계층을 유지하고 두 XML 모두 AI에게 표를 전달하는 목적이다.
+  `formula_selection_to_ai_xml`은 `<표범위 형식="AI간결수식" 형식버전="1">`을 생성한다. 공유 API인
+  `formula_selection_to_xml`의 출력과 Windows 메뉴, 단축키·기본 설정·읽기/크기 한도는 유지한다.
+  원본 선택 셀·값·
   A1/R1C1·값 타입·계산 상태·부분 참조 사유를 보존하고, 정확히 같은 `(sheet,address)` 참조만
   `<참조목록>`에 한 번 기록해 각 수식의 `<참조 ref="rN">`로 연결한다. 겹치지만 다른 주소인 범위와
   수식별 참조 순서는 유지한다. 선택 안의 단순한 제목·항목을 `<맥락>`의 원본 셀 주소로 연결하고
