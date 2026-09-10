@@ -75,7 +75,7 @@ Markdown represents merged cells as separate grid cells. Colors, fonts, column w
 
 This uses the same stable Excel selection reader as regular XML: up to 10,000 cells and 5,000,000 value characters, with a combined UTF-8 Markdown+HTML limit of 10 MB. Read, conversion, and size failures stop before writing. Copying something new while the export is being prepared cancels its write. Success replaces older Excel-specific formats with Markdown and HTML from the same selection.
 
-All three manual commands require the Excel desktop app. **Markdown focuses on the table’s presentation in documents; both XML commands organize information for AI.** Existing automatic Excel/Google Sheets ↔ Markdown copy and paste remains available. These menu descriptions reflect TestFlight 0.6.1/build 0.6.5 as of September 10, 2026.
+All three manual commands require the Excel desktop app. **Markdown focuses on the table’s presentation in documents; both XML commands organize information for AI.** Existing automatic Excel/Google Sheets ↔ Markdown copy and paste remains available. These menu descriptions reflect TestFlight 0.6.1/build 0.6.6 as of September 10, 2026.
 
 ## Copy as XML (for AI)
 
@@ -254,7 +254,7 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 
 ## Changelog
 
-- 2026-09-10 (release preparation): Preserve cell line breaks, leading/trailing/repeated spaces, and merged-cell positions when pasting Markdown tables into Excel. Improve cancellation during large formula reads. All 350 automated checks and native Excel paste checks passed on the iMac; cancellation after a new copy took 1.7–3.9 seconds across five runs. Existing XML, automatic conversion, defaults, and size limits remain unchanged. Signing, store upload, and public release status will be recorded when completed.
+- 2026-09-10: **macOS 0.6.1 / TestFlight build 0.6.6 is available to internal group `22`.** Preserve cell line breaks, leading/trailing/repeated spaces, and merged-cell positions when pasting Markdown tables into Excel. Improve cancellation during large formula reads. All 350 automated checks and native Excel paste checks passed on the iMac; cancellation after a new copy took 1.7–3.9 seconds across five runs. Verified package source parity with commit `e07dcfa`, app and installer signatures, Apple validation and upload, `VALID` processing, `IN_BETA_TESTING`, and saved Korean/English build notes. Existing XML, automatic conversion, defaults, size limits, and app descriptions remain unchanged.
 
 - 2026-09-10: **macOS 0.6.1 / TestFlight build 0.6.5 is available to internal group `22`.** The three copy commands passed 375 candidate checks; 27 Windows-only tests were skipped. App and installer signatures, Apple validation and upload, VALID processing, and IN_BETA_TESTING were verified. Korean and English build notes explain how to move tables into documents and ask AI about data; the existing app description was preserved. No App Store review submission or public GitHub release was made in this step.
 
