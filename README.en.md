@@ -254,6 +254,8 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 
 ## Changelog
 
+- 2026-10-02 (development source, unreleased): Fixed literal backslashes, pipes, character references, and `<br>` text changing cell values or column boundaries when automatically generated Markdown is copied again as plain text. The shared macOS/Windows converter retains its existing whitespace normalization and original HTML preservation.
+
 - 2026-09-10: **macOS 0.6.1 / TestFlight build 0.6.5 is available to internal group `22`.** The three copy commands passed 375 candidate checks; 27 Windows-only tests were skipped. App and installer signatures, Apple validation and upload, VALID processing, and IN_BETA_TESTING were verified. Korean and English build notes explain how to move tables into documents and ask AI about data; the existing app description was preserved. No App Store review submission or public GitHub release was made in this step.
 
 - 2026-09-10 (development source, unreleased): Unified the macOS actions as “Copy Markdown,” “Copy as XML,” and “Copy as XML with Formulas.” Formula XML now includes inferred context and shared references. Added direct Markdown copying and improved special-character and line-break round trips. Defaults, existing shortcuts, and automatic copy/paste remain available.

@@ -242,9 +242,12 @@ class CopyAsMarkdownActionTests(unittest.TestCase):
         ]))
         expected = (
             "| 항목 | 설명 |\n| --- | --- |\n"
-            "| 사과 🍎 | 첫째<br><br> |"
+            "| 사과 🍎 | 첫째<br>&lt;br&gt; |"
         )
         self.assertEqual(html_table_to_markdown(html), expected)
+        self.assertEqual(markdown_table_to_rows(expected), [
+            ["항목", "설명"], ["사과 🍎", "첫째\n<br>"],
+        ])
         selected = html_table_to_markdown(html, preserve_layout=True)
         self.assertIn("&lt;br&gt;", selected)
         self.assertIn("  사과   🍎  ", selected)

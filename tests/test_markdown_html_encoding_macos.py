@@ -2,6 +2,7 @@
 
 import sys
 import unittest
+from html import escape
 from unittest.mock import Mock, patch
 
 if sys.platform == "darwin":
@@ -27,6 +28,43 @@ if sys.platform == "darwin":
 
 @unittest.skipUnless(sys.platform == "darwin", "requires macOS HTML importer")
 class MarkdownHtmlEncodingTests(unittest.TestCase):
+    def test_automatic_markdown_text_only_recopy_preserves_cells_in_native_import(self):
+        values = [r"x\|y", r"\*", r"\\", "&copy;", "&lt;", "<br>", "한글 🍎"]
+        html = "<table><tr><th>값</th><th>확인</th></tr>" + "".join(
+            "<tr><td>" + escape(value) + "</td><td>tail</td></tr>"
+            for value in values
+        ) + "</table>"
+        automatic = TabledownApp._converted_clipboard(None, {"html": html})
+        self.assertTrue(HTML_TYPES.isdisjoint(automatic["drop_types"]))
+        markdown = automatic["text"]
+        update = TabledownApp._converted_clipboard(None, {"text": markdown})
+        self.assertIsNotNone(update)
+        self.assertEqual(update["text"], markdown)
+        expected = ["값", "확인"] + [cell for value in values for cell in (value, "tail")]
+
+        pasteboard = NSPasteboard.pasteboardWithUniqueName()
+        try:
+            with patch("tablemark.clipboard.NSPasteboard") as pasteboards:
+                pasteboards.generalPasteboard.return_value = pasteboard
+                write_clipboard(**update, mark_generated=True)
+            self.assertEqual(str(pasteboard.stringForType_(NSPasteboardTypeString)), markdown)
+            for html_type in sorted(HTML_TYPES):
+                with self.subTest(html_type=html_type):
+                    value, _, error = (
+                        NSAttributedString.alloc()
+                        .initWithData_options_documentAttributes_error_(
+                            pasteboard.dataForType_(html_type),
+                            {NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType},
+                            None,
+                            None,
+                        )
+                    )
+                    self.assertIsNone(error)
+                    self.assertIsNotNone(value)
+                    self.assertEqual(str(value.string()).splitlines(), expected)
+        finally:
+            pasteboard.releaseGlobally()
+
     def test_clipboard_html_preserves_unicode_in_native_rich_text_import(self):
         markdown = (
             "| 항목 | 값 |\n| --- | --- |\n"

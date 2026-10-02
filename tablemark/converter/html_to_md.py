@@ -497,6 +497,19 @@ def _cell_text(cell) -> str:
     return cell.get_text()
 
 
+def _escape_markdown_cell(text: str) -> str:
+    """Encode literal text before adding the only meaningful HTML: line breaks.
+
+    Both Markdown export paths use the same one-pass inverse decoder. Escape
+    backslashes before pipes so a literal backslash cannot turn a cell's pipe
+    into a column delimiter; encode HTML/entities so they remain cell values.
+    """
+    text = escape(text, quote=False)
+    for character in "\\`*_[]|~":
+        text = text.replace(character, "\\" + character)
+    return text.replace("\n", "<br>")
+
+
 def _clean_selected_cell(text: str) -> str:
     """Keep selected-cell spacing and distinguish literal HTML from newlines.
 
@@ -504,21 +517,17 @@ def _clean_selected_cell(text: str) -> str:
     conversion retains its existing normalization and trimming behavior.
     """
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = escape(text, quote=False)
-    for character in "\\`*_[]|~":
-        text = text.replace(character, "\\" + character)
-    return text.replace("\n", "<br>") or " "
+    return _escape_markdown_cell(text) or " "
 
 
 def _clean_cell(text: str) -> str:
-    """Escape pipes, preserve in-cell line breaks as <br>, ensure non-empty.
+    """Normalize whitespace, escape literal text, preserve breaks as <br>.
 
     Excel Alt+Enter and Sheets Ctrl+Enter put a literal newline inside a cell.
     Markdown table cells cannot contain a raw newline, but GFM (Obsidian,
     GitHub) renders <br> inside a cell as a line break.
     """
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = text.replace("|", "\\|")
     # Collapse runs of spaces/tabs within a line, then join lines with <br>.
     lines = [" ".join(line.split()) for line in text.split("\n")]
     # Drop empty leading/trailing lines so wrap-only whitespace doesn't add
@@ -527,8 +536,7 @@ def _clean_cell(text: str) -> str:
         lines.pop(0)
     while lines and not lines[-1]:
         lines.pop()
-    text = "<br>".join(lines)
-    return text if text else " "
+    return _escape_markdown_cell("\n".join(lines)) or " "
 
 
 def html_has_content_outside_table(html: str) -> bool:

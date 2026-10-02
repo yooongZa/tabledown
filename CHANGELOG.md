@@ -7,6 +7,9 @@
 
 ## [Unreleased]
 
+- **2026-10-02 자동 Markdown 재복사 시 문자 복원 수정 (macOS·Windows 공유 소스, 미배포):** HTML→Markdown 자동 출력도 기존 명시적 복사와 같은 문자 인코딩을 사용한다. 백슬래시를 먼저 escape(이스케이프)해 파이프가 열 구분자로 바뀌는 것을 막고, 문자참조와 문자 그대로의 `<br>`·HTML·Markdown 문법을 원래 셀 값으로 복원한다. 실제 줄바꿈은 `<br>`로 유지하며 기존 공백 정리·빈 마지막 열 제거·병합 처리·strict(엄격) 표 판정·원본 HTML 보존은 유지한다. 역변환 파서·클립보드 실행 제한·XML·설정·버전은 변경하지 않았다.
+- **2026-10-02 검증:** 수정 전 헤더/본문 파이프 앞 백슬래시 1~5개에서 표 판정 실패·열 분리·문자 소실을 재현했다. 수정 후 `.venv/bin/python -B -m unittest tests.test_markdown_roundtrip tests.test_markdown_html_encoding_macos tests.test_copy_as_markdown_macos -q` **35/35**, `run_converter_tests()` **51/51**, Windows `test_windows_port` **88 pass + 27 skip**(macOS에서 Windows 전용 제외)을 통과했다. 다중 열·문자참조·실제 줄바꿈/literal `<br>`·기존 공백/빈 열 처리와 macOS 독립 pasteboard/AppKit 가져오기, Excel 형식 CF_HTML→자동 Markdown→text-only 재복사→CF_HTML을 검증했다. 실제 Excel 붙여넣기·Windows 실기기·설치/배포는 실행하지 않았다.
+
 - **2026-09-10 TestFlight 배포 완료 (macOS 0.6.1 / build 0.6.5):** 공개 완료된 0.6.0 다음 버전으로 세 복사 메뉴 통합을 내부 그룹 `22`에 제공했다. 커밋 `013e8ec`의 별도 Python 3.13.2 후보에서 관련 테스트 211/211·비-시스템-클립보드 매트릭스 77/77·Windows 87 pass + 27 skip을 통과했다. 초기 Windows 테스트의 Pillow 누락과 검증 도구의 결과 필드 이름 오류를 해결한 뒤 재실행했으며 제품 코드 변경은 없었다. 서명 패키지의 원본 소스 일치·버전·App Sandbox/Excel Automation 권한·중첩 실행 파일 권한·앱/설치자 서명·Apple validate-app을 확인했다. 패키지 검증 도구의 codesign 출력 읽기 방식도 보정해 재검증했다. Apple 업로드 성공 후 처리 `VALID`, 빌드의 기존 내부 그룹 연결 및 `IN_BETA_TESTING`, 한국어·영어 변경 안내 저장을 직접 재조회했다. 이전에 확정한 앱 소개는 변경하지 않았다. 세 메뉴를 어떤 작업에 쓰는지 중심으로 변경 안내를 작성했다. 실제 Excel/노트 붙여넣기·로컬 설치는 이번 배포 작업에서 실행하지 않았고 App Store 심사 제출·GitHub 공개 배포는 진행하지 않았다. 검증 근거: `outputs/testflight/20260910-143443-menu-integration/`.
 
 - **2026-09-10 macOS 복사 메뉴 통합:** 메뉴를 ‘마크다운 복사’·‘XML 변환 복사’·‘수식 포함 XML 변환 복사’로 맞췄다. 세 명령 모두 Excel 선택 영역을 직접 읽는다. Markdown은 문서의 표 배치·표시값·줄바꿈을, 두 XML은 AI에 전달할 구조·맥락을 중심으로 정리한다. 별도 ‘AI용 간결 복사’ 메뉴를 제거하고 제목·항목의 추정 맥락과 중복 참조 정리를 기존 수식 메뉴·⌘⌃E에 통합했다. 일반 XML v2와 공유 legacy(기존) 수식 serializer(직렬화기), Windows 메뉴, 기본 설정·기존 단축키를 보존했다. 버전·설치·배포 변경은 없다.

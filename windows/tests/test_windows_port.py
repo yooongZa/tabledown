@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from decimal import Decimal
+from html import escape
 import importlib
 import sys
 import threading
@@ -72,6 +73,27 @@ def _excel_style_cf_html(interior: str) -> bytes:
 
 
 class WindowsPortTests(unittest.TestCase):
+    def test_excel_automatic_markdown_text_only_recopy_preserves_literal_cells(self):
+        values = [r"x\|y", r"\*", r"\\", "&copy;", "&lt;", "<br>", "한글 🍎"]
+        interior = "<tr><td>값</td><td>확인</td></tr>" + "".join(
+            "<tr><td>" + escape(value) + "</td><td>tail</td></tr>"
+            for value in values
+        )
+        source = extract_cf_html(_excel_style_cf_html(interior))
+        automatic = converted_clipboard({"html": source})
+        self.assertNotIn(CF_HTML_FORMAT_NAME, automatic["drop_formats"])
+        markdown = automatic["text"]
+        update = converted_clipboard({"text": markdown})
+        self.assertIsNotNone(update)
+        self.assertEqual(update["text"], markdown)
+
+        restored = extract_cf_html(build_cf_html(update["html"]))
+        soup = BeautifulSoup(restored, "html.parser")
+        self.assertEqual([
+            [cell.get_text() for cell in row.find_all(["th", "td"])]
+            for row in soup.find_all("tr")
+        ], [["값", "확인"], *[[value, "tail"] for value in values]])
+
     def test_excel_cf_html_fragment_without_table_tag_is_wrapped(self):
         # Excel's fragment omits the <table> tag (markers are inside it). Without
         # wrapping, table detection fails and an Excel copy never converts.

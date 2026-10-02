@@ -227,7 +227,7 @@ def run_converter_tests() -> list[TestResult]:
         "html_trailing_empty_column_trimmed",
         lambda: _assert_equal(
             html_table_to_markdown(HTML_TRAILING_EMPTY),
-            "| Step | Source |\n| --- | --- |\n| 1 | Copy_Basic |",
+            "| Step | Source |\n| --- | --- |\n| 1 | Copy\\_Basic |",
         ),
     )
     check(
