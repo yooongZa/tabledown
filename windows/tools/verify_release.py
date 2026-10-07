@@ -5,6 +5,7 @@ so this helper cannot accidentally run against someone's personal clipboard.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import importlib.metadata
 import json
@@ -51,6 +52,9 @@ def wait_for(predicate, message, process=None, timeout=20):
 
 def verify():
     assert sys.platform == "win32" and os.environ.get("GITHUB_ACTIONS") == "true"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--store", action="store_true", help="Verify the unsigned Microsoft Store submission package")
+    args = parser.parse_args()
     from PyInstaller.archive.readers import CArchiveReader
     import win32api
     import win32clipboard
@@ -62,6 +66,7 @@ def verify():
 
     report = {
         "status": "running", "version": __version__,
+        "distribution": "microsoft_store_submission" if args.store else "sideload_test",
         "source_commit": os.environ["GITHUB_SHA"], "checks": {},
         "windows_excel_device_test": "not_performed",
         "msix_install_test": "not_performed",
@@ -83,8 +88,16 @@ def verify():
                 manifest = ET.fromstring(package.read("AppxManifest.xml"))
                 ns = {"p": "http://schemas.microsoft.com/appx/manifest/foundation/windows10"}
                 identity = manifest.find("p:Identity", ns).attrib
-                assert identity == {"Name": "Tabledown.Dev", "Publisher": "CN=Tabledown.Dev", "Version": __version__ + ".0", "ProcessorArchitecture": "x64"}
-                assert "AppxSignature.p7x" in package.namelist()
+                store_identity = json.loads((WINDOWS / "packaging/store-identity.json").read_text(encoding="utf-8")) if args.store else None
+                assert identity == {
+                    "Name": store_identity["name"] if args.store else "Tabledown.Dev",
+                    "Publisher": store_identity["publisher"] if args.store else "CN=Tabledown.Dev",
+                    "Version": __version__ + ".0", "ProcessorArchitecture": "x64",
+                }
+                assert ("AppxSignature.p7x" in package.namelist()) == (not args.store)
+                assert not any(n.lower().endswith((".pfx", ".key", ".pem")) for n in package.namelist())
+                if args.store:
+                    assert manifest.find("p:Properties/p:PublisherDisplayName", ns).text == store_identity["publisher_display_name"]
                 report["checks"]["msix_zip_payload_identical"] = len(files)
                 report["msix_identity"] = identity
                 archive.extractall(work)

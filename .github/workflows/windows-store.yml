@@ -1,0 +1,73 @@
+name: Windows Microsoft Store package
+
+# Build for the existing Store product, without a development certificate.
+# Upload/submission remains an explicit Partner Center step after validation.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create Windows build environment
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          python -m venv windows/.venv
+          windows/.venv/Scripts/python -m pip install --upgrade pip
+          windows/.venv/Scripts/pip install -r windows/requirements.txt
+
+      - name: Run Windows and shared regression tests
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          Push-Location windows/tests
+          try { ../.venv/Scripts/python -m unittest test_windows_port -v }
+          finally { Pop-Location }
+          windows/.venv/Scripts/python -m unittest tests.test_markdown_roundtrip tests.test_formula_export tests.test_formula_ai_export -v
+
+      - name: Build unsigned MSIX with the existing Store identity
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $identity = Get-Content windows/packaging/store-identity.json -Raw | ConvertFrom-Json
+          pwsh -File windows/build_msix.ps1 -StoreName $identity.name -StorePublisher $identity.publisher -StorePublisherDisplay $identity.publisher_display_name
+          $v = (windows/.venv/Scripts/python -c "import sys; sys.path.insert(0,'windows'); import tabledown_windows; print(tabledown_windows.__version__)").Trim()
+          Compress-Archive -Path windows/dist/Tabledown-Windows -DestinationPath "windows/dist/Tabledown-Windows-portable-$v.zip"
+
+      - name: Verify Store identity, payload, source and packaged EXE
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          windows/.venv/Scripts/python windows/tools/verify_release.py --store
+          Get-ChildItem windows/dist/Tabledown-*.msix | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+          } | Set-Content windows/dist/SHA256SUMS.txt -Encoding utf8
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tabledown-windows-store
+          if-no-files-found: error
+          path: |
+            windows/dist/Tabledown-*.msix
+            windows/dist/SHA256SUMS.txt
+            windows/dist/release-verification.json
+            windows/dist/release-smoke.log
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: tabledown-windows-store-failure
+          if-no-files-found: ignore
+          path: |
+            windows/dist/release-verification.json
+            windows/dist/release-smoke.log
