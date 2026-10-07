@@ -100,6 +100,10 @@ def verify():
             for base, prefix in [(WINDOWS / "tabledown_windows", "tabledown_windows"), (ROOT / "tablemark/converter", "tablemark.converter")]:
                 for source in base.glob("*.py"):
                     name = prefix if source.stem == "__init__" else prefix + "." + source.stem
+                    # General table XML is a macOS action. Windows imports the
+                    # formula serializers, so PyInstaller omits this unused module.
+                    if name == "tablemark.converter.table_xml":
+                        continue
                     expected = compile(source.read_bytes(), str(source), "exec", dont_inherit=True, optimize=0)
                     assert normalized(pyz.extract(name)) == normalized(expected), name
                     modules[name] = sha(source.read_bytes())

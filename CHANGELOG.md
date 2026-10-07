@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+- **Windows 패키지 검사 보정:** 첫 Windows CI에서 포트 116/116·공용 77/77·빌드·MSIX 서명 검증은 통과했으나, 검사 도구가 Windows에서 import하지 않는 일반 XML `table_xml` 모듈을 필수로 요구해 실패했다. 해당 macOS 전용 모듈만 원본 일치 검사 대상에서 제외하고 실제 Windows 모듈 검사를 유지한다. 제품 기능 변경은 없으며 전체 CI를 재실행한다.
+
 - **2026-10-07 Windows 0.2.8 배포 준비:** Windows 독립 버전을 올리고 공유 Markdown 문자·Office 줄바꿈 수정과 현재 수식 XML 구현을 패키징한다. PyInstaller·아이콘·MSIX 에셋·버전 읽기 실패를 즉시 전파해 이전 실행 파일을 재포장하는 경로를 차단했다. Windows CI에 공용 변환/수식 테스트, EXE의 원본 bytecode(바이트코드)·동적 COM/WinRT 의존성·MSIX/ZIP payload(내용) 일치, 실제 EXE 시작·클립보드 변환·단축키 일시정지/재개·중복 실행, MSIX 서명 및 SHA-256 검증을 추가했다. macOS에서 공용 77/77, Windows 포트 89 pass + 27 skip과 Python AST를 통과했다. Windows 실행기 결과·공개 배포 여부는 완료 후 별도로 기록한다. Microsoft Store identity는 미설정이며 MSIX는 공개 인증서를 동봉한 자체 서명 설치 시험용이다.
 
 ## [0.6.1] - 2026-10-07 (macOS)
