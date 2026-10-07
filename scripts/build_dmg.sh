@@ -81,11 +81,14 @@ ditto -c -k --keepParent --norsrc --noextattr --noqtn "$APP_STAGE" "$ZIP"
 #    itself. The DMG is a separate artifact: notarizing the app alone is not
 #    enough — `stapler staple <dmg>` needs a ticket issued for the DMG.
 hdiutil create -volname "$APP_NAME" -srcfolder "$APP_STAGE" -ov -format UDZO "$DMG"
+/usr/bin/codesign --force --timestamp --sign "$SIGN_ID" "$DMG"
+/usr/bin/codesign --verify --strict --verbose=2 "$DMG"
 xcrun notarytool submit "$DMG" "${NOTARY_AUTH[@]}" --wait
 xcrun stapler staple "$DMG"
 
 # 6. Verify Gatekeeper acceptance and emit checksums for the release notes.
-spctl -a -t open --context context:primary-signature -v "$DMG" || true
+xcrun stapler validate "$DMG"
+spctl -a -t open --context context:primary-signature -v "$DMG"
 shasum -a 256 "$DMG" "$ZIP"
 du -sh "$DMG" "$ZIP"
 echo "Built and notarized: $DMG, $ZIP"

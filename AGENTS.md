@@ -513,12 +513,7 @@ fallback 을 지킬 것(`register()`/`start()` 가 False 를 돌려줄 뿐 예�
 - **GitHub 배포(DMG)**: `NOTARY_PROFILE=tabledown-notary bash scripts/build_dmg.sh`
   (Developer ID 서명 + Apple 공증 + staple. 앱과 DMG **둘 다** 공증해야 함 — DMG 만
   staple 하면 "Record not found" 로 실패.)
-- **DMG 자체 서명·최종 검증 보완 (2026-09-09 기준)**: 현재 `scripts/build_dmg.sh`는 DMG 자체
-  서명을 생략하고 마지막 `spctl` 실패를 `|| true`로 무시한다. 배포 담당자는 DMG 생성 → Developer ID로
-  DMG 자체 서명 → DMG 공증 → staple(공증 티켓 부착) 순서를 별도로 완료하고, `codesign --verify`·
-  `xcrun stapler validate`·`spctl -a -t open --context context:primary-signature`의 성공을 직접 확인한다.
-  ZIP 재추출본과 DMG 내부 앱도 동기화 폴더 밖에서 `codesign --verify --deep --strict`와 Gatekeeper로
-  검증한다. v0.6.0/build 0.6.4는 이 보완 절차를 통과했다. 스크립트 자동화 수정은 후속 항목이다.
+- **DMG 자체 서명·최종 검증 (2026-10-07 보완)**: `scripts/build_dmg.sh`는 DMG 생성 → Developer ID 서명·검증 → DMG 공증 → staple → stapler/Gatekeeper 검증 순서로 실행하며 검증 실패 시 종료한다. 배포 담당자는 ZIP 재추출본과 DMG 내부 앱도 동기화 폴더 밖에서 `codesign --verify --deep --strict`와 Gatekeeper로 검증한다.
 - **Windows 빌드는 `--collect-all winsdk` 필수**(`windows/build_windows.ps1`): `startup_task` 가 쓰는
   `winsdk` 는 namespace 모듈을 lazy import 하고 코드가 native `_winrt.pyd` 에 있어 PyInstaller 정적 분석이
   둘 다 놓친다. 빠지면 빌드는 통과하지만 **로그인 토글이 패키지 빌드에서 조용히 사라진다**(import 실패 →
