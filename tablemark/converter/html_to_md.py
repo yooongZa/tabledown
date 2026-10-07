@@ -1,6 +1,7 @@
 """Convert HTML <table> (e.g. from Excel) to Markdown table."""
 from bs4 import BeautifulSoup, NavigableString
 from html import escape
+import re
 
 
 _BLOCK_TAGS = {
@@ -493,6 +494,16 @@ def _cell_text(cell) -> str:
     place is safe because each cell is visited once during grid expansion.
     """
     for br in cell.find_all("br"):
+        # Office formats source as <br />\r\n    next line. The source newline
+        # is HTML whitespace; the <br> already represents the cell's break.
+        # Remove one formatter line only, retaining consecutive <br> elements
+        # and raw newlines elsewhere in the cell.
+        following = br.next_sibling
+        if isinstance(following, NavigableString):
+            text = str(following)
+            unformatted = re.sub(r"^[ \t]*(?:\r\n|\r|\n)[ \t]*", "", text, count=1)
+            if unformatted != text:
+                following.replace_with(unformatted)
         br.replace_with("\n")
     return cell.get_text()
 

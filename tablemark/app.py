@@ -448,10 +448,20 @@ class TabledownApp(rumps.App):
                     fill_merged_headers=fill_blanks,
                     preserve_layout=True,
                 ))
-                output_html = (
+                html_prefix = (
                     '<html><head><meta charset="utf-8">'
                     '<style>td{white-space:pre-wrap}</style></head><body>'
-                    + table_html + '</body></html>'
+                )
+                html_suffix = '</body></html>'
+                html_budget = (
+                    MAX_MARKDOWN_EXPORT_BYTES - len(xml.encode("utf-8"))
+                    - len((html_prefix + html_suffix).encode("utf-8"))
+                )
+                output_html = (
+                    html_prefix + excel_table_selection_to_html(
+                        selection, for_excel_paste=True,
+                        max_output_bytes=html_budget,
+                    ) + html_suffix
                 )
                 output_bytes = len(xml.encode("utf-8")) + len(output_html.encode("utf-8"))
                 if output_bytes > MAX_MARKDOWN_EXPORT_BYTES:
@@ -497,7 +507,19 @@ class TabledownApp(rumps.App):
                     metadata=metadata,
                 )
             else:
-                selection = read_stable_selected_excel_formulas()
+                def check_formula_cancelled() -> None:
+                    # Native reads finish cooperatively; never consume a newer
+                    # clipboard generation or export a partially read snapshot.
+                    if stop_event is not None and stop_event.is_set():
+                        raise ExcelFormulaError("cancelled")
+                    if clipboard_change_count() != expected_change_count:
+                        raise ExcelFormulaError("clipboard_changed")
+
+                check_formula_cancelled()
+                selection = read_stable_selected_excel_formulas(
+                    check_cancelled=check_formula_cancelled,
+                )
+                check_formula_cancelled()
                 xml = formula_selection_to_ai_xml(selection)
                 notice_key = formula_copy_notice_key(selection)
 
@@ -555,7 +577,7 @@ class TabledownApp(rumps.App):
             else:
                 log("copy Excel table with formulas failed: output_too_large")
         except ExcelFormulaError as exc:
-            outcome = "error"
+            outcome = "cancelled" if exc.code == "cancelled" else "error"
             error_code = exc.code
             if export_kind != _EXPORT_FORMULAS:
                 log(f"copy selected Excel table as {output_name} failed: {exc.code}")

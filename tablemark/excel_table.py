@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from html import escape
+import re
 from typing import Protocol
 
 from .converter.formula_export import MAX_SNAPSHOT_READS, MAX_VALUE_CHARACTERS
 from .converter.html_to_md import html_table_to_model
-from .converter.table_xml import TableXmlMetadata, TableXmlTitle
+from .converter.table_xml import TableXmlMetadata, TableXmlTitle, TableXmlTooLargeError
 from .excel_formula import (
     EXCEL_BUNDLE_ID,
     EXCEL_NOT_RUNNING,
@@ -505,8 +506,41 @@ def read_stable_selected_excel_table(
     raise ExcelFormulaError(SELECTION_CHANGED)
 
 
-def excel_table_selection_to_html(selection: ExcelTableSelection) -> str:
-    """Build one merge-aware HTML table for the existing XML model parser."""
+def excel_table_selection_to_html(
+    selection: ExcelTableSelection, *, for_excel_paste: bool = False,
+    max_output_bytes: int | None = None,
+) -> str:
+    """Build merge-aware HTML, optionally preserving Excel paste whitespace.
+
+    The default remains the structural input used by XML and Markdown parsing.
+    Office-specific space encoding is hidden from other HTML readers. A supplied
+    UTF-8 budget is checked before cell escaping or Office-space expansion.
+    """
+    remaining_bytes = max_output_bytes
+
+    def reserve(byte_count: int) -> None:
+        nonlocal remaining_bytes
+        if remaining_bytes is not None:
+            if byte_count > remaining_bytes:
+                raise TableXmlTooLargeError("table_html_output_too_large")
+            remaining_bytes -= byte_count
+
+    table_prefix = "<table>"
+    table_suffix = "</table>"
+    if for_excel_paste:
+        # Excel's native HTML importer needs these inner fragment boundaries
+        # to retain rowspan/colspan merges in the pasted worksheet.
+        table_prefix += "<!--StartFragment-->"
+        table_suffix = "<!--EndFragment-->" + table_suffix
+    # This also rejects a negative budget before validating or expanding input.
+    reserve(len(table_prefix) + len(table_suffix))
+    office_prefix = '<!--[if mso]><span style="mso-spacerun:yes">'
+    office_middle = '</span><![endif]--><!--[if !mso]><!--><span>'
+    office_suffix = '</span><!--<![endif]-->'
+    office_run_overhead = len(office_prefix + office_middle + office_suffix)
+    line_break = (
+        '<br style="mso-data-placement:same-cell">' if for_excel_paste else "<br>"
+    )
     start_row, start_column, end_row, end_column = _rectangle_bounds(
         selection.address
     )
@@ -545,6 +579,7 @@ def excel_table_selection_to_html(selection: ExcelTableSelection) -> str:
 
     html_rows = []
     for row_offset in range(selection.row_count):
+        reserve(len("<tr></tr>"))
         absolute_row = start_row + row_offset
         cells = []
         for column_offset in range(selection.column_count):
@@ -553,12 +588,6 @@ def excel_table_selection_to_html(selection: ExcelTableSelection) -> str:
             merge_shape = merge_starts.get(coordinate)
             if coordinate in covered and merge_shape is None:
                 continue
-            value = selection.values[
-                row_offset * selection.column_count + column_offset
-            ]
-            text = "" if value is None else value
-            escaped = escape(text, quote=False).replace("\r\n", "\n")
-            escaped = escaped.replace("\r", "\n").replace("\n", "<br>")
             attributes = ""
             if merge_shape is not None:
                 rowspan, colspan = merge_shape
@@ -566,9 +595,43 @@ def excel_table_selection_to_html(selection: ExcelTableSelection) -> str:
                     attributes += f' rowspan="{rowspan}"'
                 if colspan > 1:
                     attributes += f' colspan="{colspan}"'
+            reserve(len(f"<td{attributes}></td>"))
+            value = selection.values[
+                row_offset * selection.column_count + column_offset
+            ]
+            text = "" if value is None else value
+            text = text.replace("\r\n", "\n").replace("\r", "\n")
+            if remaining_bytes is not None:
+                # Account for escape(..., quote=False), line breaks and both
+                # conditional space branches before allocating their strings.
+                reserve(
+                    len(text.encode("utf-8"))
+                    + 4 * text.count("&")
+                    + 3 * (text.count("<") + text.count(">"))
+                    + (len(line_break) - 1) * text.count("\n")
+                )
+                if for_excel_paste:
+                    for match in re.finditer(r" +", text):
+                        # Original ASCII spaces remain in the non-Office branch;
+                        # the Office branch adds one six-byte entity per space.
+                        reserve(office_run_overhead + 6 * len(match[0]))
+            escaped = escape(text, quote=False)
+            if for_excel_paste:
+                # Excel decodes spacerun NBSPs back to ASCII spaces. Keep the
+                # original spaces in the non-Office branch so other readers
+                # never receive substituted Unicode characters.
+                escaped = re.sub(
+                    r" +",
+                    lambda match: (
+                        office_prefix + "&#160;" * len(match[0])
+                        + office_middle + match[0] + office_suffix
+                    ),
+                    escaped,
+                )
+            escaped = escaped.replace("\n", line_break)
             cells.append(f"<td{attributes}>{escaped}</td>")
         html_rows.append("<tr>" + "".join(cells) + "</tr>")
-    return "<table>" + "".join(html_rows) + "</table>"
+    return table_prefix + "".join(html_rows) + table_suffix
 
 
 def excel_table_selection_to_model(

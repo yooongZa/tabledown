@@ -38,6 +38,7 @@ from tablemark.excel_formula import (
     NSAppleScriptExecutor,
     _build_formula_read_script,
     _build_reference_read_script,
+    _FORMULA_MASK_HELPERS,
     _parse_mask_result,
     _parse_reference_result,
     _rectangle_bounds,
@@ -289,6 +290,31 @@ class NativeExcelRunningTests(unittest.TestCase):
 
 
 class ExcelFormulaReaderTests(unittest.TestCase):
+    @unittest.skipUnless(Path("/Applications/Microsoft Excel.app").exists(),
+                         "Microsoft Excel terminology is required")
+    def test_native_boolean_matrix_mask_keeps_row_major_order(self):
+        executor = NSAppleScriptExecutor()
+        for literal, expected in (
+            ("{{true, false}, {false, true}}", "1001"),
+            ("{true, false, true}", "101"),
+            ("true", "1"),
+        ):
+            with self.subTest(literal=literal):
+                self.assertEqual(executor.run(
+                    _FORMULA_MASK_HELPERS + "\nreturn my bitMaskText(" + literal + ")"
+                ), expected)
+
+    @unittest.skipUnless(Path("/Applications/Microsoft Excel.app").exists(),
+                         "Microsoft Excel terminology is required")
+    def test_native_mask_rejects_non_boolean_matrix_entries(self):
+        for literal in ('{{true, "false"}}', "{{true, 0}}", "{missing value}"):
+            with self.subTest(literal=literal):
+                with self.assertRaises(ExcelFormulaError) as caught:
+                    NSAppleScriptExecutor().run(
+                        _FORMULA_MASK_HELPERS + "\nreturn my bitMaskText(" + literal + ")"
+                    )
+                self.assertEqual(caught.exception.code, EXECUTION_FAILED)
+
     @unittest.skipUnless(
         Path("/Applications/Microsoft Excel.app").exists(),
         "Microsoft Excel terminology is required to compile the scripts",

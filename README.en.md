@@ -254,6 +254,8 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 
 ## Changelog
 
+- 2026-10-07 (macOS source and iMac QA installation): Fixed literal-cell and in-cell line-break corruption in real Excel round trips. Optimized formula reads while preserving error/empty-string distinctions and cancellation when new content is copied. A 4,008-cell range with 500 formulas decreased from 92.2 to 41.8 seconds with identical XML. Device checks passed 54 scenarios with one unexercised case; focused tests passed 280/280 on both Macs and the running-app matrix passed 85/85. Large formula ranges still take time. This update is installed in the iMac QA app; public distribution remains a separate step.
+
 - 2026-10-02 (development source, unreleased): Fixed literal backslashes, pipes, character references, and `<br>` text changing cell values or column boundaries when automatically generated Markdown is copied again as plain text. The shared macOS/Windows converter retains its existing whitespace normalization and original HTML preservation.
 
 - 2026-09-10: **macOS 0.6.1 / TestFlight build 0.6.5 is available to internal group `22`.** The three copy commands passed 375 candidate checks; 27 Windows-only tests were skipped. App and installer signatures, Apple validation and upload, VALID processing, and IN_BETA_TESTING were verified. Korean and English build notes explain how to move tables into documents and ask AI about data; the existing app description was preserved. No App Store review submission or public GitHub release was made in this step.

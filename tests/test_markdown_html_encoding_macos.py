@@ -70,11 +70,13 @@ class MarkdownHtmlEncodingTests(unittest.TestCase):
             "| 항목 | 값 |\n| --- | --- |\n"
             "| 한글 확인 | 사과 🍎 |\n"
             '| 특수문자 | A&B <태그> "인용" |\n'
+            "| 줄바꿈 | 첫째<br>둘째 |\n"
             "| English | 123 |"
         )
         expected = [
             "항목", "값", "한글 확인", "사과 🍎",
-            "특수문자", 'A&B <태그> "인용"', "English", "123",
+            "특수문자", 'A&B <태그> "인용"', "줄바꿈", "첫째", "둘째",
+            "English", "123",
         ]
         update = TabledownApp._converted_clipboard(None, {"text": markdown})
         self.assertEqual(update["text"], markdown)

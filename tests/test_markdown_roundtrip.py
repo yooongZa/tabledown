@@ -19,6 +19,18 @@ def _table_with_cells(cells):
 
 
 class MarkdownRoundtripTests(unittest.TestCase):
+    def test_office_formatted_breaks_keep_one_newline_and_consecutive_blank_lines(self):
+        html = (
+            '<table><tr><td>값</td><td>확인</td></tr>'
+            '<tr><td>첫째<br />\r\n    둘째<br />\r\n    <br />\r\n    끝</td>'
+            '<td>literal &lt;br&gt;</td></tr></table>'
+        )
+        for preserve_layout in (False, True):
+            with self.subTest(preserve_layout=preserve_layout):
+                self.assertEqual(markdown_table_to_rows(html_table_to_markdown(
+                    html, preserve_layout=preserve_layout,
+                )), [["값", "확인"], ["첫째\n둘째\n\n끝", "literal <br>"]])
+
     def test_automatic_markdown_roundtrip_preserves_literals_in_multiple_columns(self):
         values = [
             r"x\|y", r"\*", r"\\", r"C:\Temp\file", "x|y", "ends|",
@@ -159,7 +171,8 @@ class MarkdownRoundtripTests(unittest.TestCase):
         markdown = "| 값 |\n| --- |\n| first<br>second |\n| &lt;br&gt; |\n| &amp;lt; |"
         self.assertEqual(markdown_table_to_html(markdown), (
             '<meta charset="utf-8"><table><tr><th>값</th></tr>'
-            '<tr><td>first<br>second</td></tr><tr><td>&lt;br&gt;</td></tr>'
+            '<tr><td>first<br style="mso-data-placement:same-cell">second</td></tr>'
+            '<tr><td>&lt;br&gt;</td></tr>'
             '<tr><td>&amp;lt;</td></tr></table>'
         ))
 

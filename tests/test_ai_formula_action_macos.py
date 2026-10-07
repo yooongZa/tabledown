@@ -3,7 +3,7 @@
 import sys
 import unittest
 import xml.etree.ElementTree as ET
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
 
 if sys.platform == "darwin":
     from tablemark import clipboard
@@ -45,7 +45,8 @@ class AiFormulaActionTests(unittest.TestCase):
             patch("tablemark.app.write_text_only_clipboard") as writer,
         ):
             self._run(app)
-        reader.assert_called_once_with()
+        reader.assert_called_once_with(check_cancelled=ANY)
+        self.assertTrue(callable(reader.call_args.kwargs["check_cancelled"]))
         compact.assert_called_once_with(selection)
         writer.assert_called_once_with("<표범위 />", mark_generated=True, expected_change_count=23)
         app._flash_icon_success.assert_called_once_with()
@@ -85,7 +86,8 @@ class AiFormulaActionTests(unittest.TestCase):
             patch("tablemark.app.write_text_only_clipboard") as writer,
         ):
             self._run(app)
-        reader.assert_called_once_with()
+        reader.assert_called_once_with(check_cancelled=ANY)
+        self.assertTrue(callable(reader.call_args.kwargs["check_cancelled"]))
         copied_xml = writer.call_args.args[0]
         root = ET.fromstring(copied_xml)
         self.assertEqual(root.attrib["형식"], "AI간결수식")
@@ -148,7 +150,7 @@ class AiFormulaActionTests(unittest.TestCase):
     def test_stop_during_read_does_not_write_or_report_success(self):
         app = self._app()
         selection = legacy_tests.AppFormulaActionTests._notice_selection()
-        def stop_after_read():
+        def stop_after_read(*, check_cancelled=None):
             app._stop_watcher.set()
             return selection
         with (

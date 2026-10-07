@@ -132,7 +132,11 @@ class CopyAsMarkdownActionTests(unittest.TestCase):
             "첫째<br>둘째<br>&lt;br&gt;<br><br>끝 | 2026-09-10 | 12.50% |   |"
         ))
         self.assertTrue(markdown.startswith("\n|"))
-        soup = BeautifulSoup(html, "html.parser")
+        # Whitespace-only spans are intentional source data. The default
+        # BeautifulSoup parser normalizes those nodes before get_text().
+        soup = BeautifulSoup(
+            html, "html.parser", preserve_whitespace_tags={"td", "span"},
+        )
         self.assertEqual(soup.find("meta")["charset"], "utf-8")
         self.assertIn("white-space:pre-wrap", soup.find("style").get_text())
         html_rows = soup.find("table").find_all("tr")

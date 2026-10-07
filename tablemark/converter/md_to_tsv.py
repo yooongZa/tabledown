@@ -55,7 +55,12 @@ def markdown_table_to_html(md: str) -> str:
     html_rows = []
     for row_index, row in enumerate(rows):
         tag = "th" if row_index == 0 else "td"
-        escaped_cells = (escape(cell).replace("\n", "<br>") for cell in row)
+        # Excel otherwise interprets a bare <br> as another worksheet row.
+        # Other HTML importers retain the same semantic line break.
+        escaped_cells = (
+            escape(cell).replace("\n", '<br style="mso-data-placement:same-cell">')
+            for cell in row
+        )
         cells = "".join(f"<{tag}>{cell}</{tag}>" for cell in escaped_cells)
         html_rows.append(f"<tr>{cells}</tr>")
     # Rich-text importers such as Apple Notes can guess a legacy encoding for
