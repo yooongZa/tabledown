@@ -75,7 +75,7 @@ Markdown represents merged cells as separate grid cells. Colors, fonts, column w
 
 This uses the same stable Excel selection reader as regular XML: up to 10,000 cells and 5,000,000 value characters, with a combined UTF-8 Markdown+HTML limit of 10 MB. Read, conversion, and size failures stop before writing. Copying something new while the export is being prepared cancels its write. Success replaces older Excel-specific formats with Markdown and HTML from the same selection.
 
-All three manual commands require the Excel desktop app. **Markdown focuses on the table’s presentation in documents; both XML commands organize information for AI.** Existing automatic Excel/Google Sheets ↔ Markdown copy and paste remains available. These menu descriptions reflect TestFlight 0.6.1/build 0.6.6 as of September 10, 2026.
+All three manual commands require the Excel desktop app. **Markdown focuses on the table’s presentation in documents; both XML commands organize information for AI.** Existing automatic Excel/Google Sheets ↔ Markdown copy and paste remains available. These menu descriptions reflect macOS 0.6.1.
 
 ## Copy as XML (for AI)
 
@@ -253,6 +253,8 @@ Tabledown does not use account creation, analytics, ad tracking, location data, 
 Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.log` for behavior checks. Logs are not sent externally and can be deleted by the user.
 
 ## Changelog
+
+- 2026-10-07: **macOS 0.6.1 update (build 0.6.7).** Includes the three copy commands, fixes for special characters, spaces and line breaks in Excel round trips, and faster formula reading. Published the signed and notarized [DMG and ZIP](https://github.com/yooongZa/tabledown/releases/tag/v0.6.1) as GitHub Latest and verified public download hashes. Candidate checks passed 448 tests, with 27 Windows-only skips; iMac retesting passed 58 scenarios with one unexercised case. App Store state: `WAITING_FOR_REVIEW` as checked on October 7, 2026, with automatic release after approval. Large formula ranges still take time.
 
 - 2026-10-07 (macOS source and iMac QA installation): Fixed literal-cell and in-cell line-break corruption in real Excel round trips. Optimized formula reads while preserving error/empty-string distinctions and cancellation when new content is copied. A 4,008-cell range with 500 formulas decreased from 92.2 to 41.8 seconds with identical XML. Device checks passed 54 scenarios with one unexercised case; focused tests passed 280/280 on both Macs and the running-app matrix passed 85/85. Large formula ranges still take time. This update is installed in the iMac QA app; public distribution remains a separate step.
 

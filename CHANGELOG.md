@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-07 (macOS)
+
+macOS 0.6.1/build 0.6.7. 검증한 소스 `5488380`에 태그 `v0.6.1`을 연결했다. GitHub Latest의 DMG·ZIP을 공개하고 인증 없는 재다운로드 SHA-256·크기와 고정 DMG 링크를 확인했다. App Store 업로드·처리 VALID, 내부 그룹 `22`의 IN_BETA_TESTING, 한·영 변경 안내 저장, 심사 제출을 확인했다. 2026-10-07 확인 시 App Store 상태는 `WAITING_FOR_REVIEW`이며 승인 후 자동 공개다. 기존 앱 소개를 보존했다.
+
+- 배포 후보: Python 3.13.2, macOS 단위 282/282·기본 매트릭스 77/77·macOS에서 Windows 포트 89 pass + 27 skip. 앱/설치자/DMG 서명, 앱·DMG Apple 공증, stapler·Gatekeeper, ZIP 재추출본·DMG 내부 앱과 소스 16개 일치 및 Apple validate/upload를 검증했다. DMG 서명 누락과 검증 실패 무시도 빌드 스크립트에서 수정했다.
+- 실제 사용: iMac 58 pass·0 fail·부분 병합 거부 1 unexercised. 특수문자·셀 줄바꿈·공백 왕복과 세 복사 메뉴를 확인했으며 4,008셀·500수식은 약 92→42초, 출력 XML은 동일하다. Word 구독 차단, 실제 재로그인·Sheets 계정·VoiceOver·절전 복귀·Windows 실기기는 미검증이다. Windows 버전과 설치 파일은 이번에 배포하지 않았다.
+- 주요 실행: `TABLEDOWN_BUILD=0.6.7 bash scripts/build_app_store.sh`, `TABLEDOWN_BUILD=0.6.7 NOTARY_PROFILE=tabledown-notary bash scripts/build_dmg.sh`, 후보 단위/매트릭스, `xcrun altool --validate-app/--upload-package`, `git push origin main`, `git push origin v0.6.1`, `gh release create/edit`. 상세 근거: `outputs/releases/20261007-0.6.1/`.
+
 - **2026-10-07 macOS 0.6.1/build 0.6.7 릴리즈 준비:** iMac 재시험 수정과 원격 TestFlight 이력을 병합했다. 제품 소스는 재시험 커밋 `e9afd21`과 동일하며, 이전 공개본과 같은 Python 3.13.2 환경에서 별도 후보를 만든다. `scripts/build_dmg.sh`에 DMG 자체 Developer ID 서명·검증과 stapler 검증을 추가하고 Gatekeeper 실패 무시를 제거했다. 검증은 `bash -n` 및 실제 서명·공증된 DMG/ZIP과 App Store 패키지 확인으로 수행하며 최종 배포 상태는 완료 후 기록한다.
 
 - **2026-10-07 iMac 추가 재시험·공통 converter 수정 (macOS QA 반영):** 실제 Excel 자동 복사에서 `mso-spacerun:yes` 공백 구간 안의 HTML 정리용 줄바꿈이 셀 줄바꿈으로 바뀌어 `앞 공백`이 `앞↵공백`으로 손상되는 결함을 추가 확인했다. `tablemark/converter/html_to_md.py`에서 공백만 포함한 Office span의 정리용 줄바꿈만 공백으로 보정했다. 실제 `<br>`·연속 빈 줄·일반/비공백 span의 원래 줄바꿈·자동 공백 정리·원본 HTML 공존·명시적 선택과 XML·설정·한도·취소 보호를 보존했다. 공유 converter이므로 Windows에도 적용되며 별도 슬롯 결정 로직은 변경하지 않았다. 재현 회귀와 일반 HTML 보존, Excel 형식 CF_HTML 회귀 3개를 추가했다.
