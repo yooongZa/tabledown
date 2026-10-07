@@ -493,6 +493,18 @@ def _cell_text(cell) -> str:
     Excel/Sheets multi-line cells into a single line. Mutating the cell in
     place is safe because each cell is visited once during grid expansion.
     """
+    for span in cell.find_all("span"):
+        if not re.search(r"(?:^|;)\s*mso-spacerun\s*:\s*yes\s*(?:;|$)",
+                         str(span.get("style", "")), re.IGNORECASE):
+            continue
+        # Excel wraps whitespace-only Office space runs across source lines.
+        # Those formatter newlines represent spaces, not cell line breaks.
+        for node in list(span.children):
+            if isinstance(node, NavigableString) and not str(node).strip():
+                text = str(node)
+                normalized = re.sub(r"\r\n?|\n", " ", text)
+                if normalized != text:
+                    node.replace_with(normalized)
     for br in cell.find_all("br"):
         # Office formats source as <br />\r\n    next line. The source newline
         # is HTML whitespace; the <br> already represents the cell's break.

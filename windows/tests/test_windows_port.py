@@ -73,6 +73,17 @@ def _excel_style_cf_html(interior: str) -> bytes:
 
 
 class WindowsPortTests(unittest.TestCase):
+    def test_excel_cf_html_space_runs_preserve_only_real_line_breaks(self):
+        html = extract_cf_html(_excel_style_cf_html(
+            '<tr><td>값</td><td>확인</td></tr><tr>'
+            '<td>앞<span style="mso-spacerun:yes">\u00a0\r\n  </span>공백'
+            '<br />\r\n  <br />\r\n  뒤</td><td>tail</td></tr>'
+        ))
+        result = converted_clipboard({"html": html})
+        self.assertIsNotNone(result)
+        self.assertIn("| 앞 공백<br><br>뒤 | tail |", result["text"])
+        self.assertNotIn(CF_HTML_FORMAT_NAME, result["drop_formats"])
+
     def test_excel_automatic_markdown_text_only_recopy_preserves_literal_cells(self):
         values = [r"x\|y", r"\*", r"\\", "&copy;", "&lt;", "<br>", "한글 🍎"]
         interior = "<tr><td>값</td><td>확인</td></tr>" + "".join(

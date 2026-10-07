@@ -19,6 +19,28 @@ def _table_with_cells(cells):
 
 
 class MarkdownRoundtripTests(unittest.TestCase):
+    def test_office_space_runs_do_not_create_cell_line_breaks(self):
+        html = (
+            '<table><tr><td>항목</td><td>값</td></tr><tr><td>행</td>'
+            '<td>앞<span style="mso-spacerun:yes">\u00a0\r\n  </span>공백'
+            '<br />\r\n    <br />\r\n    뒤 공백</td></tr></table>'
+        )
+        self.assertEqual(markdown_table_to_rows(html_table_to_markdown(html)), [
+            ["항목", "값"], ["행", "앞 공백\n\n뒤 공백"],
+        ])
+
+    def test_space_run_cleanup_keeps_unmarked_and_nonspace_newlines(self):
+        for style, value in (
+            ("", "앞\n뒤"),
+            ("mso-spacerun:no", "앞\n뒤"),
+            ("mso-spacerun:yes", "앞\n뒤"),
+        ):
+            with self.subTest(style=style):
+                html = ('<table><tr><td>값</td></tr><tr><td><span style="'
+                        + style + '">' + value + '</span></td></tr></table>')
+                self.assertEqual(markdown_table_to_rows(html_table_to_markdown(html)),
+                                 [["값"], [value]])
+
     def test_office_formatted_breaks_keep_one_newline_and_consecutive_blank_lines(self):
         html = (
             '<table><tr><td>값</td><td>확인</td></tr>'
