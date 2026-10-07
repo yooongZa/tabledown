@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-10-07 (Windows)
+
+- Windows x64 **0.2.8**를 태그 `windows-v0.2.8`(소스 `f3a2b67`)로 GitHub에 공개했다. portable ZIP, 자체 서명 sideload MSIX **0.2.8.0**, 공개 인증서, 설치 안내, SHA-256 목록을 제공한다. 개인키는 배포하지 않았으며 Microsoft Store 제출은 하지 않았다. macOS Latest `v0.6.1`과 DMG 고정 링크를 유지했다.
+- 공유 converter의 특수문자·Office 공백/줄바꿈 왕복 수정과 현재 Windows 수식 XML·AI용 간결 XML, 설정·단축키 기능을 포함한다. macOS의 직접 Markdown/일반 XML 메뉴와 수식 reader 속도 개선을 Windows에도 적용했다고 주장하지 않는다.
+- Windows 실행기에서 **포트 116/116 + 공용 77/77 = 193/193**, 실제 배포 EXE의 시작·WinRT 로드·HTML↔Markdown·한글/이모지/파이프/연속 줄바꿈·원본 HTML 보존·일반 text/XML 무변환·Ctrl+Alt+T 일시정지/재개·중복 실행 방지를 확인했다. 소스 17개 bytecode 일치, x64 PE, MSIX manifest/서명, ZIP과 MSIX의 716개 파일 동일성, 공개 파일 5개의 인증 없는 재다운로드 크기·SHA-256도 통과했다. 첫 검사 도구의 미사용 모듈 요구 실패는 보정 후 재실행했고 제품 변경은 없었다.
+- 검증은 GitHub Windows 실행기에서 수행했다. Excel 설치 PC에서의 실제 붙여넣기·MSIX 설치·실제 로그인 시작은 미검증이다. portable EXE는 상용 코드 서명이 없고 MSIX 인증서는 자체 서명이며 설치 시 공개 인증서 신뢰가 필요하다.
+- 주요 명령: `gh workflow run windows-build.yml --ref main`, Windows `python -m unittest test_windows_port -v` 및 공용 3모듈, `pwsh -File windows/build_msix.ps1 -SelfSign`, `python windows/tools/verify_release.py`, `signtool verify /pa /v`, `git push origin main`, `git push origin windows-v0.2.8`, `gh release create/edit --latest=false`. [Windows CI](https://github.com/yooongZa/tabledown/actions/runs/37614087458), 근거 `outputs/releases/20261007-windows-0.2.8/`.
+
 - **Windows 패키지 검사 보정:** 첫 Windows CI에서 포트 116/116·공용 77/77·빌드·MSIX 서명 검증은 통과했으나, 검사 도구가 Windows에서 import하지 않는 일반 XML `table_xml` 모듈을 필수로 요구해 실패했다. 해당 macOS 전용 모듈만 원본 일치 검사 대상에서 제외하고 실제 Windows 모듈 검사를 유지한다. 제품 기능 변경은 없으며 전체 CI를 재실행한다.
 
 - **2026-10-07 Windows 0.2.8 배포 준비:** Windows 독립 버전을 올리고 공유 Markdown 문자·Office 줄바꿈 수정과 현재 수식 XML 구현을 패키징한다. PyInstaller·아이콘·MSIX 에셋·버전 읽기 실패를 즉시 전파해 이전 실행 파일을 재포장하는 경로를 차단했다. Windows CI에 공용 변환/수식 테스트, EXE의 원본 bytecode(바이트코드)·동적 COM/WinRT 의존성·MSIX/ZIP payload(내용) 일치, 실제 EXE 시작·클립보드 변환·단축키 일시정지/재개·중복 실행, MSIX 서명 및 SHA-256 검증을 추가했다. macOS에서 공용 77/77, Windows 포트 89 pass + 27 skip과 Python AST를 통과했다. Windows 실행기 결과·공개 배포 여부는 완료 후 별도로 기록한다. Microsoft Store identity는 미설정이며 MSIX는 공개 인증서를 동봉한 자체 서명 설치 시험용이다.

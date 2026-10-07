@@ -2,6 +2,16 @@
 
 Windows용 Tabledown 이식 버전입니다. 기존 macOS 앱 파일은 그대로 두고, 이 폴더 안에 Windows tray(시스템 트레이) 앱과 build(빌드) 설정만 분리했습니다.
 
+## 다운로드 — Windows 0.2.8
+
+[Windows 0.2.8 릴리즈](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.2.8)에서 받을 수 있습니다.
+
+- **일반 사용:** `Tabledown-Windows-portable-0.2.8.zip`을 풀고 `Tabledown-Windows.exe`를 실행합니다. Python 설치가 필요 없습니다. portable EXE에는 상용 코드 서명이 없어 게시자 확인 안내가 나타날 수 있습니다.
+- **설치형 시험:** `Tabledown-0.2.8.0.msix`와 `Tabledown-dev.cer`, `INSTALL.txt`를 함께 받습니다. 자체 서명한 sideload 패키지이며 Microsoft Store 배포본은 아닙니다. 설치 안내에 따라 공개 인증서를 신뢰한 뒤 설치합니다. 개인키는 배포하지 않습니다.
+- `SHA256SUMS.txt`와 다운로드 파일의 SHA-256을 비교할 수 있습니다.
+
+2026-10-07 Windows 실행기에서 테스트 **193/193**, 실제 EXE의 자동 변환·한글/특수문자/줄바꿈·단축키 일시정지/재개·중복 실행, 패키지 서명·원본 소스 일치와 공개 다운로드를 확인했습니다. 실제 Excel PC 붙여넣기·MSIX 설치·재로그인 시작은 아직 확인하지 않았습니다. macOS의 직접 Markdown/일반 XML 메뉴는 Windows에 포함되지 않습니다.
+
 ## 개발 실행
 
 PowerShell에서 실행합니다.

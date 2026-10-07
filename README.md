@@ -41,6 +41,8 @@ Mac App Store에서 받는 것을 권장합니다 (자동 업데이트).
 
 배포용 DMG는 Developer ID signing(개발자 ID 서명)과 Apple notarization(애플 공증)을 통과한 빌드입니다. Mac App Store 빌드는 App Sandbox(앱 샌드박스)에서 동작합니다.
 
+**Windows x64:** [Windows 0.2.8 다운로드](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.2.8) · [Windows 사용법](windows/README.md). ZIP을 풀고 EXE를 실행합니다. 자체 서명 MSIX는 별도 설치 시험용으로 제공합니다. 아래 기능 안내는 macOS 기준입니다.
+
 ## 왜 쓰나요
 
 | 입력 | 붙여넣는 곳 | 출력 |
@@ -253,6 +255,8 @@ Tabledown은 계정 생성, analytics(분석), 광고 추적, 위치 정보, 연
 진단 로그는 앱 동작 확인을 위해 사용자의 Mac 안의 `~/Library/Logs/Tabledown.log`에만 저장됩니다. 로그는 clipboard 원문 전체를 외부로 전송하지 않으며, 사용자가 직접 삭제할 수 있습니다.
 
 ## 변경 이력
+
+- 2026-10-07: **Windows 0.2.8 공개.** [ZIP·MSIX](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.2.8)을 배포했다. Windows 테스트 193/193, 실제 EXE 자동 변환·단축키·중복 실행, 서명·번들 소스·공개 다운로드 해시 검증을 통과했다. Microsoft Store 제출과 실제 Excel/MSIX 설치 시험은 미실시다. macOS Latest 다운로드는 유지한다.
 
 - 2026-10-07: **macOS 0.6.1 정식 업데이트(빌드 0.6.7).** 세 복사 메뉴와 Excel 왕복의 특수문자·공백·줄바꿈 개선, 수식 읽기 속도 개선을 포함한다. [DMG·ZIP](https://github.com/yooongZa/tabledown/releases/tag/v0.6.1)을 GitHub Latest로 공개했고, 서명·Apple 공증·재다운로드 해시를 확인했다. 후보 검증 448개 통과·Windows 전용 27개 제외, iMac 재시험 58 통과·1 미재현이다. App Store는 `WAITING_FOR_REVIEW`(2026-10-07 확인)이며 승인 후 자동 공개다. 큰 수식 표의 대기는 남는다.
 

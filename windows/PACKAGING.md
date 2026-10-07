@@ -63,7 +63,7 @@ Import-PfxCertificate -FilePath dist\Tabledown-dev.pfx -Password $pw -CertStoreL
 Add-AppxPackage dist\Tabledown-<버전>.msix
 ```
 
-> 개인키를 루트에 두기 싫으면, `.pfx` 에서 공개 `.cer` 만 추출해
+> 개인키 없이 설치하려면, `.pfx` 에서 공개 `.cer` 만 추출해
 > `Import-Certificate` 로 신뢰해도 된다(CI `windows-build.yml` 이 쓰는 방식):
 > ```powershell
 > $c = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2Collection
@@ -83,7 +83,7 @@ Add-AppxPackage dist\Tabledown-<버전>.msix
 > **macOS 개발자라면**: PyInstaller 는 크로스컴파일이 안 되므로 macOS 에서 이
 > `.msix`(또는 포터블 exe)를 만들 수 없다. 대신 GitHub Actions 워크플로
 > `.github/workflows/windows-build.yml` 을 **수동 트리거**(Actions 탭 → *Windows build
-> (test installer)* → *Run workflow*, `workflow_dispatch`)해 `windows-latest` 러너에서
+> (verified packages)* → *Run workflow*, `workflow_dispatch`)해 `windows-latest` 러너에서
 > 빌드하고, 산출물(자체 서명 `.msix` + 공개 `.cer` + 포터블 zip + `INSTALL.txt`)을
 > artifact 로 내려받아 Windows PC 에서 테스트한다.
 
