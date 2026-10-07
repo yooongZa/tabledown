@@ -57,7 +57,7 @@ pwsh -File .\build_msix.ps1 -SelfSign
 ```powershell
 # 관리자 PowerShell — .pfx(개인키 포함)를 신뢰된 루트에 등록
 $pw = ConvertTo-SecureString "tabledown" -AsPlainText -Force
-Import-PfxCertificate -FilePath dist\Tabledown-dev.pfx -Password $pw -CertStoreLocation Cert:\LocalMachine\Root
+Import-PfxCertificate -FilePath dist\Tabledown-dev.pfx -Password $pw -CertStoreLocation Cert:\LocalMachine\TrustedPeople
 
 # 빌드 출력에 찍힌 실제 파일명 사용 (예: Tabledown-<버전>.msix)
 Add-AppxPackage dist\Tabledown-<버전>.msix
@@ -69,7 +69,7 @@ Add-AppxPackage dist\Tabledown-<버전>.msix
 > $c = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2Collection
 > $c.Import("$PWD\dist\Tabledown-dev.pfx", "tabledown", 'DefaultKeySet')
 > [IO.File]::WriteAllBytes("$PWD\dist\Tabledown-dev.cer", $c[0].Export('Cert'))
-> Import-Certificate -FilePath dist\Tabledown-dev.cer -CertStoreLocation Cert:\LocalMachine\Root
+> Import-Certificate -FilePath dist\Tabledown-dev.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
 > ```
 
 설치 후 확인할 것:
@@ -88,6 +88,8 @@ Add-AppxPackage dist\Tabledown-<버전>.msix
 > artifact 로 내려받아 Windows PC 에서 테스트한다.
 
 ---
+
+GitHub 공개 MSIX는 자체 서명한 sideload(별도 설치) 시험용이며, 공개 `.cer`만 배포한다. `.pfx`는 개인키가 있으므로 배포하지 않는다. 인증서는 [Microsoft 안내](https://learn.microsoft.com/en-us/windows/msix/package/sign-msix-package-guide)에 따라 LocalMachine의 TrustedPeople 저장소에 등록한다. 현재 CI는 서명·manifest(매니페스트)·portable ZIP과의 내용 일치 및 실제 EXE 실행을 확인하며, MSIX 설치와 Excel 실기기 시험은 별도다.
 
 ## 2. Microsoft Store 계정 등록 (0원)
 

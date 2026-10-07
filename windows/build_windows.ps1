@@ -19,6 +19,7 @@ if (-not (Test-Path $Python)) {
 }
 
 & $Python (Join-Path $ScriptRoot "tools\make_icon.py") --source $SourceIcon --output $IconPath
+if ($LASTEXITCODE -ne 0) { throw "Icon generation failed ($LASTEXITCODE)" }
 
 Push-Location $ScriptRoot
 try {
@@ -42,6 +43,7 @@ try {
     --hidden-import win32com.client `
     --icon $IconPath `
     $EntryPoint
+  if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed ($LASTEXITCODE)" }
 }
 finally {
   Pop-Location

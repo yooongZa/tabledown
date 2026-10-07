@@ -1,4 +1,4 @@
-name: Windows build (test installer)
+name: Windows build (verified packages)
 
 # Manual trigger only — builds a testable Windows package on a windows-latest
 # runner (PyInstaller can't cross-compile from macOS). Produces two artifacts:
@@ -7,9 +7,13 @@ name: Windows build (test installer)
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -20,6 +24,7 @@ jobs:
       - name: Create build venv (windows/.venv, where the PS1 scripts look)
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           python -m venv windows/.venv
           windows/.venv/Scripts/python -m pip install --upgrade pip
           windows/.venv/Scripts/pip install -r windows/requirements.txt
@@ -27,7 +32,15 @@ jobs:
       - name: Run Windows test suite (the tray tests skipped on non-Windows)
         shell: pwsh
         working-directory: windows/tests
-        run: ..\.venv\Scripts\python -m unittest test_windows_port -v
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          ..\.venv\Scripts\python -m unittest test_windows_port -v
+
+      - name: Run shared conversion and formula export tests
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          windows/.venv/Scripts/python -m unittest tests.test_markdown_roundtrip tests.test_formula_export tests.test_formula_ai_export -v
 
       - name: Build self-signed MSIX (also runs PyInstaller onedir)
         shell: pwsh
@@ -43,12 +56,29 @@ jobs:
           $col.Import("windows/dist/Tabledown-dev.pfx", "tabledown", 'DefaultKeySet')
           [IO.File]::WriteAllBytes("windows/dist/Tabledown-dev.cer", $col[0].Export('Cert'))
 
+      - name: Verify MSIX signature using its public test certificate
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          Import-Certificate -FilePath windows/dist/Tabledown-dev.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null
+          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\' } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signTool) { throw "signtool not found" }
+          Get-ChildItem windows/dist/Tabledown-*.msix | ForEach-Object { & $signTool.FullName verify /pa /v $_.FullName }
+
       - name: Zip the portable PyInstaller build
         shell: pwsh
         run: |
           $v = (windows/.venv/Scripts/python -c "import sys; sys.path.insert(0,'windows'); import tabledown_windows; print(tabledown_windows.__version__)").Trim()
           Compress-Archive -Path windows/dist/Tabledown-Windows `
             -DestinationPath "windows/dist/Tabledown-Windows-portable-$v.zip" -Force
+
+      - name: Verify payloads and run the packaged EXE on Windows
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          windows/.venv/Scripts/python windows/tools/verify_release.py
 
       - name: Write install notes
         shell: pwsh
@@ -59,21 +89,25 @@ jobs:
           while ($parts.Count -lt 3) { $parts += "0" }
           $msix = "Tabledown-{0}.{1}.{2}.0.msix" -f $parts[0], $parts[1], $parts[2]
           @"
-          Tabledown — Windows test build
+          Tabledown $v — Windows x64
           ==============================
 
           A) Portable (easiest — no install, no admin):
              1. Unzip Tabledown-Windows-portable-*.zip
              2. Run Tabledown-Windows\Tabledown-Windows.exe
              3. A table icon appears in the tray. (The "Open at Login" toggle is
-                hidden here — it needs the installed MSIX. Everything else,
-                including "Auto-fill blank cells", works.)
+                hidden here — it needs the installed MSIX.)
+             This EXE has no commercial code-signing certificate. Windows may
+             show an unknown-publisher warning. Check SHA256SUMS.txt and the
+             official GitHub release before running it.
 
-          B) Installed (MSIX — tests the packaged app):
+          B) Optional sideload test package (self-signed MSIX, not Microsoft Store):
              1. Trust the dev cert (admin PowerShell, one time):
-                Import-Certificate -FilePath Tabledown-dev.cer -CertStoreLocation Cert:\LocalMachine\Root
+                Import-Certificate -FilePath Tabledown-dev.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
              2. Add-AppxPackage $msix
              3. Launch Tabledown from the Start menu.
+             A new test certificate is issued for each build. The private
+             signing key is never included in the release.
 
           Testing the "Auto-fill blank cells" feature:
              - Tray menu -> toggle "빈칸을 자동 채우기" (Auto-fill blank cells) ON.
@@ -81,6 +115,13 @@ jobs:
                the merged header now carries its value instead of a blank.
              - Toggle OFF -> re-copy -> blanks stay blank (default behavior).
           "@ | Set-Content -Path windows/dist/INSTALL.txt -Encoding UTF8
+
+      - name: Write release checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem windows/dist -File | Where-Object { $_.Name -match '\.(zip|msix|cer)$' -or $_.Name -eq 'INSTALL.txt' } |
+            Sort-Object Name | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } |
+            Set-Content -Path windows/dist/SHA256SUMS.txt -Encoding utf8
 
       - uses: actions/upload-artifact@v4
         with:
@@ -90,4 +131,17 @@ jobs:
             windows/dist/Tabledown-dev.cer
             windows/dist/Tabledown-Windows-portable-*.zip
             windows/dist/INSTALL.txt
+            windows/dist/SHA256SUMS.txt
+            windows/dist/release-verification.json
+            windows/dist/release-smoke.log
           if-no-files-found: error
+
+      - name: Preserve package verification evidence on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabledown-windows-verification-failure
+          path: |
+            windows/dist/release-verification.json
+            windows/dist/release-smoke.log
+          if-no-files-found: ignore

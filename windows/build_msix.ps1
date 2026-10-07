@@ -72,6 +72,7 @@ if (-not (Test-Path $Python)) {
 Push-Location $ScriptRoot
 try {
   $rawVersion = (& $Python -c "import tabledown_windows; print(tabledown_windows.__version__)").Trim()
+  if ($LASTEXITCODE -ne 0) { throw "Version read failed ($LASTEXITCODE)" }
 } finally {
   Pop-Location
 }
@@ -92,6 +93,7 @@ if (-not (Test-Path $PyInstallerOut)) {
 # --- 2. Assets ---
 Write-Host "==> MSIX assets" -ForegroundColor Cyan
 & $Python (Join-Path $ScriptRoot "tools\make_msix_assets.py") --source $MasterIcon --output-dir $AssetsDir
+if ($LASTEXITCODE -ne 0) { throw "MSIX asset generation failed ($LASTEXITCODE)" }
 
 # --- 3. Staging ---
 Write-Host "==> Staging" -ForegroundColor Cyan
@@ -154,7 +156,7 @@ if ($SelfSign) {
   Write-Host "  1) 자체 서명 인증서를 신뢰: .pfx 는 개인키 포함이라 Import-PfxCertificate 로 등록" -ForegroundColor Yellow
   Write-Host "     (Import-Certificate 는 공개 .cer 전용이라 .pfx 를 못 받는다):" -ForegroundColor Yellow
   Write-Host "     `$pw = ConvertTo-SecureString 'tabledown' -AsPlainText -Force" -ForegroundColor Yellow
-  Write-Host "     Import-PfxCertificate -FilePath '$pfx' -Password `$pw -CertStoreLocation Cert:\LocalMachine\Root" -ForegroundColor Yellow
+  Write-Host "     Import-PfxCertificate -FilePath '$pfx' -Password `$pw -CertStoreLocation Cert:\LocalMachine\TrustedPeople" -ForegroundColor Yellow
   Write-Host "  2) Add-AppxPackage '$msixPath'" -ForegroundColor Yellow
 }
 
