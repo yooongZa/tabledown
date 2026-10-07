@@ -936,8 +936,11 @@ def _test_watcher_html_adds_markdown() -> str:
         lambda value: (
             value["text"].startswith("\n| Name | Score |")
             and "| Alice | 95 |" in value["text"]
-            and not value["html"]
-            and all(pb_type not in value["types"] for pb_type in HTML_TYPES)
+            and value["html"] == HTML_BASIC
+            and all(
+                pb_type in value["types"]
+                for pb_type in (str(NSPasteboardTypeHTML), LEGACY_HTML_TYPE)
+            )
             and "public.png" not in value["types"]
         ),
     )
@@ -1093,7 +1096,7 @@ def _wait_for(read_fn, done_fn, timeout: float = 2.0, interval: float = 0.05):
 
 def _is_tabledown_running() -> bool:
     result = subprocess.run(
-        ["pgrep", "-f", "Tabledown.app/Contents/MacOS/Tabledown|python.*run.py"],
+        ["pgrep", "-f", "Tabledown[^/]*[.]app/Contents/MacOS/Tabledown|python.*run.py"],
         check=False,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
