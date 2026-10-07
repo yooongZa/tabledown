@@ -218,7 +218,10 @@ def verify():
                     process.wait(timeout=5)
                 seed("")
         report["status"] = "passed"
-        report["artifacts"] = {p.name: {"sha256": sha(p.read_bytes()), "bytes": p.stat().st_size} for p in (portable, msix, DIST / "Tabledown-dev.cer")}
+        artifacts = [portable, msix]
+        if not args.store:
+            artifacts.append(DIST / "Tabledown-dev.cer")
+        report["artifacts"] = {p.name: {"sha256": sha(p.read_bytes()), "bytes": p.stat().st_size} for p in artifacts}
     except Exception as error:
         report["status"] = "failed"
         report["error"] = repr(error)

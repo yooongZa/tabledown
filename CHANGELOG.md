@@ -9,7 +9,7 @@
 
 ## [0.2.8] - 2026-10-07 (Windows)
 
-- **2026-10-07 Microsoft Store 업데이트 준비:** Partner Center에서 기존 앱 `9NGS4C0N2Z6L`의 공개 패키지 **0.2.7.0**과 `LIMOD.Tabledown` identity를 확인했다. 기존 Microsoft Store 출시는 완료된 상태였으며, 앞선 GitHub 0.2.8 공개와 Store 업데이트 제출은 별개다. 기존 앱을 업데이트하는 unsigned MSIX 전용 CI와 identity 설정을 추가하고 기존 패키지·EXE 검사기를 Store 모드로 재사용한다. 앱 기능·기존 자체서명 CI는 보존한다. 로컬 Python AST/JSON 검증 후 실제 Windows CI와 Partner Center 결과를 별도로 기록한다.
+- **2026-10-07 Microsoft Store 업데이트 준비:** Partner Center에서 기존 앱 `9NGS4C0N2Z6L`의 공개 패키지 **0.2.7.0**과 `LIMOD.Tabledown` identity를 확인했다. 기존 Microsoft Store 출시는 완료된 상태였으며, 앞선 GitHub 0.2.8 공개와 Store 업데이트 제출은 별개다. 기존 앱을 업데이트하는 unsigned MSIX 전용 CI와 identity 설정을 추가하고 기존 패키지·EXE 검사기를 Store 모드로 재사용한다. 앱 기능·기존 자체서명 CI는 보존한다. 로컬 Python AST/JSON 검증과 첫 Windows CI의 193개 테스트·Store identity·EXE 검사는 통과했다. 마지막 산출물 기록에서 불필요한 개발용 인증서를 요구한 검사기 오류를 수정하고 전체 CI를 다시 실행한다. Partner Center 결과는 별도로 기록한다.
 
 - Windows x64 **0.2.8**를 태그 `windows-v0.2.8`(소스 `f3a2b67`)로 GitHub에 공개했다. portable ZIP, 자체 서명 sideload MSIX **0.2.8.0**, 공개 인증서, 설치 안내, SHA-256 목록을 제공한다. 개인키는 배포하지 않았으며 Microsoft Store 제출은 하지 않았다. macOS Latest `v0.6.1`과 DMG 고정 링크를 유지했다.
 - 공유 converter의 특수문자·Office 공백/줄바꿈 왕복 수정과 현재 Windows 수식 XML·AI용 간결 XML, 설정·단축키 기능을 포함한다. macOS의 직접 Markdown/일반 XML 메뉴와 수식 reader 속도 개선을 Windows에도 적용했다고 주장하지 않는다.
