@@ -3,6 +3,22 @@
 이 문서는 Windows 포트를 **full-trust(mediumIL) MSIX** 로 패키징해 Microsoft Store 에
 출시하는 전체 절차다. 비용은 **0원**(등록비 면제 + MSIX 는 Microsoft 가 자동 서명).
 
+## 기존 Store 앱 업데이트
+
+Tabledown은 [Microsoft Store](https://apps.microsoft.com/detail/9NGS4C0N2Z6L)에 출시되어 있다. 2026-10-07 Partner Center에서 공개 패키지 **0.2.7.0**과 아래 identity를 직접 확인했다. 신규 앱을 만들지 않고 이 제품의 **Start update**를 사용한다.
+
+- Store ID: `9NGS4C0N2Z6L`
+- Package Name: `LIMOD.Tabledown`
+- Publisher: `CN=3CE75D39-EFE1-43E2-9E0C-7C23605EDC2B`
+- PublisherDisplayName: `LIMOD`
+- PFN: `LIMOD.Tabledown_125t6k9623gdj`
+
+공개 식별자는 `packaging/store-identity.json`에서 관리한다. `gh workflow run windows-store.yml --ref main`으로 Store용 unsigned MSIX를 빌드한다. Windows 회귀 테스트와 `verify_release.py --store`의 identity·소스·패키지·실행 검사를 통과한 `tabledown-windows-store` 산출물을 기존 앱의 Packages에 업로드한다. Store 심사 접수와 실제 사용자 공개 상태를 각각 기록한다.
+
+`windows-build.yml`의 자체서명 `Tabledown.Dev` 패키지는 sideload 시험용이다. 기존 Store 앱 업데이트에는 위 Store identity를 쓴다.
+
+2026-10-07: Store용 Windows 0.2.8.0 검증(193/193·EXE·identity·소스 일치) 후 Submission 5를 제출했다. 상태는 `In certification / Pre-processing`, 승인 후 자동 공개다. 사용자의 Store 설치·업데이트는 아직 검증하지 않았다.
+
 ## 왜 full-trust(mediumIL) 인가
 
 Tabledown 은 백그라운드에서 클립보드를 **상시 감시**하다가 표를 감지하면 클립보드를
@@ -108,8 +124,8 @@ Partner Center 에서 앱 이름(Tabledown) 예약 후 **Product identity** 에�
 
 | 매니페스트 위치 | Partner Center 항목 | 예시 |
 |---|---|---|
-| `Identity/@Name` | Package/Identity/Name | `12345LIMOD.Tabledown` |
-| `Identity/@Publisher` | Package/Identity/Publisher | `CN=AB12CD34-...` |
+| `Identity/@Name` | Package/Identity/Name | `LIMOD.Tabledown` |
+| `Identity/@Publisher` | Package/Identity/Publisher | `CN=3CE75D39-EFE1-43E2-9E0C-7C23605EDC2B` |
 | `Properties/PublisherDisplayName` | Publisher display name | `LIMOD` |
 
 ---
@@ -119,8 +135,8 @@ Partner Center 에서 앱 이름(Tabledown) 예약 후 **Product identity** 에�
 ```powershell
 cd windows
 .\build_msix.ps1 `
-  -StoreName "12345LIMOD.Tabledown" `
-  -StorePublisher "CN=AB12CD34-..." `
+  -StoreName "LIMOD.Tabledown" `
+  -StorePublisher "CN=3CE75D39-EFE1-43E2-9E0C-7C23605EDC2B" `
   -StorePublisherDisplay "LIMOD"
 ```
 

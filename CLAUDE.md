@@ -526,6 +526,7 @@ fallback 을 지킬 것(`register()`/`start()` 가 False 를 돌려줄 뿐 예�
   포터블 zip + 자체서명 MSIX(+공개 인증서) 아티팩트를 받는다.
 
 ## 버전 / 릴리스 관례
+- **Windows는 Microsoft Store 출시 앱**: Store ID `9NGS4C0N2Z6L`, identity `LIMOD.Tabledown`(정확한 공개 값은 `windows/packaging/store-identity.json`). GitHub 공개와 Store 업데이트 제출을 각각 확인한다. Store용 빌드는 `windows-store.yml`, 자체서명 시험용은 `windows-build.yml`이며, `Tabledown.Dev` 패키지를 Store에 제출하지 않는다.
 - **버전은 플랫폼별 2-트랙 (독립 SemVer)**: macOS = `tablemark/__init__.py` 의 `__version__`(현재 0.6.x 트랙),
   Windows = `windows/tabledown_windows/__init__.py` 의 `__version__`(현재 0.2.x 트랙). Windows 는 macOS 버전을
   **따르지 않는다** — MSIX PackageVersion 이 이 값을 읽으므로 공유하면 잘못 찍힌다(그 파일 주석 참조). 버전

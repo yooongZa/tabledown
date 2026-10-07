@@ -9,6 +9,9 @@
 
 ## [0.2.8] - 2026-10-07 (Windows)
 
+- **Microsoft Store 0.2.8.0 업데이트 심사 접수 완료:** 기존 출시 앱 [`9NGS4C0N2Z6L`](https://apps.microsoft.com/detail/9NGS4C0N2Z6L)의 공개 0.2.7.0을 잇는 Submission 5(`1152921505702064353`)를 제출했다. 2026-10-07 확인 상태는 **In certification / Pre-processing**, 승인 후 자동 공개다. 새 0.2.8.0의 사용자 공개는 아직 확인되지 않았다. Partner Center 패키지 Validated, 한·영 변경 안내 저장 원문 일치, 기존 소개·가격·시장·속성 보존을 확인했다.
+- **Store 제출용 검증:** `LIMOD.Tabledown` identity의 unsigned MSIX를 Windows에서 새로 빌드했다. [Store CI](https://github.com/yooongZa/tabledown/actions/runs/37618532993)의 테스트 **193/193**, EXE 자동 변환·단축키·중복 실행·WinRT, x64·MSIX/ZIP 내용·17개 원본 모듈 일치 검사 모두 통과했다. 17개 앱 모듈은 GitHub Windows 0.2.8과 동일하다. MSIX SHA-256 `fa886a644e34b9e798ae30de76a30766015c5fb6f0b240f675a7d52a5458dfcb`. 주요 명령: `gh workflow run windows-store.yml --ref main`, `python windows/tools/verify_release.py --store`; 실제 Excel PC·Store 설치·재로그인 시험은 미실시다. 근거 `outputs/releases/20261007-windows-store-0.2.8/`.
+
 - **2026-10-07 Microsoft Store 업데이트 준비:** Partner Center에서 기존 앱 `9NGS4C0N2Z6L`의 공개 패키지 **0.2.7.0**과 `LIMOD.Tabledown` identity를 확인했다. 기존 Microsoft Store 출시는 완료된 상태였으며, 앞선 GitHub 0.2.8 공개와 Store 업데이트 제출은 별개다. 기존 앱을 업데이트하는 unsigned MSIX 전용 CI와 identity 설정을 추가하고 기존 패키지·EXE 검사기를 Store 모드로 재사용한다. 앱 기능·기존 자체서명 CI는 보존한다. 로컬 Python AST/JSON 검증과 첫 Windows CI의 193개 테스트·Store identity·EXE 검사는 통과했다. 마지막 산출물 기록에서 불필요한 개발용 인증서를 요구한 검사기 오류를 수정하고 전체 CI를 다시 실행한다. Partner Center 결과는 별도로 기록한다.
 
 - Windows x64 **0.2.8**를 태그 `windows-v0.2.8`(소스 `f3a2b67`)로 GitHub에 공개했다. portable ZIP, 자체 서명 sideload MSIX **0.2.8.0**, 공개 인증서, 설치 안내, SHA-256 목록을 제공한다. 개인키는 배포하지 않았으며 Microsoft Store 제출은 하지 않았다. macOS Latest `v0.6.1`과 DMG 고정 링크를 유지했다.
