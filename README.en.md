@@ -13,7 +13,7 @@ Tabledown runs in the macOS menu bar or Windows system tray. You can also copy E
 | Platform | Store | Direct download |
 | --- | --- | --- |
 | macOS 12 or later · Apple Silicon | [Mac App Store](https://apps.apple.com/app/id6768205551) | [DMG](https://github.com/yooongZa/tabledown/releases/latest/download/Tabledown.dmg) |
-| Windows 10/11 · x64 | [Microsoft Store](https://apps.microsoft.com/detail/9NGS4C0N2Z6L) | [Windows ZIP](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.2) |
+| Windows 10/11 · x64 | [Microsoft Store](https://apps.microsoft.com/detail/9NGS4C0N2Z6L) | [Windows ZIP](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.3) |
 
 On Mac, open the DMG and drag the app into Applications. The download is signed with Developer ID and notarized by Apple.
 On Windows, extract the ZIP and run `Tabledown-Windows.exe`. No Python installation is needed. For the optional self-signed MSIX, see the [Windows guide](windows/README.md).

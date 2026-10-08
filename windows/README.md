@@ -8,7 +8,7 @@ Excel·Google Sheets ↔ Markdown(마크다운) 표를 복사·붙여넣기로 �
 
 **Windows 10/11 · x64**
 
-[Microsoft Store](https://apps.microsoft.com/detail/9NGS4C0N2Z6L) 또는 [GitHub Windows 릴리스](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.2)에서 받으세요.
+[Microsoft Store](https://apps.microsoft.com/detail/9NGS4C0N2Z6L) 또는 [GitHub Windows 릴리스](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.3)에서 받으세요.
 
 - **ZIP:** 압축을 풀고 `Tabledown-Windows.exe`를 실행합니다. Python 설치가 필요 없습니다. EXE에는 상용 코드 서명이 없어 게시자 확인 안내가 나타날 수 있습니다.
 - **자체 서명 MSIX:** 설치 시험용입니다. 릴리스의 `Tabledown-dev.cer`와 `INSTALL.txt` 안내에 따라 설치하세요. Microsoft Store 제출 패키지는 별도로 빌드합니다.

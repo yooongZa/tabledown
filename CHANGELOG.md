@@ -17,7 +17,12 @@
 
 - Excel 표를 Obsidian에 붙여넣으면 빈 표 아래로 데이터 행이 풀리는 문제를 수정했다. 자동 변환 시 Chromium/Electron의 `text/markdown` 형식을 함께 기록해 Obsidian이 생성된 Markdown을 직접 읽게 한다.
 - 원본 HTML·Excel native 형식·다른 앱의 사용자 정의 형식을 보존한다. 일반 텍스트·XML과 기존 Markdown+HTML 복사본 처리, 클립보드 변경 감지는 유지한다.
-- 검증: macOS에서 실제 Obsidian 1.13.7에 Excel 형식 HTML을 붙여넣어 수정 전 오류와 수정 후 3행×2열·한글·이모지·셀 줄바꿈을 확인했다. macOS 회귀 286개, Windows 포트 104개(27 skip), 변환·기타 매트릭스 77개 통과. Windows 실제 실행·배포 결과는 패키지 검증 후 별도 기록한다.
+- 검증: macOS에서 실제 Obsidian 1.13.7에 Excel 형식 HTML을 붙여넣어 수정 전 오류와 수정 후 3행×2열·한글·이모지·셀 줄바꿈을 확인했다. macOS 회귀 286개, Windows 포트 104개(27 skip), 변환·기타 매트릭스 77개 통과. 패키지 검증·배포 결과는 아래에 기록했다.
+
+- **GitHub 공개 완료:** 수정 소스 `fe6b32e`의 macOS **0.6.3** [DMG·ZIP](https://github.com/yooongZa/tabledown/releases/tag/v0.6.3)과 Windows **0.3.3 / MSIX 0.3.3.0** [ZIP·자체서명 MSIX](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.3)을 먼저 공개했다. 두 태그의 소스 일치, 인증 없는 전체 재다운로드 SHA-256, macOS Latest와 DMG 고정 링크를 확인한 뒤 스토어 빌드·제출을 시작했다. README 3개의 Windows 다운로드 링크도 새 버전으로 갱신했다.
+- **스토어 심사 접수:** App Store **0.6.3/build 0.6.9**의 처리 `VALID`, 내부 TestFlight 그룹 `22`의 `IN_BETA_TESTING`, 심사 `WAITING_FOR_REVIEW`를 확인했다. 대기 중이던 macOS 0.6.2 제출을 취소한 후 새 빌드로 제출했다. Microsoft Store **0.3.3.0**은 Submission 7(`1152921505702072550`)의 `In certification / Pre-processing`을 확인했다. 직전 Windows 0.3.2의 Store 공개도 확인했다. 두 새 버전 모두 승인 후 자동 공개이며 승인·사용자 설치는 아직 확인하지 않았다. 기존 소개·가격·시장·속성을 보존하고 한·영 변경 안내의 저장값을 확인했다.
+- **배포·붙여넣기 검증:** macOS 회귀 **286개**, 매트릭스 **77개**, 실제 Windows GitHub/Store CI 각각 **211개**와 패키징한 EXE의 native clipboard `text/markdown` 검사 통과. Windows 두 패키지의 앱 모듈 **22개**가 일치했다. Apple Silicon macOS 앱·DMG 서명, 앱/DMG 공증 `Accepted`, staple·Gatekeeper, 원본 모듈 **17개** 일치, Store PKG 서명·Apple validate/upload를 확인했다. Mac의 실제 Obsidian과 Notion에서 **3행×2열·한글·이모지·셀 줄바꿈**을 확인했다. 이번 긴급 수정의 Windows PC Obsidian 실기기 붙여넣기는 재시험하지 않았다.
+- **주요 실행/근거:** `python -m unittest discover -s tests -v`, 기존 매트릭스 함수, `TABLEDOWN_BUILD=0.6.9 bash scripts/build_app_store.sh`, DMG 빌드·`xcrun notarytool`·`stapler`, `xcrun altool --validate-app/--upload-package`, `gh workflow run windows-build.yml/windows-store.yml`, `python windows/tools/verify_release.py [--store]`, `gh release create/edit`, `git push origin main`. 근거는 `outputs/obsidian_hotfix_20261008/`, `outputs/releases/20261008-0.6.3/`, `20261008-windows-0.3.3/`, `20261008-windows-store-0.3.3/`에 보관했다.
 
 ## [0.6.2] / [0.3.2] - 2026-10-08 (macOS / Windows)
 

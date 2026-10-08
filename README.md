@@ -13,7 +13,7 @@ macOS 메뉴바와 Windows 트레이에서 실행됩니다. Excel의 표 구조�
 | 플랫폼 | 스토어 | 직접 다운로드 |
 | --- | --- | --- |
 | macOS 12 이상 · Apple Silicon | [Mac App Store](https://apps.apple.com/app/id6768205551) | [DMG](https://github.com/yooongZa/tabledown/releases/latest/download/Tabledown.dmg) |
-| Windows 10/11 · x64 | [Microsoft Store](https://apps.microsoft.com/detail/9NGS4C0N2Z6L) | [Windows ZIP](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.2) |
+| Windows 10/11 · x64 | [Microsoft Store](https://apps.microsoft.com/detail/9NGS4C0N2Z6L) | [Windows ZIP](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.3) |
 
 Mac은 DMG를 열고 앱을 Applications(응용 프로그램)에 옮기세요. 배포 파일은 Developer ID 서명과 Apple 공증을 통과했습니다.
 Windows는 ZIP을 풀고 `Tabledown-Windows.exe`를 실행하세요. 별도의 Python 설치가 필요 없습니다. 자체 서명 MSIX 설치는 [Windows 안내](windows/README.md)를 참고하세요.
