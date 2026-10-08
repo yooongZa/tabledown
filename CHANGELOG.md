@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### 2026-10-08 — GitHub 최종 배포본 실기기 재시험: iMac 빠른 붙여넣기 실패
+
+- **이전 판정 정정:** 이전 대화의 iMac QA 0.6.2·Windows Dev 0.3.2 시험, CI/공증 검증, 새 GitHub 최종 파일의 실제 붙여넣기는 서로 다른 범위였다. 최신 긴급 수정판의 Windows Obsidian 실기기 재시험도 빠져 있었다. 준비·함수/클립보드 검사 통과를 사용자 붙여넣기 전체의 성공으로 확대하지 않는다.
+- **고정 대상과 설치:** GitHub 공개 `v0.6.3` DMG와 `windows-v0.3.3` portable ZIP·MSIX(소스 `fe6b32e`)를 기기에서 직접 내려받아 공개 SHA-256과 비교했다. iMac(macOS 27.0.1/arm64)은 기존 시스템 앱 0.6.1을 보존하고 사용자 Applications에 원본 0.6.3을 설치했다(시스템 앱 교체 권한 없음). 서명·Gatekeeper·일반 실행·실행 경로를 확인했다. Windows 11 build 26200은 portable 실제 사용자 세션 시험 후 기존 `Tabledown.Dev`를 공개 MSIX 0.3.3.0으로 업데이트했다. 첨부 공개 인증서 신뢰·서명 Valid·설치 EXE/ZIP SHA-256 일치·AppsFolder 실행을 확인했다.
+- **확인한 기본 경로:** 실제 Excel Ctrl/Cmd+C와 일반 붙여넣기로 3행×2열 한글·이모지·셀 줄바꿈을 Obsidian에 전달하고 저장된 Markdown·렌더링 화면을 확인했다. Excel 원본 재붙여넣기, 일반 XML 메뉴/단축키, 수식 XML, 종료/재실행도 확인했다. Windows에서는 Markdown→Excel·일시정지/재개·중복 실행도 확인했다. 대기 경로의 기록된 단계는 iMac 9/9, 설치 Windows 12/12이며 준비 단계가 포함되어 기능 개수나 전체 호환성 통과 수로 쓰지 않는다.
+- **남은 실제 실패:** 변환 marker/`text/markdown`을 기다리지 않는 iMac 연속 붙여넣기는 최종 **7회 중 2회 실패**했다(기본 3×2 표 5회 중 1회, 특수문자 13×2 표 2회 중 1회). 일반 텍스트는 나중에 정상 Markdown이 됐으나 Obsidian이 먼저 받은 Excel HTML로 빈 헤더·다른 escape/문자참조 결과를 만들었다. 기본 표 실패에서는 복사 후 0.484초의 붙여넣기 직전과 0.651초의 키 입력 반환 때 Chromium 형식이 없었고 후속 관찰에는 생겼다. 코드의 0.1초 polling과 비동기 변환/기록 사이에 도착지가 원본 형식을 먼저 읽을 수 있음을 실제 화면·저장 노트·형식 시점으로 확인했다. **macOS 0.6.3의 실기기 완료 조건은 미충족**이다. Windows 설치본의 같은 기본 표 즉시 붙여넣기 5회는 통과했으며 모든 속도·입력의 보장을 뜻하지 않는다.
+- **대조군·관찰 도구:** 기존 iMac 0.6.1도 같은 실제 Excel 입력에서 빈 헤더를 추가했다. 최신판 초기 시험의 선행 개행·`&amp;` 기대값, Windows 포커스/도움말 버전 가정, Obsidian 읽기 모드·저장 지연, raw GDI snapshot 오류는 시험 도구 문제로 분리하고 수정 후 재시험했다. 첫 실패와 최종 기록을 모두 보존했으며 위 2/7은 보정 후 저장 완료·실제 입력·화면까지 확인한 제품 실패다.
+- **환경·근거·한계:** Excel Mac 16.113.3 / Windows 16.0.20430.20146. iMac Obsidian 런처 Info.plist는 1.12.7, 로컬 업데이트 패키지는 1.14.4이며 실행 UI의 버전 표시는 별도 확인하지 않았다. Windows는 공식 Obsidian 1.14.4를 시험 폴더·별도 profile로 실행했다. 사용자 원본 표·이번 Notion·Store 설치·재로그인은 미시험. 사용자 문서·시험 노트와 초기 iMac 클립보드를 복원하고 최신 Tabledown을 실행 상태로 남겼으며 Windows 임시 예약 작업을 제거했다. 원본 시스템 Mac 앱도 서명이 유효하다.
+- **실행/기록:** `ssh imac`의 `mac_e2e3.py`·`mac_direct_timing_final.py`, Windows Interactive ScheduledTask의 `windows_msix_e2e.py`·`windows_direct_paste_verified.py`, `codesign`·`spctl`·`Add-AppxPackage`·`Get-FileHash`를 사용했다. `outputs/release_retest_20261008/REPORT.html`, `RESULT.json`, 각 JSON·화면·시험 스크립트에 근거를 보관했다. `AGENTS.md`·`CLAUDE.md`에 최종 asset/PID 고정, 실제 붙여넣기·빠른 경로·관찰 도구 오류 분리 규칙을 추가했다. 앱 코드·버전·공개 릴리스는 바꾸지 않았다.
+
 ### 2026-10-08 — README 간소화
 
 - 한글·영문 README를 각각 389/387줄에서 90줄로, Windows 안내를 173줄에서 77줄로 줄였다. 다운로드·기본 사용법·XML 단축키·설정을 중심으로 정리하고 긴 XML 예시·구현 설명·과거 변경 이력을 기존 상세 문서로 연결했다. 개발 명령과 빈칸 채우기 세부 기준은 접기 영역에 두었다.
