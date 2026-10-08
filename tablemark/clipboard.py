@@ -4,6 +4,9 @@ Why not pyperclip? Because Excel puts both HTML and TSV on the clipboard,
 and pyperclip only sees the text portion. We need NSPasteboard to read HTML.
 """
 from AppKit import NSPasteboard, NSPasteboardTypeHTML, NSPasteboardTypeString
+from Foundation import NSData
+
+from .web_clipboard import MAC_WEB_CUSTOM_TYPE, with_markdown
 
 LEGACY_HTML_TYPE = "Apple HTML pasteboard type"
 LEGACY_STRING_TYPE = "NSStringPboardType"
@@ -83,6 +86,7 @@ def write_clipboard(
     drop_types: set[str] | None = None,
     *,
     expected_change_count: int | None = None,
+    markdown: str | None = None,
 ) -> None:
     """Update formats only while the watcher still owns the source generation.
 
@@ -106,6 +110,12 @@ def write_clipboard(
         data = pb.dataForType_(pb_type)
         if data is not None:
             existing_data[pb_type] = data
+
+    if markdown is not None:
+        previous = existing_data.get(MAC_WEB_CUSTOM_TYPE)
+        custom = with_markdown(markdown, bytes(previous) if previous is not None else None)
+        if custom is not None:
+            existing_data[MAC_WEB_CUSTOM_TYPE] = NSData.dataWithBytes_length_(custom, len(custom))
 
     replaced_types = set()
     if text is not None:

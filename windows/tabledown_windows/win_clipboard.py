@@ -10,6 +10,8 @@ import pywintypes
 import win32clipboard
 import win32con
 
+from tablemark.web_clipboard import WINDOWS_WEB_CUSTOM_TYPE, with_markdown
+
 from .html_clipboard import CF_HTML_FORMAT_NAME, build_cf_html, extract_cf_html
 
 
@@ -18,6 +20,7 @@ GENERATED_MARKER_VALUE = "Tabledown"
 
 HTML_FORMAT_ID = win32clipboard.RegisterClipboardFormat(CF_HTML_FORMAT_NAME)
 GENERATED_FORMAT_ID = win32clipboard.RegisterClipboardFormat(TABLEDOWN_GENERATED_TYPE)
+WEB_CUSTOM_FORMAT_ID = win32clipboard.RegisterClipboardFormat(WINDOWS_WEB_CUSTOM_TYPE)
 
 TEXT_FORMATS = {
     win32con.CF_TEXT,
@@ -93,6 +96,7 @@ def write_clipboard(
     drop_formats: Iterable[str] | None = None,
     *,
     expected_change_count: int | None = None,
+    markdown: str | None = None,
 ) -> None:
     """Update formats only if the watcher still owns the source generation."""
     drop_format_names = set(drop_formats or ())
@@ -127,6 +131,13 @@ def write_clipboard(
                 continue
             if _can_restore_data(data):
                 preserved.append((fmt, data))
+
+        if markdown is not None:
+            previous = next((data for fmt, data in preserved if fmt == WEB_CUSTOM_FORMAT_ID), None)
+            custom = with_markdown(markdown, previous) if previous is None or isinstance(previous, bytes) else None
+            if custom is not None:
+                preserved = [(fmt, data) for fmt, data in preserved if fmt != WEB_CUSTOM_FORMAT_ID]
+                preserved.append((WEB_CUSTOM_FORMAT_ID, custom))
 
         win32clipboard.EmptyClipboard()
 

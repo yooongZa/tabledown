@@ -11,4 +11,4 @@
 # 0.2.8: 공유 Markdown 왕복 문자/줄바꿈 수정과 현재 수식 XML 기능 배포.
 # 0.3.2: Refresh the installed development build with current conversion and
 # formula safeguards, direct-selection general XML, and scoped blank-fill UI.
-__version__ = "0.3.2"
+__version__ = "0.3.3"

@@ -586,6 +586,7 @@ class TabledownWindowsApp:
 
                 write_clipboard(
                     text=updated.get("text"),
+                    markdown=updated.get("text"),
                     html=updated.get("html"),
                     mark_generated=True,
                     drop_formats=updated.get("drop_formats"),

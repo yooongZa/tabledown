@@ -61,7 +61,8 @@ def verify():
     import win32con
     from tabledown_windows import __version__
     from tabledown_windows.html_clipboard import build_cf_html
-    from tabledown_windows.win_clipboard import HTML_FORMAT_ID, read_clipboard
+    from tabledown_windows.win_clipboard import HTML_FORMAT_ID, WEB_CUSTOM_FORMAT_ID, read_clipboard
+    from tablemark.web_clipboard import with_markdown
     from tablemark.converter.md_to_tsv import markdown_table_to_rows
 
     report = {
@@ -116,7 +117,7 @@ def verify():
                     expected = compile(source.read_bytes(), str(source), "exec", dont_inherit=True, optimize=0)
                     assert normalized(pyz.extract(name)) == normalized(expected), name
                     modules[name] = sha(source.read_bytes())
-            for name in ("excel_table", "excel_formula"):
+            for name in ("excel_table", "excel_formula", "web_clipboard"):
                 source = ROOT / "tablemark" / (name + ".py")
                 module = "tablemark." + name
                 expected = compile(source.read_bytes(), str(source), "exec", dont_inherit=True, optimize=0)
@@ -188,6 +189,14 @@ def verify():
                 assert copied["html"] == html
                 assert markdown_table_to_rows(copied["text"]) == [["항목", "값"], ["A", "한글 😀 앞 공백\n\n뒤"]]
                 report["checks"]["native_html_to_markdown_preserves_html_unicode_breaks"] = True
+                win32clipboard.OpenClipboard()
+                try:
+                    custom = win32clipboard.GetClipboardData(WEB_CUSTOM_FORMAT_ID)
+                    expected = with_markdown(copied["text"])
+                    assert custom[:len(expected)] == expected
+                finally:
+                    win32clipboard.CloseClipboard()
+                report["checks"]["native_browser_markdown_format"] = True
 
                 markdown = '| 항목 | 값 |\n| --- | --- |\n| 한글 😀 | A\\|B |'
                 seed(markdown)

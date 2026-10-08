@@ -1541,7 +1541,7 @@ class StableExcelFormulaReaderTests(unittest.TestCase):
 class FormulaTextClipboardTests(unittest.TestCase):
     def test_writer_replaces_clipboard_with_text_and_generated_marker_only(self):
         fake_clipboard = mock.Mock()
-        fake_clipboard.RegisterClipboardFormat.side_effect = [49152, 49153]
+        fake_clipboard.RegisterClipboardFormat.side_effect = [49152, 49153, 49154]
         fake_con = types.SimpleNamespace(
             CF_TEXT=1,
             CF_BITMAP=2,

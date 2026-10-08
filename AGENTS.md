@@ -136,6 +136,11 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   writer(클립보드 기록기)와 독립 pasteboard(클립보드)를 거쳐 AppKit HTML importer(가져오기 기능)로
   한글·이모지·특수문자를 확인한다. 단순 HTML 문자열 비교만으로 이 검증을 대체하지 말 것.
 
+- **Obsidian 붙여넣기 보강 (macOS 0.6.3 / Windows 0.3.3)**: 자동 변환 writer는 생성된 text와 같은
+  Markdown을 Chromium DataTransfer의 `text/markdown`에도 기록한다(`tablemark/web_clipboard.py`).
+  HTML과 native 슬롯은 그대로 유지한다. 다른 사용자 정의 MIME은 병합 보존하며 알 수 없는 형식은
+  덮지 않는다. 명시적 XML의 text-only writer에는 이 형식을 추가하지 않는다.
+
 ### 4. 표가 포함된 "문서" → text 에 마크다운 표 보강 + html 유지 (0.2.3)
 - 문단·헤딩·리스트 사이에 표가 섞인 문서(`html_has_content_outside_table` 가 True)는
   **표만 추출하면 안 된다** (나머지 텍스트가 통째로 소실됨 — 0.2.2 이전 버그).

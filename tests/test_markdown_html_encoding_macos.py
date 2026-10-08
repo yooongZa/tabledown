@@ -28,6 +28,32 @@ if sys.platform == "darwin":
 
 @unittest.skipUnless(sys.platform == "darwin", "requires macOS HTML importer")
 class MarkdownHtmlEncodingTests(unittest.TestCase):
+    def test_browser_markdown_keeps_original_html_and_native_formats(self):
+        from tablemark.web_clipboard import MAC_WEB_CUSTOM_TYPE, with_markdown
+        html = '<table>\r\n <tr><td>항목</td><td>값</td></tr>\r\n <tr><td>A</td><td>한글 🙂</td></tr>\r\n</table>'
+        update = TabledownApp._converted_clipboard(None, {"html": html})
+        pasteboard = NSPasteboard.pasteboardWithUniqueName()
+        try:
+            pasteboard.setString_forType_(html, "public.html")
+            pasteboard.setString_forType_("native-data", "test.excel-native")
+            original_html = bytes(pasteboard.dataForType_("public.html"))
+            with patch("tablemark.clipboard.NSPasteboard") as pasteboards:
+                pasteboards.generalPasteboard.return_value = pasteboard
+                write_clipboard(**update, markdown=update["text"], mark_generated=True,
+                                expected_change_count=int(pasteboard.changeCount()))
+            self.assertEqual(bytes(pasteboard.dataForType_("public.html")), original_html)
+            self.assertEqual(pasteboard.stringForType_("test.excel-native"), "native-data")
+            self.assertEqual(bytes(pasteboard.dataForType_(MAC_WEB_CUSTOM_TYPE)),
+                             with_markdown(update["text"]))
+            with patch("tablemark.clipboard.NSPasteboard") as pasteboards:
+                pasteboards.generalPasteboard.return_value = pasteboard
+                with self.assertRaises(ClipboardChangedError):
+                    write_clipboard(text="stale", markdown="stale", expected_change_count=-1)
+            self.assertEqual(bytes(pasteboard.dataForType_(MAC_WEB_CUSTOM_TYPE)),
+                             with_markdown(update["text"]))
+        finally:
+            pasteboard.releaseGlobally()
+
     def test_automatic_markdown_text_only_recopy_preserves_cells_in_native_import(self):
         values = [r"x\|y", r"\*", r"\\", "&copy;", "&lt;", "<br>", "한글 🍎"]
         html = "<table><tr><th>값</th><th>확인</th></tr>" + "".join(

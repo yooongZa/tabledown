@@ -363,6 +363,7 @@ class CopyAsXmlActionTests(unittest.TestCase):
         app._converted_clipboard.assert_called_once_with(content)
         writer.assert_called_once_with(
             text="| A |",
+            markdown="| A |",
             html="<table><tr><td>A</td></tr></table>",
             drop_types=set(),
             mark_generated=True,

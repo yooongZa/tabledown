@@ -862,6 +862,7 @@ class TabledownApp(rumps.App):
 
                 write_clipboard(
                     **updated,
+                    markdown=updated.get("text"),
                     mark_generated=True,
                     expected_change_count=source_change_count,
                 )

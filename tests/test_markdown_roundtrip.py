@@ -2,11 +2,14 @@
 
 from html import escape
 from string import punctuation
+import struct
 import unittest
+from unittest.mock import patch
 
 from bs4 import BeautifulSoup
 
 from tablemark.converter.html_to_md import html_table_to_markdown
+from tablemark.web_clipboard import with_markdown
 from tablemark.converter.md_to_tsv import (
     is_markdown_table,
     markdown_table_to_html,
@@ -19,6 +22,34 @@ def _table_with_cells(cells):
 
 
 class MarkdownRoundtripTests(unittest.TestCase):
+    def test_chromium_markdown_pickle_utf16_units_and_alignment(self):
+        encoded = with_markdown("한🙂")
+        # UTF-16 code units, not Python character count (the emoji uses two).
+        self.assertEqual(encoded, (
+            struct.pack("<III", 48, 1, 13)
+            + "text/markdown".encode("utf-16-le") + b"\0\0"
+            + struct.pack("<I", 3) + "한🙂".encode("utf-16-le") + b"\0\0"
+        ))
+
+    def test_chromium_markdown_merge_keeps_other_app_data(self):
+        payload = (struct.pack("<II", 1, 1) + b"x\0\0\0"
+                   + struct.pack("<I", 1) + b"y\0\0\0")
+        old = struct.pack("<I", len(payload)) + payload
+        merged = with_markdown("table", old)
+        self.assertEqual(struct.unpack_from("<I", merged, 4)[0], 2)
+        self.assertEqual(merged[8:24], old[8:24])
+        # Re-copy replaces only Markdown and never duplicates its MIME entry.
+        self.assertEqual(with_markdown("table", merged), merged)
+
+    def test_chromium_unknown_or_oversized_data_is_not_replaced(self):
+        for data in (b"", b"bad", b"\xff" * 12,
+                     struct.pack("<II", 4, 1),
+                     struct.pack("<IIII", 12, 1, 0xFFFFFFFF, 0)):
+            with self.subTest(data=data):
+                self.assertIsNone(with_markdown("table", data))
+        with patch("tablemark.web_clipboard._MAX_BYTES", 64):
+            self.assertIsNone(with_markdown("large" * 20))
+
     def test_office_space_runs_do_not_create_cell_line_breaks(self):
         html = (
             '<table><tr><td>항목</td><td>값</td></tr><tr><td>행</td>'

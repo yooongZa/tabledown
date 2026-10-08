@@ -13,6 +13,12 @@
 - 다운로드 주소·플랫폼 조건·현재 메뉴 이름·내보내기 한도·선택 밖/다른 시트 참조값의 개인정보 범위와 기존 개인정보 제목을 보존했다. 오래된 줄바꿈 제한 설명을 제거하고, 개발 지침의 README 갱신 규칙과 XML 문서의 링크 설명을 맞췄다. 앱 코드는 변경하지 않았다.
 - 검증: Python으로 상대 링크/앵커 28개·Markdown fence/details 짝·다운로드/단축키/한도/개인정보 항목을 확인하고 `git diff --check`를 통과했다. 문서만 수정해 앱·실기기 테스트는 다시 실행하지 않았다. 기존 CHANGELOG 초안과 Word 문서 2개는 보존했다.
 
+## [0.6.3] / [0.3.3] - 2026-10-08 (macOS / Windows)
+
+- Excel 표를 Obsidian에 붙여넣으면 빈 표 아래로 데이터 행이 풀리는 문제를 수정했다. 자동 변환 시 Chromium/Electron의 `text/markdown` 형식을 함께 기록해 Obsidian이 생성된 Markdown을 직접 읽게 한다.
+- 원본 HTML·Excel native 형식·다른 앱의 사용자 정의 형식을 보존한다. 일반 텍스트·XML과 기존 Markdown+HTML 복사본 처리, 클립보드 변경 감지는 유지한다.
+- 검증: macOS에서 실제 Obsidian 1.13.7에 Excel 형식 HTML을 붙여넣어 수정 전 오류와 수정 후 3행×2열·한글·이모지·셀 줄바꿈을 확인했다. macOS 회귀 286개, Windows 포트 104개(27 skip), 변환·기타 매트릭스 77개 통과. Windows 실제 실행·배포 결과는 패키지 검증 후 별도 기록한다.
+
 ## [0.6.2] / [0.3.2] - 2026-10-08 (macOS / Windows)
 
 - **GitHub 공개 완료:** macOS **0.6.2 / build 0.6.8**의 [DMG·ZIP](https://github.com/yooongZa/tabledown/releases/tag/v0.6.2)과 Windows **0.3.2 / MSIX 0.3.2.0**의 [portable ZIP·자체서명 MSIX](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.2)을 공개했다. 태그 `v0.6.2`·`windows-v0.3.2`는 검증 후보 `4533696`을 가리킨다. 두 플랫폼 공개 파일의 인증 없는 재다운로드 크기·SHA-256, macOS Latest `v0.6.2`와 고정 DMG 링크를 확인했다.
