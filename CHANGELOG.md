@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### 2026-10-08 — macOS 0.6.2 / Windows 0.3.2 릴리스 준비
+
+- 실기기 검증 소스를 macOS **0.6.2 / build 0.6.8**, Windows **0.3.2 / MSIX 0.3.2.0**으로 패키징한다. 공개 파일·서명·스토어 제출 결과는 완료 후 아래에 기록한다.
+- 설치 안내와 영문 기능 설명에서 제거한 Markdown 메뉴를 정리하고 ‘그룹·분류 빈칸 채우기’의 실제 적용 범위, Windows 일반 XML의 현재 선택 읽기와 새 버전 다운로드 경로를 반영했다. 앱 코드·설정 기본값·원본값 보존 동작은 실기기 검증 소스와 같다.
+- 사전 확인: Apple 서버의 최신 build 0.6.7, macOS 0.6.1 `READY_FOR_SALE`; Microsoft Store Submission 5 공개 완료. `git diff --check`와 릴리스 후보 테스트·패키지 검증을 이어 실행한다.
+
 ### 2026-10-08 — 복사 메뉴 정리·Windows 개발판 수정 및 양쪽 실기기 검증
 
 - **메뉴·설명:** macOS의 명시적 ‘마크다운 복사’ 메뉴를 제거하고 Windows에도 해당 메뉴가 없는 것을 확인했다. 자동 Excel/Sheets ↔ Markdown은 유지한다. 두 플랫폼의 설정 이름을 **‘그룹·분류 빈칸 채우기’**로 바꾸고 한·영 도움말·macOS tooltip에 자동 Markdown의 열 그룹 제목/왼쪽 분류 열, 일반 XML의 왼쪽 분류 열, 본문 열의 추정 기준과 적용 제외 범위를 설명했다. 기존 `fill_blanks` 키·기본 OFF·원본 Excel/HTML·수식 XML을 보존했다.

@@ -109,8 +109,8 @@ jobs:
              A new test certificate is issued for each build. The private
              signing key is never included in the release.
 
-          Testing the "Auto-fill blank cells" feature:
-             - Tray menu -> toggle "빈칸을 자동 채우기" (Auto-fill blank cells) ON.
+          Testing "Fill group and category blanks":
+             - Tray menu -> toggle "그룹·분류 빈칸 채우기" (Fill group and category blanks) ON.
              - Copy a merged-cell table from Excel, paste into a Markdown editor:
                the merged header now carries its value instead of a blank.
              - Toggle OFF -> re-copy -> blanks stay blank (default behavior).

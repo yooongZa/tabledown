@@ -41,7 +41,7 @@ Install (DMG):
 
 The release DMG is built with Developer ID signing and Apple notarization. The Mac App Store build runs in the App Sandbox.
 
-**Windows x64:** [Microsoft Store](https://apps.microsoft.com/detail/9NGS4C0N2Z6L) · [Windows 0.2.8 on GitHub](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.2.8) · [Windows guide](windows/README.md). Extract the ZIP and run the EXE. The optional self-signed MSIX is for sideload testing. The feature guide below describes macOS.
+**Windows x64:** [Microsoft Store](https://apps.microsoft.com/detail/9NGS4C0N2Z6L) · [Windows 0.3.2 on GitHub](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.2) · [Windows guide](windows/README.md). Extract the ZIP and run the EXE. The optional self-signed MSIX is for sideload testing. The feature guide below describes macOS.
 
 ## Why Use It
 
@@ -49,7 +49,6 @@ The release DMG is built with Developer ID signing and Apple notarization. The M
 |------|--------------|--------|
 | Excel/Google Sheets table (`Cmd+C`) | Obsidian/GitHub/Markdown editor (`Cmd+V`) | Markdown source table |
 | Markdown table (`Cmd+C`) | Excel (`Cmd+V`) | Spreadsheet cells |
-| Select an Excel range, then “Copy Markdown” | Notes or Markdown documents (`Cmd+V`) | Selected columns, displayed values, and cell line breaks |
 | Select an Excel table range, then “Copy as XML” or `⌘⌃X` | LLM prompt (`Cmd+V`) | Hierarchy, exact merge ranges, source, and displayed values as XML |
 | Select an Excel formula range, then “Copy as XML with Formulas” or `⌘⌃E` | LLM prompt (`Cmd+V`) | Cell types, raw values, calculation state, A1/R1C1 formulas, and direct reference values as XML |
 
@@ -69,15 +68,7 @@ Tabledown augments the clipboard's plain-text slot with Markdown while keeping t
 
 The screenshot above shows the two paste results — Markdown source (top) and a rendered table (bottom). (It was captured on a version before 0.2.4, when the on/off toggle made this difference; today both formats coexist on the clipboard and the destination app chooses.) In other words, Tabledown is not a pretty table renderer. It is a table converter for Markdown documents.
 
-## Copy Markdown (Excel only)
-
-Select a rectangular range including its header row in Excel, choose **“Copy Markdown”**, and paste into your document. There is no need to press `Cmd+C` first. The copy retains selected column order, trailing blank columns, displayed values, and cell line breaks. Markdown source preserves whitespace and escapes literal special characters. The first selected row becomes the table header; dates, percentages, and currency use Excel’s displayed strings.
-
-Markdown represents merged cells as separate grid cells. Colors, fonts, column widths, and merged shapes cannot be reproduced by Markdown syntax. The existing “Fill blanks automatically” option applies only to group/header blanks, keeping data blanks intact. A UTF-8 HTML table from the same selection also carries merges and line breaks for destinations such as Excel and Notes. The destination chooses its format and controls how whitespace is displayed.
-
-This uses the same stable Excel selection reader as regular XML: up to 10,000 cells and 5,000,000 value characters, with a combined UTF-8 Markdown+HTML limit of 10 MB. Read, conversion, and size failures stop before writing. Copying something new while the export is being prepared cancels its write. Success replaces older Excel-specific formats with Markdown and HTML from the same selection.
-
-All three manual commands require the Excel desktop app. **Markdown focuses on the table’s presentation in documents; both XML commands organize information for AI.** Existing automatic Excel/Google Sheets ↔ Markdown copy and paste remains available. These menu descriptions reflect macOS 0.6.1.
+Markdown tables convert automatically when you copy from Excel or Google Sheets and paste into your destination. macOS 0.6.2 removes the separate “Copy Markdown” menu. Windows also has no separate Markdown command. The manual XML commands below read the current selection in the Excel desktop app.
 
 ## Copy as XML (for AI)
 
@@ -105,7 +96,7 @@ Example: a cross-table of two vertical levels (Rank ▸ Manager/Deputy, Title) �
 - **Progress state and clipboard-overwrite protection**: XML commands first show `…` beside the menu-bar icon, switch the menu to “Copying…”, and allow only one export at a time. Because macOS requires NSAppleScript on the main thread, a large selection—especially near 10,000 cells—can leave the menu unresponsive for tens of seconds, and an in-progress read cannot currently be cancelled. Split the range if it takes too long. If you copy something else while XML is being prepared, the final clipboard-generation check cancels the XML write. A success checkmark appears only after read-back verification. macOS exposes no atomic clipboard compare-and-swap, so an extremely small race window remains between the final check and clearing the pasteboard.
 - **Both horizontal and vertical groups nest**: horizontal multi-level headers nest as `<열그룹>`, and vertical groups (Rank: Manager/Deputy) nest as `<{header}그룹>`, keeping the table's hierarchy. Horizontal headers live in `n=`/`이름=` attributes (not tag names), so spaces, symbols, or leading digits never mangle a tag and stay safe in any standard XML parser. The Korean `<표>` root (not `<table>`) means the content survives even where the text is rendered as HTML (a browser, an Obsidian preview).
 - **Vertical groups nest as parent nodes (changed from the previous version)**: the previous version repeated each vertical key column (Rank) on every row, so each row was a self-contained record. Now vertical groups nest as parent nodes (`<직급그룹>`) — the hierarchy is preserved, but the group value lives only on the parent, so **a single row on its own no longer carries its Rank** (a deliberate trade: hierarchy preservation over self-contained rows).
-- **“Auto-fill blank cells” (Settings ▸, off by default)**: When converting a table, this one toggle drives **both the Markdown and XML paths**, filling blank cells in the left grouping (key) columns and the header frame from the value above (vertical), then to the left (horizontal). Blanks in the data (value) region are left as-is. General XML records whether the rule ran and the exact source cells it changed in `빈칸채움`, `빈칸채움기준`, `빈칸채움수`, and `빈칸채움셀`, so generated values are not mistaken for original Excel input.
+- **“Fill group and category blanks” (Settings ▸, off by default)**: Automatic Markdown conversion fills merged column-group headings horizontally and left category columns vertically. General XML fills left category blanks from above, then fills remaining blanks from the left. Category columns are inferred as the columns before the first body column with no blanks. Blanks in that body column and columns to its right, formula XML, and the original Excel/HTML are preserved. The existing `fill_blanks` setting is retained. General XML records the rule and the original A1 addresses of filled cells in `빈칸채움`, `빈칸채움기준`, `빈칸채움수`, and `빈칸채움셀`.
 
 ## Copy as XML with Formulas (Excel only)
 

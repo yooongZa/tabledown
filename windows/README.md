@@ -2,17 +2,15 @@
 
 Windows용 Tabledown 이식 버전입니다. 기존 macOS 앱 파일은 그대로 두고, 이 폴더 안에 Windows tray(시스템 트레이) 앱과 build(빌드) 설정만 분리했습니다.
 
-## 다운로드 — Windows 0.2.8
+## 다운로드 — Windows 0.3.2
 
-[Microsoft Store에서 설치](https://apps.microsoft.com/detail/9NGS4C0N2Z6L)하거나 [Windows 0.2.8 GitHub 릴리즈](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.2.8)를 받을 수 있습니다. Store 배포·심사 상태는 아래에 별도로 기록합니다.
+[Microsoft Store](https://apps.microsoft.com/detail/9NGS4C0N2Z6L) · [Windows 0.3.2 GitHub 릴리즈](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.2)
 
-- **일반 사용:** `Tabledown-Windows-portable-0.2.8.zip`을 풀고 `Tabledown-Windows.exe`를 실행합니다. Python 설치가 필요 없습니다. portable EXE에는 상용 코드 서명이 없어 게시자 확인 안내가 나타날 수 있습니다.
-- **설치형 시험:** `Tabledown-0.2.8.0.msix`와 `Tabledown-dev.cer`, `INSTALL.txt`를 함께 받습니다. 자체 서명한 sideload 패키지이며 Microsoft Store 배포본은 아닙니다. 설치 안내에 따라 공개 인증서를 신뢰한 뒤 설치합니다. 개인키는 배포하지 않습니다.
+- **일반 사용:** `Tabledown-Windows-portable-0.3.2.zip`을 풀고 `Tabledown-Windows.exe`를 실행합니다. Python 설치가 필요 없습니다. portable EXE에는 상용 코드 서명이 없어 게시자 확인 안내가 나타날 수 있습니다.
+- **설치형 시험:** `Tabledown-0.3.2.0.msix`와 `Tabledown-dev.cer`, `INSTALL.txt`를 함께 받습니다. 자체 서명한 sideload 패키지입니다. 개인키는 배포하지 않습니다.
 - `SHA256SUMS.txt`와 다운로드 파일의 SHA-256을 비교할 수 있습니다.
 
-2026-10-07 Windows 실행기에서 테스트 **193/193**, 실제 EXE의 자동 변환·한글/특수문자/줄바꿈·단축키 일시정지/재개·중복 실행, 패키지 서명·원본 소스 일치와 공개 다운로드를 확인했습니다. 실제 Excel PC 붙여넣기·MSIX 설치·재로그인 시작은 아직 확인하지 않았습니다. 이 내용은 공개판 0.2.8의 당시 검증 기록입니다. 현재 개발판 0.3.2은 일반 XML의 Excel 직접 선택 읽기를 지원합니다.
-
-**Microsoft Store 업데이트:** 기존 공개본은 0.2.7.0이며, 0.2.8.0은 2026-10-07 Submission 5로 심사 제출했습니다. 현재 `In certification`으로 승인 후 자동 공개됩니다. Store 전용 패키지도 Windows 테스트 193/193과 실행·소스·identity 검증을 통과했습니다.
+0.3.2 소스는 실제 Windows PC에서 단위 테스트 208/208과 Excel 시나리오 30개(준비·성능 포함)를 통과했습니다. 일반 XML은 현재 Excel 선택을 읽으며, 문자열·줄바꿈 왕복, 수식 참조·값 타입·계산 상태와 읽는 중 새 복사 보호를 확인했습니다. Store 업데이트와 공개 파일 검증 결과는 아래 릴리스 기록에 이어 기록합니다.
 
 ## 개발 실행
 
@@ -40,7 +38,7 @@ python run_windows.py
 2. Excel에서 붙여넣습니다.
 3. HTML table clipboard format(클립보드 형식)을 Excel이 읽어 셀 단위로 붙여넣습니다.
 
-### XML 변환 복사 (개발판 0.3.2)
+### XML 변환 복사 (0.3.2)
 
 Excel에서 제목 행과 데이터를 포함한 사각형 영역을 선택한 뒤 **‘XML 변환 복사’** 또는 **`Ctrl+Alt+X`** 를 누르세요. 먼저 복사할 필요가 없습니다. 현재 표시값·빈칸·병합 계층과 통합문서·시트·주소를 XML로 기록합니다. 수식 자체는 아래 수식 XML 명령으로 복사합니다.
 

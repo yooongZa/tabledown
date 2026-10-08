@@ -41,7 +41,7 @@ Mac App Store에서 받는 것을 권장합니다 (자동 업데이트).
 
 배포용 DMG는 Developer ID signing(개발자 ID 서명)과 Apple notarization(애플 공증)을 통과한 빌드입니다. Mac App Store 빌드는 App Sandbox(앱 샌드박스)에서 동작합니다.
 
-**Windows x64:** [Microsoft Store](https://apps.microsoft.com/detail/9NGS4C0N2Z6L) · [Windows 0.2.8 GitHub 다운로드](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.2.8) · [Windows 사용법](windows/README.md). ZIP을 풀고 EXE를 실행합니다. 자체 서명 MSIX는 별도 설치 시험용으로 제공합니다. 아래 기능 안내는 macOS 기준입니다.
+**Windows x64:** [Microsoft Store](https://apps.microsoft.com/detail/9NGS4C0N2Z6L) · [Windows 0.3.2 GitHub 다운로드](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.2) · [Windows 사용법](windows/README.md). ZIP을 풀고 EXE를 실행합니다. 자체 서명 MSIX는 별도 설치 시험용으로 제공합니다. 아래 기능 안내는 macOS 기준입니다.
 
 ## 왜 쓰나요
 
@@ -68,7 +68,7 @@ Tabledown은 clipboard(클립보드)의 text(일반 텍스트) 슬롯에 Markdow
 
 위 스크린샷은 같은 표가 붙는 두 가지 결과 — Markdown source(위)와 렌더링된 표(아래) — 를 보여줍니다. (0.2.4 이전 버전 캡처라 켬/끔으로 나뉘어 있지만, 지금은 두 형식이 clipboard에 공존하며 도착지 앱이 선택합니다.) 즉 Tabledown은 "예쁜 표 렌더러"가 아니라 "Markdown 문서용 표 변환기"입니다.
 
-Markdown 표는 Excel·Google Sheets에서 복사한 뒤 원하는 앱에 붙여넣으면 자동으로 변환됩니다. macOS 0.6.2 개발판부터 별도의 ‘마크다운 복사’ 메뉴를 제거했습니다. Windows 개발판에도 이 메뉴를 두지 않습니다. 아래 수동 XML 명령은 Excel 데스크톱 앱의 현재 선택 영역을 읽습니다.
+Markdown 표는 Excel·Google Sheets에서 복사한 뒤 원하는 앱에 붙여넣으면 자동으로 변환됩니다. macOS 0.6.2부터 별도의 ‘마크다운 복사’ 메뉴를 제거했습니다. Windows에도 이 메뉴를 두지 않습니다. 아래 수동 XML 명령은 Excel 데스크톱 앱의 현재 선택 영역을 읽습니다.
 
 ## XML 변환 복사 (AI용)
 
