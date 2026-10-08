@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+## [0.6.2] / [0.3.2] - 2026-10-08 (macOS / Windows)
+
+- **GitHub 공개 완료:** macOS **0.6.2 / build 0.6.8**의 [DMG·ZIP](https://github.com/yooongZa/tabledown/releases/tag/v0.6.2)과 Windows **0.3.2 / MSIX 0.3.2.0**의 [portable ZIP·자체서명 MSIX](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.2)을 공개했다. 태그 `v0.6.2`·`windows-v0.3.2`는 검증 후보 `4533696`을 가리킨다. 두 플랫폼 공개 파일의 인증 없는 재다운로드 크기·SHA-256, macOS Latest `v0.6.2`와 고정 DMG 링크를 확인했다.
+- **스토어 심사 접수:** App Store 0.6.2/build 0.6.8의 처리 `VALID`, 내부 TestFlight 그룹 `22`의 `IN_BETA_TESTING`, 심사 `WAITING_FOR_REVIEW`를 확인했다. Microsoft Store 기존 앱 `9NGS4C0N2Z6L`에 `LIMOD.Tabledown` 패키지 0.3.2.0을 Submission 6(`1152921505702071549`)으로 제출했고 `In certification / Pre-processing`을 확인했다. 모두 승인 후 자동 공개이며 새 스토어 버전의 사용자 공개는 아직 확인되지 않았다. 기존 앱 소개·가격·시장·속성은 보존하고 한·영 변경 안내 저장값을 재확인했다. 이전 macOS 0.6.1·Windows 0.2.8.0의 스토어 공개 완료도 확인했다.
+- **배포 검증:** macOS 후보 **463 pass + 27 Windows 전용 skip**(단위 282, Windows 포트 104+27, 변환/설정 매트릭스 77). Apple 앱·설치자·DMG 서명, 앱/DMG 공증 `Accepted`, staple·Gatekeeper, ZIP 추출본·DMG 내부 앱의 소스 16개 일치, Apple validate/upload를 확인했다. Mac 파일은 **Apple Silicon 전용**이다. Windows GitHub/Store CI 각각 **208/208**, 실제 EXE 자동 변환·단축키·중복 실행·WinRT, x64·identity·서명/unsigned 계약·ZIP/MSIX payload·모듈 21개 검증을 통과했다. Store 재빌드 소스 `9933e5b`는 테스트 리소스 격리만 다르고 앱 21개 모듈 해시는 GitHub 패키지와 같다.
+- **실기기 근거와 한계:** 아래 0.6.2 QA/0.3.2 Dev 기록의 실제 Windows 30개·iMac 31개 시나리오와 동일한 앱 소스를 배포했다(준비·성능 포함). 최종 배포 파일은 CI/공증 파이프라인에서 별도로 생성했으며, 그 파일 자체로 실제 Excel 시험·Store 설치를 다시 수행했다고 주장하지 않는다. 부분 병합 거부의 실제 오류 재현과 iMac 큰 표 대기(10,000셀 약 39~41초)는 남는다.
+- **주요 실행:** `TABLEDOWN_BUILD=0.6.8 bash scripts/build_app_store.sh`, `TABLEDOWN_BUILD=0.6.8 NOTARY_PROFILE=tabledown-notary bash scripts/build_dmg.sh`, `xcrun altool --validate-app/--upload-package`, `gh workflow run windows-build.yml/windows-store.yml --ref main`, `python windows/tools/verify_release.py [--store]`, `gh release create/edit`, 태그·main push. 근거: `outputs/releases/20261008-0.6.2/`, `20261008-windows-0.3.2/`, `20261008-windows-store-0.3.2/`.
+
 ### 2026-10-08 — Windows 릴리스 테스트의 트레이 리소스 격리
 
 - Store CI의 메뉴 단위 테스트에서 실행하지 않은 pystray Icon이 Win32 class를 남겨 `WinError 1410`이 간헐적으로 발생했다. 메뉴/행동 테스트에서는 native Icon만 대역으로 만들고 실제 Menu와 앱 로직을 유지했다. 제품 코드에는 변경이 없으며 패키지 실행 검증은 실제 트레이를 계속 사용한다.

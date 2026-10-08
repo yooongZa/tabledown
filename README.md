@@ -247,6 +247,8 @@ Tabledown은 계정 생성, analytics(분석), 광고 추적, 위치 정보, 연
 
 ## 변경 이력
 
+- 2026-10-08: **macOS 0.6.2 / Windows 0.3.2 공개.** [Mac DMG·ZIP](https://github.com/yooongZa/tabledown/releases/tag/v0.6.2)과 [Windows ZIP·MSIX](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.2)를 배포하고 공개 다운로드 SHA-256을 확인했다. Mac 서명·Apple 공증·후보 검사 463개, Windows 두 빌드 각각 208개와 실제 EXE 검사를 통과했다. App Store는 `WAITING_FOR_REVIEW`, Microsoft Store 0.3.2.0 Submission 6은 `In certification`이며 승인 후 자동 공개다(2026-10-08 확인). 메뉴 정리·빈칸 설정 설명·Windows 일반 XML 직접 선택을 포함한다. 아래 개발판 실기기 검증과 최종 패키지 검증을 구분한다.
+
 - 2026-10-08 (개발판 수정·재설치): macOS QA 0.6.2 / Windows Dev 0.3.2.0에서 명시적 Markdown 메뉴 제거, ‘그룹·분류 빈칸 채우기’ 설명 개선, Windows 일반 XML의 현재 선택 읽기를 반영했다. 이전 개발판의 문자/수식/새 복사 보호 누락을 보완한 소스로 실기기 시나리오 Windows 30개·iMac 31개를 통과했다(준비·성능 포함). 같은 4,008셀/500수식의 단축키 출력은 Windows 6.13초, iMac 17.52초(각 3회 중앙값)였다. 부분 병합 거부의 실기기 재현과 iMac 큰 표 대기는 남는다. 공개 배포는 변경하지 않았다.
 
 - 2026-10-08 (설치 개발판 재검증): **Tabledown.Dev 0.3.0은 macOS와 동등하지 않습니다.** 실제 Excel과 설치 EXE의 17개 시나리오 중 11개 통과·6개 기준 미충족입니다. Markdown 왕복 줄바꿈 손상과 수식 읽기 중 새 복사본 덮어쓰기를 재현했고, 수식 참조값·값 타입·계산 상태 및 일반 XML의 직접 선택 읽기가 없습니다. 500수식 출력은 3.16초였으나 처리 범위가 달라 Mac과 동등 성능으로 비교할 수 없습니다. 아래 공개판 0.2.8 결과와 구분합니다.
