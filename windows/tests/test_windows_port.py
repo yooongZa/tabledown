@@ -2119,10 +2119,18 @@ class LoginMenuTests(unittest.TestCase):
         # app.__init__ seeds login_supported/login_enabled from one
         # current_state() read; None means "unsupported, hide the toggle".
         state = ("enabled" if enabled else "disabled") if supported else None
-        with mock.patch.object(startup_task, "current_state", return_value=state):
-            from tabledown_windows.app import TabledownWindowsApp
+        from tabledown_windows import app as app_module
 
-            return TabledownWindowsApp()
+        # These tests inspect menu/action logic without running a tray loop.
+        # Real pystray Icons register Win32 classes until their loop exits;
+        # repeated short-lived instances can reuse an id and collide in CI.
+        # Keep the real Menu, but isolate the unstarted native tray resource.
+        with mock.patch.object(startup_task, "current_state", return_value=state), \
+             mock.patch.object(
+                 app_module.pystray, "Icon",
+                 side_effect=lambda _name, **kwargs: mock.Mock(**kwargs),
+             ):
+            return app_module.TabledownWindowsApp()
 
     def _labels(self, app):
         return [getattr(item, "text", "") for item in app.icon.menu]
