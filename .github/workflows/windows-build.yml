@@ -34,7 +34,7 @@ jobs:
         working-directory: windows/tests
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
-          ..\.venv\Scripts\python -m unittest test_windows_port -v
+          ..\.venv\Scripts\python -m unittest test_windows_port test_windows_table -v
 
       - name: Run shared conversion and formula export tests
         shell: pwsh

@@ -34,7 +34,7 @@ Tabledown 은 macOS 메뉴바 앱으로, 클립보드를 감시하며 **Excel/Sh
 
 ### 버전은 플랫폼별 2-트랙 (독립 버저닝)
 - macOS: `tablemark/__init__.py` (`__version__`, 현재 **0.6.x** 트랙).
-- Windows: `windows/tabledown_windows/__init__.py` (`__version__`, 현재 **0.2.x** 트랙). Windows 는 macOS 버전을 일부러 안 따른다(MSIX PackageVersion 소스이므로 공유하면 오기록 — 그 파일 주석 참조).
+- Windows: `windows/tabledown_windows/__init__.py` (`__version__`, 현재 **0.3.x** 트랙). Windows 는 macOS 버전을 일부러 안 따른다(MSIX PackageVersion 소스이므로 공유하면 오기록 — 그 파일 주석 참조).
 - 문서·커밋에서 버전을 말할 땐 **어느 플랫폼인지 반드시 명시**.
 
 ### 테스트 지도
@@ -46,7 +46,7 @@ Tabledown 은 macOS 메뉴바 앱으로, 클립보드를 감시하며 **Excel/Sh
   ⚠️ `clipboard_direct`(및 `watcher`) 그룹은 **시스템 클립보드를 읽고 쓴다** — 실행 중 클립보드 내용이 잠깐 바뀐다. 산출물(fixture·`report.json`)은 gitignore 된 `outputs/tabledown_test_envs/` 로 나간다.
 - **Windows 포트 테스트**(`.github/workflows/windows-build.yml` 이 CI 에서 쓰는 커맨드) — macOS 에서도 리포 루트 `.venv` 로 실행됨(트레이·`winsdk` 의존 테스트는 자동 skip):
   ```bash
-  cd windows/tests && ../../.venv/bin/python -m unittest test_windows_port -v   # 2026-09-09 검증: 114개 = 87 pass + 27 skip (macOS)
+  cd windows/tests && ../../.venv/bin/python -m unittest test_windows_port test_windows_table -v   # 2026-09-09 검증: 114개 = 87 pass + 27 skip (macOS)
   ```
 - converter만 빠르게(클립보드 안 건드림)는 이 파일 **불변식 섹션 끝의 원라이너**(51/51) 참조.
 
@@ -143,7 +143,8 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
 - html 슬롯: **원본 유지** (PNG/PDF/RTF 등 RENDERED 이미지 형식만 drop, html 은 절대 drop 금지).
 - 결과: 마크다운 에디터는 마크다운 표를, Word·Excel 은 원본 표 형식을 받는다. **양쪽 동시 만족.**
 
-### 4-M. 명시적 Markdown 복사 (macOS, 2026-09-10)
+### 4-M. 내부 Markdown 복사 helper (메뉴 제거: 2026-10-08)
+- macOS·Windows에 ‘마크다운 복사’ 메뉴를 노출하지 않는다. 아래 helper와 테스트는 내부 호환용으로 유지하며 사용자는 자동 Markdown 변환을 쓴다.
 - `copy_as_markdown`은 일반 XML과 같은 안정된 Excel 선택을 한 번 읽고 `excel_table_selection_to_html`에서
   Markdown과 UTF-8 HTML을 함께 만든다. `Cmd+C`나 과거 clipboard로 대체하지 않는다.
 - `html_table_to_markdown(..., preserve_layout=True)`에서만 선택한 빈 마지막 열·병합으로 덮인 빈 행·
@@ -156,6 +157,11 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   generation 확인·검증 기록·실패/종료/재시도 경로를 공유한다. 새 내용을 복사한 뒤 자동 재시도하거나
   OS clear 이후 쓰기 실패를 복구했다고 주장하지 않는다. Markdown+HTML 합계 UTF-8 10MB 상한을 쓰기 전에
   검사하고 Excel 선택 10,000셀·값 5,000,000자·표시 overflow 차단은 기존 reader의 한도를 유지한다.
+
+### 4-W. Windows 일반 XML 직접 선택 (개발판 0.3.2, 2026-10-08)
+- `windows/tabledown_windows/excel_table.py`는 COM으로 현재 선택의 `.Text`·원시 타입·병합 영역을 읽고 두 번 연속 같은 snapshot만 반환한다. macOS의 `ExcelTableSelection`·표 구조·출처 metadata·bounded XML serializer를 공유한다. macOS 전용 AppKit/Foundation import는 해당 플랫폼에서만 수행한다.
+- Ctrl+Alt+X·일반 XML 메뉴는 수식 XML과 같은 실행 lock·설정 snapshot·clipboard generation 검증·text-only writer를 쓴다. 최대 10,000셀·5,000,000자·XML 10MB, 부분 병합·표시 overflow 거부, 새 복사 취소를 보존한다. 옛 clipboard fallback을 되살리지 말 것.
+- ‘그룹·분류 빈칸 채우기’는 두 플랫폼에서 자동 Markdown의 열 그룹 제목·왼쪽 분류 열과 일반 XML의 왼쪽 분류 열에 적용한다. 수식 XML·원본 Excel·원본 HTML에는 적용하지 않는다. 분류 열은 빈칸 없는 첫 본문 열 앞까지로 추정하며 기존 설정 키·기본 OFF를 유지한다.
 
 ### 5. XML 표 변환 — 표→XML은 명시적 메뉴 클릭 전용, 자동 역변환은 없음 (0.3.0)
 - **형식 (v2 — 다단 헤더 중첩, 방안1: 일반 태그)**: LLM 친화 XML. 다단 헤더(가로·세로 양방향)를
@@ -258,7 +264,7 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   `값대입수식상태="omitted_xml_size_limit"`을 반드시 기록한다. `값종류`·계산 상태·참조 누락 사유를
   조용히 제거해 성공시키지 말 것.
 - **macOS 수식 XML에 AI용 간결 출력을 통합 (2026-09-10)**:
-  macOS 복사 메뉴는 ‘마크다운 복사’·‘XML 변환 복사’·‘수식 포함 XML 변환 복사’ 3개다. 별도
+  macOS 0.6.2 개발판의 복사 메뉴는 ‘XML 변환 복사’·‘수식 포함 XML 변환 복사’ 2개다. 별도
   ‘AI용 간결 복사’ 메뉴는 제거하고 기존 수식 메뉴·⌘⌃E에서 `formula_selection_to_ai_xml`을 호출한다.
   일반 XML은 기존 v2 계층을 유지하고 두 XML 모두 AI에게 표를 전달하는 목적이다.
   `formula_selection_to_ai_xml`은 `<표범위 형식="AI간결수식" 형식버전="1">`을 생성한다. 공유 API인
@@ -308,7 +314,7 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   직접 읽은 Excel merge area(병합 영역)를 `rowspan`/`colspan` HTML로 합성한 뒤 기존 XML model parser에
   넣는다. 마크다운은 병합·계층을 *그릴* 수 없어, 다단 헤더는 리프 헤더 행이 본문으로 내려가는 평면 구조로 둔다 —
   **의도된 동작, 이 구조는 건드리지 말 것**. 단 마크다운도 병합이 남긴 *빈칸은 채울 수 있다* —
-  ‘빈칸을 자동 채우기’ 옵션이 켜지면 `_fill_header_frame` 이 헤더 프레임만 forward-fill 한다(값
+  ‘그룹·분류 빈칸 채우기’ 옵션이 켜지면 `_fill_header_frame` 이 헤더 프레임만 forward-fill 한다(값
   영역 보존, 아래 옵션 항목 참조). 그래도 리프-본문 강등 구조 자체는 그대로다. XML 경로는: ① rowspan 값을 아래로
   채우고(forward-fill), ② 전체 열 병합 제목 행(단일 cell colspan=전체)은 건너뛰고, ③ 다단
   그룹 헤더는 `<th>`/`<thead>` 가 있으면 그걸로, 없으면(=실제 Excel 은 전부 `<td>`) **colspan 으로
@@ -316,7 +322,7 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   `model_to_xml` 이 `<열그룹>` 으로 중첩(평면 결합 금지). 실제 Excel 은 `th` 를 안 쓰므로 **colspan
   기반 헤더 추론을 제거하면 다단 헤더가 다시 깨진다.** (`html_table_to_rows` 는 이 모델을 한 줄
   헤더로 평면 결합한 뷰 — 마크다운·빈칸 채우기용.)
-- **‘빈칸을 자동 채우기’ 옵션(`fill_blanks`, 기본 꺼짐, `settings.py`/NSUserDefaults 영속)**: 병합을
+- **‘그룹·분류 빈칸 채우기’ 옵션(`fill_blanks`, 기본 꺼짐, `settings.py`/NSUserDefaults 영속)**: 병합을
   안 하고 빈칸으로 그룹을 표현한 표(직급을 그룹 첫 행에만 쓰고 아래는 비움 — 현실에서 흔함)를
   위해 빈칸을 채운다. **하나의 토글이 XML·마크다운 두 경로 공통**(2026-06-30 통합 — 옛 라벨 "XML:
   빈칸을 자동 채우기"에서 "XML:" 제거). 공통 가드: 열을 왼쪽→오른쪽으로 보다 **빈칸 없는(꽉 찬)
@@ -528,7 +534,7 @@ fallback 을 지킬 것(`register()`/`start()` 가 False 를 돌려줄 뿐 예�
 ## 버전 / 릴리스 관례
 - **Windows는 Microsoft Store 출시 앱**: Store ID `9NGS4C0N2Z6L`, identity `LIMOD.Tabledown`(정확한 공개 값은 `windows/packaging/store-identity.json`). GitHub 공개와 Store 업데이트 제출을 각각 확인한다. Store용 빌드는 `windows-store.yml`, 자체서명 시험용은 `windows-build.yml`이며, `Tabledown.Dev` 패키지를 Store에 제출하지 않는다.
 - **버전은 플랫폼별 2-트랙 (독립 SemVer)**: macOS = `tablemark/__init__.py` 의 `__version__`(현재 0.6.x 트랙),
-  Windows = `windows/tabledown_windows/__init__.py` 의 `__version__`(현재 0.2.x 트랙). Windows 는 macOS 버전을
+  Windows = `windows/tabledown_windows/__init__.py` 의 `__version__`(현재 0.3.x 트랙). Windows 는 macOS 버전을
   **따르지 않는다** — MSIX PackageVersion 이 이 값을 읽으므로 공유하면 잘못 찍힌다(그 파일 주석 참조). 버전
   언급 시 어느 플랫폼인지 명시.
 - CHANGELOG(`CHANGELOG.md`) 와 README 변경 이력(한 `README.md` / 영 `README.en.md`) 둘 다 갱신.

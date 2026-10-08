@@ -10,7 +10,7 @@ Windows용 Tabledown 이식 버전입니다. 기존 macOS 앱 파일은 그대�
 - **설치형 시험:** `Tabledown-0.2.8.0.msix`와 `Tabledown-dev.cer`, `INSTALL.txt`를 함께 받습니다. 자체 서명한 sideload 패키지이며 Microsoft Store 배포본은 아닙니다. 설치 안내에 따라 공개 인증서를 신뢰한 뒤 설치합니다. 개인키는 배포하지 않습니다.
 - `SHA256SUMS.txt`와 다운로드 파일의 SHA-256을 비교할 수 있습니다.
 
-2026-10-07 Windows 실행기에서 테스트 **193/193**, 실제 EXE의 자동 변환·한글/특수문자/줄바꿈·단축키 일시정지/재개·중복 실행, 패키지 서명·원본 소스 일치와 공개 다운로드를 확인했습니다. 실제 Excel PC 붙여넣기·MSIX 설치·재로그인 시작은 아직 확인하지 않았습니다. macOS의 직접 Markdown/일반 XML 메뉴는 Windows에 포함되지 않습니다.
+2026-10-07 Windows 실행기에서 테스트 **193/193**, 실제 EXE의 자동 변환·한글/특수문자/줄바꿈·단축키 일시정지/재개·중복 실행, 패키지 서명·원본 소스 일치와 공개 다운로드를 확인했습니다. 실제 Excel PC 붙여넣기·MSIX 설치·재로그인 시작은 아직 확인하지 않았습니다. 이 내용은 공개판 0.2.8의 당시 검증 기록입니다. 현재 개발판 0.3.2은 일반 XML의 Excel 직접 선택 읽기를 지원합니다.
 
 **Microsoft Store 업데이트:** 기존 공개본은 0.2.7.0이며, 0.2.8.0은 2026-10-07 Submission 5로 심사 제출했습니다. 현재 `In certification`으로 승인 후 자동 공개됩니다. Store 전용 패키지도 Windows 테스트 193/193과 실행·소스·identity 검증을 통과했습니다.
 
@@ -39,6 +39,14 @@ python run_windows.py
 1. Markdown table(마크다운 표)을 복사합니다.
 2. Excel에서 붙여넣습니다.
 3. HTML table clipboard format(클립보드 형식)을 Excel이 읽어 셀 단위로 붙여넣습니다.
+
+### XML 변환 복사 (개발판 0.3.2)
+
+Excel에서 제목 행과 데이터를 포함한 사각형 영역을 선택한 뒤 **‘XML 변환 복사’** 또는 **`Ctrl+Alt+X`** 를 누르세요. 먼저 복사할 필요가 없습니다. 현재 표시값·빈칸·병합 계층과 통합문서·시트·주소를 XML로 기록합니다. 수식 자체는 아래 수식 XML 명령으로 복사합니다.
+
+최대 10,000셀을 두 번 연속 읽어 값·선택·병합이 같을 때만 내보냅니다. 선택 경계를 걸친 병합, 좁은 숫자·날짜 열의 `###`, 값 합계 5,000,000자 또는 XML 10MB 초과는 중단합니다. 성공 시 클립보드는 XML text와 생성 표식만 남습니다. 모든 XML 명령은 한 번에 하나만 실행되며, 읽는 동안 새 내용을 복사하면 기존 작업의 쓰기를 취소합니다.
+
+별도의 ‘마크다운 복사’ 메뉴는 없습니다. Excel·Sheets ↔ Markdown은 위의 자동 복사·붙여넣기로 사용합니다.
 
 ### 셀 값·수식·참조를 XML로 복사
 
@@ -70,9 +78,7 @@ Tabledown은 수식을 실행하거나 재계산하지 않고 Excel의 현재 ra
   켜진 상태로 시작합니다(영속 안 함).
 - **셀 값·수식·참조를 XML로 복사** — 현재 Excel 선택 영역의 값 타입·원시값·계산 상태·주소·A1/R1C1 수식, 같은 통합문서의 직접 A1 참조값과 설명용 `값대입수식`을 cell-grid XML(셀 그리드 XML)로 복사합니다. 병합 계층·표시 서식은 포함하지 않으며 그 사실도 XML에 표시합니다. 전역 단축키는 `Ctrl+Alt+E`입니다.
 - **AI용 간결 복사** — 기존 수식 정보에 선택 안의 추정 맥락을 보강하고 공통 참조값의 반복을 줄입니다. 메뉴에서만 실행합니다.
-- **빈칸을 자동 채우기** (0.2.7) — 병합 셀이 남긴 헤더 빈칸을 마크다운 변환 시
-  forward-fill 합니다(헤더 프레임만, 값 영역은 보존). 기본 꺼짐이며 켜면 설정에
-  영속됩니다. macOS 0.5.0 의 `fill_blanks` 포팅.
+- **그룹·분류 빈칸 채우기** — 자동 Markdown에서는 병합된 열 그룹 제목을 가로로, 왼쪽 분류 열을 세로로 채웁니다. 일반 XML에서는 왼쪽 분류 열을 위쪽 값으로 채운 뒤 남은 빈칸을 왼쪽 값으로 채웁니다. 분류 열은 왼쪽부터 처음으로 빈칸 없는 본문 열의 앞까지로 추정하며, 그 열과 오른쪽 열의 본문 빈칸은 유지합니다. 수식 XML·원본 Excel·원본 HTML에는 적용하지 않습니다. 기본 꺼짐과 기존 `fill_blanks` 설정을 유지합니다.
 - **언어** — 표시 언어를 고릅니다(설정에 영속).
 - **로그인 시 자동 실행** (0.2.5) — Windows 로그인 시 앱을 자동 시작합니다.
   **MSIX 로 설치했을 때만** 메뉴에 표시됩니다(WinRT StartupTask 는 패키지 identity
@@ -148,7 +154,7 @@ Windows 포트 단위 테스트(변환 · i18n · CF_HTML · 핫키 · 단일 �
 
 ```powershell
 cd windows\tests
-..\.venv\Scripts\python -m unittest test_windows_port -v
+..\.venv\Scripts\python -m unittest test_windows_port test_windows_table -v
 ```
 
 트레이·StartupTask 테스트는 Windows 전용이라 다른 OS 에서는 자동 skip 됩니다.
@@ -157,7 +163,7 @@ cd windows\tests
 
 ```bash
 # macOS — 리포 루트에서
-cd windows/tests && ../../.venv/bin/python -m unittest test_windows_port -v
+cd windows/tests && ../../.venv/bin/python -m unittest test_windows_port test_windows_table -v
 ```
 
 ## 제한사항

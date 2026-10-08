@@ -9,4 +9,6 @@
 # 0.2.7: '빈칸을 자동 채우기' 토글(macOS 0.5.0 포팅) — 마크다운 변환 시 병합 헤더가 남긴
 #        빈칸을 forward-fill(헤더 프레임만, 값 영역 보존). 기본 꺼짐, 설정에 영속.
 # 0.2.8: 공유 Markdown 왕복 문자/줄바꿈 수정과 현재 수식 XML 기능 배포.
-__version__ = "0.2.8"
+# 0.3.2: Refresh the installed development build with current conversion and
+# formula safeguards, direct-selection general XML, and scoped blank-fill UI.
+__version__ = "0.3.2"

@@ -64,8 +64,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "formula.error.output_too_large": "생성될 수식 XML이 10MB를 넘습니다. 더 작은 범위를 선택하세요.",
         "formula.error.execution_failed": "Excel에서 표 값과 수식을 읽지 못했습니다. 셀 범위를 다시 선택한 뒤 재시도하세요.",
         "formula.error.invalid_response": "Excel에서 표 값과 수식을 읽지 못했습니다. 셀 범위를 다시 선택한 뒤 재시도하세요.",
-        "menu.fill_blanks": "빈칸을 자동 채우기",
-        "menu.fill_blanks_tooltip": "표를 변환할 때(마크다운·XML) 병합·빈 칸을 바로 위/좌측의 칸 값으로 자동 채웁니다. 헤더 영역만 채우고 데이터(값) 영역의 빈 칸은 그대로 둡니다.",
+        "menu.fill_blanks": "그룹·분류 빈칸 채우기",
+        "menu.fill_blanks_tooltip": "자동 Markdown 변환에서는 병합된 열 그룹 제목과 왼쪽 분류 열의 빈칸을 채웁니다. 일반 XML에서는 왼쪽 분류 열의 빈칸을 위쪽 값으로 채운 뒤, 남은 빈칸을 왼쪽 값으로 채웁니다. 분류 열은 왼쪽부터 처음으로 빈칸 없는 본문 열의 앞까지로 추정합니다. 본문에서 그 열과 오른쪽 열의 빈칸, 수식 XML, 원본 Excel·HTML은 그대로 둡니다.",
         "menu.settings": "설정",
         "menu.language": "언어",
         "menu.language.ko": "한국어",
@@ -89,11 +89,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "메뉴로 복사:\n"
             "Excel에서 제목과 항목명을 포함한 영역 하나를 선택한 뒤 메뉴를 누르세요. Cmd+C 없이 복사하고, 원하는 앱에 붙여넣습니다.\n"
             "\n"
-            "• 마크다운 복사: 열 배치·표시값·줄바꿈을 살려 노트와 문서로 옮깁니다. Markdown은 색상·글꼴·열 너비·병합 모양을 표현하지 못합니다. 첫 행은 제목 행이며 병합 빈칸은 설정에 따라 유지하거나 채웁니다.\n"
             "• XML 변환 복사 (⌘⌃X): AI가 표를 읽기 좋게 표시값·빈칸·그룹 구조·실제 병합 범위·출처를 담습니다. 수식 자체는 포함하지 않습니다.\n"
             "• 수식 포함 XML 변환 복사 (⌘⌃E): AI가 계산을 설명할 수 있도록 현재 값·값 타입·계산 상태·A1/R1C1 수식·직접 A1 참조값을 담습니다. 선택 안의 제목·항목 후보를 추정으로 연결하고 반복 참조는 한 번 기록합니다. 병합 계층·표시 서식은 포함하지 않습니다. 연결된 값을 읽을 수 있도록 XML 전체를 붙여넣으세요.\n"
             "\n"
-            "‘빈칸을 자동 채우기’는 Markdown·일반 XML의 그룹/헤더 빈칸만 채우며 데이터 빈칸은 유지합니다.\n"
+            "‘그룹·분류 빈칸 채우기’: 자동 Markdown 변환에서는 병합된 열 그룹 제목과 왼쪽 분류 열의 빈칸을 채웁니다. 일반 XML에서는 왼쪽 분류 열의 빈칸을 위쪽 값으로 채운 뒤, 남은 빈칸을 왼쪽 값으로 채웁니다. 분류 열은 왼쪽부터 처음으로 빈칸 없는 본문 열의 앞까지로 추정합니다. 본문에서 그 열과 오른쪽 열의 빈칸, 수식 XML, 원본 Excel·HTML은 그대로 둡니다.\n"
             "복사 중에는 세 메뉴가 잠시 비활성화됩니다. 큰 범위는 수십 초 걸릴 수 있습니다. 그사이 다른 내용을 복사하면 새 클립보드를 보호합니다.\n"
             "복사가 완료되면 메뉴바 아이콘이 잠깐 체크 표시로 바뀝니다.\n"
             "\n"
@@ -152,8 +151,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "formula.error.output_too_large": "The generated formula XML would exceed 10 MB. Select a smaller range.",
         "formula.error.execution_failed": "Couldn't read table values and formulas from Excel. Select the cell range again and retry.",
         "formula.error.invalid_response": "Couldn't read table values and formulas from Excel. Select the cell range again and retry.",
-        "menu.fill_blanks": "Auto-fill blank cells",
-        "menu.fill_blanks_tooltip": "When converting a table (Markdown or XML), merged/blank cells are auto-filled from the cell directly above or to the left. Only header areas are filled; data (value) cells are left as-is.",
+        "menu.fill_blanks": "Fill group and category blanks",
+        "menu.fill_blanks_tooltip": "Automatic Markdown conversion fills merged column-group headings and blanks in the left grouping columns. General XML fills the left grouping columns from above, then from the left. Grouping columns are inferred as those before the first body column with no blanks, starting from the left. Body blanks in that column and to its right, formula XML, and the original Excel cells and HTML are unchanged.",
         "menu.settings": "Settings",
         "menu.language": "Language",
         "menu.language.ko": "한국어",
@@ -177,11 +176,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Copy from the menu:\n"
             "Select one range in Excel including headers and item names, then click a copy command. Without Cmd+C, it copies the selection for pasting into another app.\n"
             "\n"
-            "• Copy Markdown: keep column layout, displayed values, and line breaks for notes and documents. Markdown cannot reproduce colors, fonts, column widths, or merged-cell shapes. The first row becomes the header; merged blanks follow your fill setting.\n"
             "• Copy as XML (⌘⌃X): share displayed values, blanks, grouped structure, exact merge ranges, and source information with AI. Formula text is not included.\n"
             "• Copy as XML with Formulas (⌘⌃E): share current values, value types, calculation state, A1/R1C1 formulas, and direct A1 reference values with AI. Headers and item names within the selection are linked as inferred context; repeated references are listed once. Merge hierarchy and display formatting are not included. Paste the complete XML so the reference values remain available.\n"
             "\n"
-            "‘Auto-fill blank cells’ fills grouping/header blanks in Markdown and general XML while preserving data blanks.\n"
+            "Fill group and category blanks: Automatic Markdown conversion fills merged column-group headings and blanks in the left grouping columns. General XML fills the left grouping columns from above, then from the left. Grouping columns are inferred as those before the first body column with no blanks, starting from the left. Body blanks in that column and to its right, formula XML, and the original Excel cells and HTML are unchanged.\n"
             "All three commands pause while copying. Large selections can take tens of seconds. New clipboard content copied during this time is protected.\n"
             "The menu bar icon briefly shows a checkmark after successful copying.\n"
             "\n"

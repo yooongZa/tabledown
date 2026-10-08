@@ -8,10 +8,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 import re
+import sys
 from typing import Callable, Protocol
 
-from AppKit import NSRunningApplication, NSWorkspace
-from Foundation import NSAppleScript
+# The Windows table reader reuses the immutable table model and serializers.
+# Only the native macOS executor needs Apple frameworks; keep its globals on
+# macOS for existing native tests and avoid importing them on Windows.
+if sys.platform == "darwin":
+    from AppKit import NSRunningApplication, NSWorkspace
+    from Foundation import NSAppleScript
 
 from .converter.formula_export import (
     MAX_FORMULA_CHARACTERS,

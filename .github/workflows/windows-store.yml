@@ -31,7 +31,7 @@ jobs:
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           Push-Location windows/tests
-          try { ../.venv/Scripts/python -m unittest test_windows_port -v }
+          try { ../.venv/Scripts/python -m unittest test_windows_port test_windows_table -v }
           finally { Pop-Location }
           windows/.venv/Scripts/python -m unittest tests.test_markdown_roundtrip tests.test_formula_export tests.test_formula_ai_export -v
 

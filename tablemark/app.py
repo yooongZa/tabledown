@@ -140,10 +140,6 @@ class TabledownApp(rumps.App):
             key="e",
         )
         self._show_cmd_ctrl_shortcut(self.copy_excel_formulas_item)
-        self.copy_markdown_item = rumps.MenuItem(
-            t("menu.copy_markdown", self.lang),
-            callback=self.copy_as_markdown,
-        )
         self.fill_blanks_item = rumps.MenuItem(
             t("menu.fill_blanks", self.lang),
             callback=self.toggle_fill_blanks,
@@ -189,7 +185,6 @@ class TabledownApp(rumps.App):
         # Order: actions, then preferences, then help/support/quit.
         menu_items = [
             self.toggle_item,
-            self.copy_markdown_item,
             self.copy_xml_item,
             self.copy_excel_formulas_item,
             None,  # separator
@@ -654,7 +649,6 @@ class TabledownApp(rumps.App):
         self._update_explicit_export_menu()
         enabled = export_kind is None
         for item in (
-            self.copy_markdown_item,
             self.copy_xml_item,
             self.copy_excel_formulas_item,
         ):
@@ -678,12 +672,7 @@ class TabledownApp(rumps.App):
             ),
             self.lang,
         )
-        self.copy_markdown_item.title = t(
-            "menu.copy_markdown_busy" if active == _EXPORT_MARKDOWN else "menu.copy_markdown",
-            self.lang,
-        )
         for item, key in (
-            (self.copy_markdown_item, "menu.copy_markdown_tooltip"),
             (self.copy_xml_item, "menu.copy_xml_tooltip"),
             (self.copy_excel_formulas_item, "menu.copy_excel_formulas_tooltip"),
         ):

@@ -386,7 +386,7 @@ class CopyAsMarkdownActionTests(unittest.TestCase):
             patch("tablemark.app.AppHelper.callAfter", side_effect=lambda cb, *args: queued.append((cb, args))),
         ):
             app.copy_as_markdown(None)
-            for item in (app.copy_markdown_item, app.copy_xml_item, app.copy_excel_formulas_item):
+            for item in (app.copy_xml_item, app.copy_excel_formulas_item):
                 item._menuitem.setEnabled_.assert_called_with(False)
             app.copy_as_markdown(None)
             app.copy_as_xml(None)
@@ -397,7 +397,7 @@ class CopyAsMarkdownActionTests(unittest.TestCase):
         callback, args = queued[0]
         callback(*args)
         self.writer.assert_called_once()
-        for item in (app.copy_markdown_item, app.copy_xml_item, app.copy_excel_formulas_item):
+        for item in (app.copy_xml_item, app.copy_excel_formulas_item):
             item._menuitem.setEnabled_.assert_called_with(True)
         self.assertFalse(app._explicit_export_lock.locked())
 

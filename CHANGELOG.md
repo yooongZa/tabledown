@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### 2026-10-08 — 복사 메뉴 정리·Windows 개발판 수정 및 양쪽 실기기 검증
+
+- **메뉴·설명:** macOS의 명시적 ‘마크다운 복사’ 메뉴를 제거하고 Windows에도 해당 메뉴가 없는 것을 확인했다. 자동 Excel/Sheets ↔ Markdown은 유지한다. 두 플랫폼의 설정 이름을 **‘그룹·분류 빈칸 채우기’**로 바꾸고 한·영 도움말·macOS tooltip에 자동 Markdown의 열 그룹 제목/왼쪽 분류 열, 일반 XML의 왼쪽 분류 열, 본문 열의 추정 기준과 적용 제외 범위를 설명했다. 기존 `fill_blanks` 키·기본 OFF·원본 Excel/HTML·수식 XML을 보존했다.
+- **Windows 일반 XML:** `excel_table.py`에서 현재 Excel 선택의 표시값·빈칸·병합을 COM으로 읽고 두 번 연속 같은 snapshot만 공유 v2 XML model/serializer로 변환한다. Ctrl+Alt+X·일반 XML 메뉴를 추가했다. 기존 clipboard를 입력으로 쓰지 않으며, 세 XML 명령이 실행 lock·설정 snapshot·generation 검증·text-only writer를 공유한다. 10,000셀·5,000,000자·XML 10MB 상한, 표시 overflow·부분 병합 거부, 새 복사 보호를 적용했다. macOS 전용 framework import는 플랫폼 조건 안으로 한정했다.
+- **개발판 설치:** 이전 Windows 설치 0.3.0에 빠졌던 현재 소스의 문자/줄바꿈 왕복·수식 참조/값 타입/계산 상태·안정 읽기·새 복사 보호를 포함해 새 개발판을 만들었다. 최초 후보 0.3.1 기능 시험 후 본문 빈칸 설명을 명확히 한 **Tabledown.Dev 0.3.2.0**을 최종 설치했다. 변환 코드 일치를 확인하고 마지막 메뉴/도움말/빈칸 설정/두 XML을 재시험했다. iMac은 **macOS 0.6.2 QA** 앱을 갱신했다. 공개 릴리스·Store 제출은 하지 않았다.
+- **자동 검증:** 로컬 Mac·iMac 단위 각 **282/282**, 실제 Windows PC **208/208**(새 일반 XML 테스트 15개 포함), converter/i18n **62/62**. Windows CI 테스트와 번들 소스 검사 대상에 새 경로를 포함했다. 주요 명령은 `python -m unittest discover -s tests -v`, Windows `python windows_unit.py`, `run_converter_tests()/run_i18n_tests()`다.
+- **실기기:** SSH 사용자 데스크톱의 설치 EXE·iMac QA 앱으로 최종 시나리오 Windows **30개**, iMac **31개**를 통과했다(준비·성능 포함, 마지막 문구 빌드의 추가 smoke 검증은 별도 기록). 실제 Excel ↔ Markdown 문자/줄바꿈·네이티브 병합 재붙여넣기·표시 서식·일반 XML 현재 선택·수식 타입/참조·빈칸 OFF/ON·새 복사 취소/재시도·10,000셀 경계와 초과 거부를 확인했다. 잘못된 관찰 도구 가정은 보정 후 재시험했으며 초기 실패 기록을 보존했다.
+- **성능:** 동일 참조를 공유하는 88/808/4,008셀(10/100/500수식)을 각 3회 실제 단축키→clipboard로 측정했다. Windows 중앙값 **0.30/1.37/6.13초**, iMac **2.38/3.51/17.52초**이며 숫자 표현을 정규화한 선택값·A1/R1C1 수식이 일치했다. 같은 4,008셀 일반 XML은 **7.85/9.93초**다. CPU·Excel·Python·COM/Apple Events와 입력 전달 비용을 포함한다. XML 전체·계산 상태·기본 수식 메뉴 형식까지 동일하다는 뜻은 아니다.
+- **한계·복원:** Windows Excel이 부분 병합 선택을 전체 병합 범위로 확장해, 실제 부분 병합 거부는 미재현(단위 검증 통과)이다. 선택이 바뀐 뒤 두 snapshot이 같아지면 안정된 새 선택을 내보내는 기존 bounded retry 동작도 확인했다. iMac의 별도 500개 다른 참조 표는 40.04초, 10,000셀 일반/수식 XML은 38.88/40.51초로 큰 표의 대기가 남는다. 시험 문서·클립보드·설정·Flow를 복원하고 Windows 임시 작업을 제거했다. Windows 번들 21개 모듈/설치 EXE 해시, iMac 16개 소스/재실행 후 서명을 확인했다. 근거: `outputs/cross_platform_fix_20261008/REPORT.html`·`FINAL-RESULT.json`.
+
 ### 2026-10-08 — 설치 개발판 0.3.0 실제 Excel 재검증
 
 - **검증 대상 정정:** 사용자가 지정한 개발판을 확인하기 위해 실제 실행 중인 `Tabledown.Dev 0.3.0.0`을 그대로 시험했다. 앞선 공개판 0.2.8/현재 소스의 통과·속도 결과는 이 개발판에 적용되지 않는다. 실행 파일 SHA-256은 `b4f3e631139666e0862708b8bbe8db5fb2138a0b45438043d9d4a332611d0557`; 현재 소스 reader를 대신 호출하지 않고 개발판 Ctrl+Alt+E/X·출력·로그와 실제 Excel Copy/Paste를 확인했다.

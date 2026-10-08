@@ -14,6 +14,7 @@ spreadsheet-pasteable format — by watching the system clipboard.
   it detects a table, writes the converted text/HTML formats back to the **same
   clipboard**. All conversion happens **on your PC**; nothing is sent to any
   external server.
+- When you choose **Copy as XML**, the app reads the current Excel selection's displayed values, blank cells, merge ranges and source addresses locally, then writes XML to the clipboard. It does not read a previously copied table as a substitute.
 - When you explicitly choose **Copy cell values, formulas, and references as XML**, the app locally
   reads cell values, blanks, formula text, and addresses from the current
   Microsoft Excel selection, plus current values from direct static A1 references
@@ -26,7 +27,7 @@ spreadsheet-pasteable format — by watching the system clipboard.
   It records short status messages (e.g. "clipboard formats updated") — **not**
   the full clipboard contents — never leaves your device, and you can delete it
   at any time.
-- User settings (language, first-run flag, auto-fill blank cells preference) are
+- User settings (language, first-run flag, group/category blank-fill preference) are
   stored locally in `%APPDATA%\Tabledown\settings.json`.
 
 Because clipboard conversion must run in the background, the app uses the
@@ -44,6 +45,7 @@ Contact: <sukmack@gmail.com>
 - 앱은 Windows 클립보드의 현재 내용을 로컬에서 읽고, 표를 감지하면 변환한
   text/HTML 형식을 **같은 클립보드**에 다시 기록합니다. 모든 변환은 **사용자의 PC
   안에서만** 처리되며 외부 서버로 전송되지 않습니다.
+- **‘XML 변환 복사’** 를 실행하면 현재 Excel 선택 영역의 표시값·빈칸·병합 범위·출처 주소를 로컬에서 읽어 클립보드에 XML로 기록합니다. 과거에 복사한 표를 대신 읽지 않습니다.
 - 사용자가 **‘셀 값·수식·참조를 XML로 복사’** 를 명시적으로 실행한 경우에만 현재 Microsoft
   Excel 선택 영역의 셀 값·빈칸·수식·주소와 수식에 직접 적힌 같은 통합문서의 정적 A1
   참조값을 로컬에서 읽어 같은 클립보드에 XML을 기록합니다. 셀 값과 수식 내용은 진단
@@ -53,7 +55,7 @@ Contact: <sukmack@gmail.com>
 - 진단 로그는 앱 동작 확인용으로 `%LOCALAPPDATA%\Tabledown\Tabledown.log` 에만
   저장됩니다. 짧은 상태 메시지(예: "clipboard formats updated")만 기록하고 클립보드
   원문 전체는 기록하지 않으며, 외부로 전송되지 않고 사용자가 직접 삭제할 수 있습니다.
-- 사용자 설정(언어, 첫 실행 플래그, 빈칸 자동 채우기 설정)은
+- 사용자 설정(언어, 첫 실행 플래그, 그룹·분류 빈칸 채우기 설정)은
   `%APPDATA%\Tabledown\settings.json` 에 로컬로 저장됩니다.
 
 클립보드 변환은 백그라운드에서 동작해야 하므로 앱은 `runFullTrust` 권한과 Win32

@@ -34,6 +34,7 @@ MOD_NOREPEAT = 0x4000  # one WM_HOTKEY per press, not autorepeat-spammed
 # Virtual-key codes (VK is the uppercase ASCII for letters/digits).
 VK_E = 0x45
 VK_T = 0x54
+VK_X = 0x58
 
 # Window messages.
 _WM_QUIT = 0x0012

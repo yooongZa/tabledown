@@ -36,7 +36,7 @@ HTML_DOCUMENT = (
     "<p>After</p></body></html>"
 )
 # A bare table with a vertical merge (부장 spans 2 rows) — mirrors HTML_MD_VKEY in
-# scripts/run_test_matrix.py. The "빈칸을 자동 채우기" toggle (0.5.0) forward-fills
+# scripts/run_test_matrix.py. The "그룹·분류 빈칸 채우기" toggle (0.5.0) forward-fills
 # the merged key column in the Markdown path; off by default the blank stays.
 HTML_MERGED_VKEY = (
     "<table><tr><th>직급</th><th>이름</th><th>금액</th></tr>"
@@ -293,10 +293,10 @@ class WindowsPortTests(unittest.TestCase):
                 self.assertNotEqual(t(key, lang), key)
 
     def test_fill_blanks_translations_exist(self):
-        # The 0.5.0 "빈칸을 자동 채우기" label must resolve in each language, not
+        # The 0.5.0 "그룹·분류 빈칸 채우기" label must resolve in each language, not
         # fall back to the bare key.
-        self.assertEqual(t("menu.fill_blanks", "ko"), "빈칸을 자동 채우기")
-        self.assertEqual(t("menu.fill_blanks", "en"), "Auto-fill blank cells")
+        self.assertEqual(t("menu.fill_blanks", "ko"), "그룹·분류 빈칸 채우기")
+        self.assertEqual(t("menu.fill_blanks", "en"), "Fill group and category blanks")
 
     def test_excel_formula_export_translations_exist(self):
         self.assertEqual(
@@ -2187,12 +2187,14 @@ class LoginMenuTests(unittest.TestCase):
              mock.patch.object(
                  app._formula_hotkey, "start", return_value=True
              ) as formula_start, \
+             mock.patch.object(app._xml_hotkey, "start", return_value=True) as xml_start, \
              mock.patch.object(app.icon, "run") as icon_run:
             app.run()
 
         worker.return_value.start.assert_called_once_with()
         toggle_start.assert_called_once_with()
         formula_start.assert_called_once_with()
+        xml_start.assert_called_once_with()
         icon_run.assert_called_once_with(setup=app._on_ready)
 
     def test_quit_stops_toggle_and_formula_hotkeys(self):
@@ -2200,12 +2202,14 @@ class LoginMenuTests(unittest.TestCase):
 
         with mock.patch.object(app._hotkey, "stop") as toggle_stop, \
              mock.patch.object(app._formula_hotkey, "stop") as formula_stop, \
+             mock.patch.object(app._xml_hotkey, "stop") as xml_stop, \
              mock.patch.object(app.icon, "stop") as icon_stop:
             app.quit_app(None, None)
 
         self.assertTrue(app._stop_watcher.is_set())
         toggle_stop.assert_called_once_with()
         formula_stop.assert_called_once_with()
+        xml_stop.assert_called_once_with()
         icon_stop.assert_called_once_with()
 
     def test_excel_formula_export_starts_daemon_worker(self):

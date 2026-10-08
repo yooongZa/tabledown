@@ -113,13 +113,15 @@ def verify():
             for base, prefix in [(WINDOWS / "tabledown_windows", "tabledown_windows"), (ROOT / "tablemark/converter", "tablemark.converter")]:
                 for source in base.glob("*.py"):
                     name = prefix if source.stem == "__init__" else prefix + "." + source.stem
-                    # General table XML is a macOS action. Windows imports the
-                    # formula serializers, so PyInstaller omits this unused module.
-                    if name == "tablemark.converter.table_xml":
-                        continue
                     expected = compile(source.read_bytes(), str(source), "exec", dont_inherit=True, optimize=0)
                     assert normalized(pyz.extract(name)) == normalized(expected), name
                     modules[name] = sha(source.read_bytes())
+            for name in ("excel_table", "excel_formula"):
+                source = ROOT / "tablemark" / (name + ".py")
+                module = "tablemark." + name
+                expected = compile(source.read_bytes(), str(source), "exec", dont_inherit=True, optimize=0)
+                assert normalized(pyz.extract(module)) == normalized(expected), module
+                modules[module] = sha(source.read_bytes())
             assert "win32com.client" in pyz.toc and "pythoncom" in pyz.toc
             assert any("winsdk" in n and n.endswith(".pyd") for n in files)
             report["checks"]["bundled_sources"] = modules

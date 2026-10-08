@@ -17,10 +17,14 @@ from tablemark.converter.formula_export import (
     formula_selection_to_xml,
 )
 
+from tablemark.converter.table_xml import TableXmlTooLargeError
+from tablemark.excel_formula import ExcelFormulaError
+
 from . import diagnostics, single_instance, startup_task
 from .conversion import converted_clipboard
 from .excel_formula import read_stable_selected_excel_formulas
-from .hotkey import MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, VK_E, VK_T, GlobalHotkey
+from .excel_table import read_stable_selected_excel_table, selection_to_xml
+from .hotkey import MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, VK_E, VK_T, VK_X, GlobalHotkey
 from .i18n import SUPPORTED_LANGUAGES, resolve_language, save_preferred_language, t
 from .logger import log
 from .settings import load_settings, save_setting
@@ -34,7 +38,7 @@ from .win_clipboard import (
 )
 
 WELCOME_SHOWN_KEY = "welcome_shown"
-# Persisted "빈칸을 자동 채우기" preference (0.5.0, parity with macOS fill_blanks).
+# Persisted group/category blank-fill preference; keep the existing setting key.
 # Off by default so a merge stays blank unless the user opts in.
 FILL_BLANKS_KEY = "fill_blanks"
 
@@ -100,6 +104,10 @@ class TabledownWindowsApp:
             self._copy_selected_excel_formulas_from_hotkey,
         )
 
+        self._xml_hotkey = GlobalHotkey(
+            MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_X, self._copy_as_xml_from_hotkey
+        )
+
     def run(self) -> None:
         watcher = threading.Thread(
             target=self._watch_clipboard,
@@ -116,6 +124,10 @@ class TabledownWindowsApp:
             log("windows Excel formula hotkey registered")
         else:
             log("windows Excel formula hotkey not registered")
+        if self._xml_hotkey.start():
+            log("windows Excel table hotkey registered")
+        else:
+            log("windows Excel table hotkey not registered")
         # setup runs on a pystray thread once the icon is ready; the first-run
         # welcome goes through _show_message_box_async, so it never blocks.
         self.icon.run(setup=self._on_ready)
@@ -139,6 +151,7 @@ class TabledownWindowsApp:
                 self.toggle,
                 checked=lambda _item: self.enabled,
             ),
+            pystray.MenuItem(t("menu.copy_xml", self.lang), self.copy_as_xml),
             pystray.MenuItem(
                 t("menu.copy_excel_formulas", self.lang),
                 self.copy_selected_excel_formulas,
@@ -269,6 +282,13 @@ class TabledownWindowsApp:
             t("help.message", self.lang), t("help.title", self.lang)
         )
 
+    def copy_as_xml(self, _icon, _item) -> None:
+        """Read the current Excel selection without a clipboard fallback."""
+        self._copy_selected_excel_formula_xml(compact_for_ai=False, table=True)
+
+    def _copy_as_xml_from_hotkey(self) -> None:
+        self.copy_as_xml(None, None)
+
     def copy_selected_excel_formulas(self, _icon, _item) -> None:
         """Export the active Excel table values and formulas without blocking."""
         self._copy_selected_excel_formula_xml(compact_for_ai=False)
@@ -277,14 +297,20 @@ class TabledownWindowsApp:
         """Copy AI context and shared references from the same stable selection."""
         self._copy_selected_excel_formula_xml(compact_for_ai=True)
 
-    def _copy_selected_excel_formula_xml(self, *, compact_for_ai: bool) -> None:
-        # Both actions share the reader, clipboard generation and export gate.
+    def _copy_selected_excel_formula_xml(self, *, compact_for_ai: bool, table: bool = False) -> None:
+        # All XML actions share the clipboard generation and export gate.
         # The regular menu and its hotkey retain the original XML serializer.
-        serialize = formula_selection_to_ai_xml if compact_for_ai else formula_selection_to_xml
+        fill_blanks = bool(getattr(self, "fill_blanks", False))
+        serialize = (
+            (lambda selection: selection_to_xml(selection, fill_blanks=fill_blanks))
+            if table else formula_selection_to_ai_xml if compact_for_ai else formula_selection_to_xml
+        )
+        prefix = "table_export" if table else "formula_export"
+        operation = "excel table" if table else "excel formula"
 
         if not self._formula_export_lock.acquire(blocking=False):
             self._show_message_box_async(
-                t("formula_export.error.in_progress", self.lang),
+                t(f"{prefix}.error.in_progress", self.lang),
                 t("help.title", self.lang),
             )
             return
@@ -296,9 +322,9 @@ class TabledownWindowsApp:
                 expected_change_count = clipboard_change_count()
         except Exception as exc:  # noqa: BLE001 - content-free startup failure
             self._formula_export_lock.release()
-            log(f"excel formula export start failed: {type(exc).__name__}")
+            log(f"{operation} export start failed: {type(exc).__name__}")
             self._show_message_box_async(
-                t("formula_export.error.export_failed", self.lang),
+                t(f"{prefix}.error.export_failed", self.lang),
                 t("help.title", self.lang),
             )
             return
@@ -308,25 +334,32 @@ class TabledownWindowsApp:
                 if self._stop_watcher.is_set():
                     return
                 try:
-                    result = read_stable_selected_excel_formulas()
+                    result = (
+                        read_stable_selected_excel_table(is_cancelled=lambda: (
+                            self._stop_watcher.is_set()
+                            or clipboard_change_count() != expected_change_count
+                        )) if table else read_stable_selected_excel_formulas()
+                    )
                 except Exception as exc:  # noqa: BLE001 - guard daemon worker
-                    log(f"excel formula read failed: {type(exc).__name__}")
+                    log(f"{operation} read failed: {type(exc).__name__}")
                     self._show_message_box_async(
-                        t("formula_export.error.export_failed", self.lang),
+                        t(f"{prefix}.error.export_failed", self.lang),
                         t("help.title", self.lang),
                     )
                     return
                 if not result.ok:
-                    key = f"formula_export.error.{result.code}"
+                    key = f"{prefix}.error.{result.code}"
                     message = t(key, self.lang)
                     if message == key:
                         safe_code = "unknown"
-                        message = t("formula_export.error.export_failed", self.lang)
+                        message = t(f"{prefix}.error.export_failed", self.lang)
                     else:
                         safe_code = result.code
                     # Only a localized, known code reaches the shareable log.
                     # An unexpected adapter payload is reduced to "unknown".
-                    log(f"excel formula export failed: {safe_code}")
+                    log(f"{operation} export failed: {safe_code}")
+                    if self._stop_watcher.is_set():
+                        return
                     self._show_message_box_async(message, t("help.title", self.lang))
                     return
 
@@ -342,48 +375,58 @@ class TabledownWindowsApp:
                             expected_change_count=expected_change_count,
                         )
                 except ClipboardChangedError:
-                    log("excel formula export cancelled: clipboard_changed")
+                    log(f"{operation} export cancelled: clipboard_changed")
                     self._show_message_box_async(
                         t(
-                            "formula_export.error.clipboard_changed",
+                            f"{prefix}.error.clipboard_changed",
                             self.lang,
                         ),
                         t("help.title", self.lang),
                     )
                     return
-                except FormulaXmlTooLargeError:
-                    log("excel formula export failed: output_too_large")
+                except (FormulaXmlTooLargeError, TableXmlTooLargeError):
+                    log(f"{operation} export failed: output_too_large")
                     self._show_message_box_async(
                         t(
-                            "formula_export.error.output_too_large",
+                            f"{prefix}.error.output_too_large",
                             self.lang,
                         ),
                         t("help.title", self.lang),
                     )
                     return
                 except ClipboardWriteError:
-                    log("excel formula clipboard write failed: clipboard_write_failed")
+                    log(f"{operation} clipboard write failed: clipboard_write_failed")
                     self._show_message_box_async(
                         t(
-                            "formula_export.error.clipboard_write_failed",
+                            f"{prefix}.error.clipboard_write_failed",
                             self.lang,
                         ),
                         t("help.title", self.lang),
                     )
                     return
-                except Exception as exc:  # noqa: BLE001 - omit formula-bearing details
-                    log(f"excel formula clipboard write failed: {type(exc).__name__}")
+                except ExcelFormulaError as exc:
+                    key = f"{prefix}.error.{exc.code}"
+                    known = t(key, self.lang) != key
+                    log(f"{operation} export failed: {exc.code if known else 'unknown'}")
                     self._show_message_box_async(
-                        t("formula_export.error.export_failed", self.lang),
+                        t(key if known else f"{prefix}.error.export_failed", self.lang),
+                        t("help.title", self.lang),
+                    )
+                    return
+                except Exception as exc:  # noqa: BLE001 - omit formula-bearing details
+                    log(f"{operation} clipboard write failed: {type(exc).__name__}")
+                    self._show_message_box_async(
+                        t(f"{prefix}.error.export_failed", self.lang),
                         t("help.title", self.lang),
                     )
                     return
 
                 if self._stop_watcher.is_set():
                     return
-                log("excel table-with-formulas export succeeded")
-                notice = formula_copy_notice_key(result.selection)
+                log("excel table export succeeded" if table else "excel table-with-formulas export succeeded")
+                notice = None if table else formula_copy_notice_key(result.selection)
                 success_key = (
+                    "table_export.success" if table else
                     f"formula_export.success.{notice}"
                     if notice is not None
                     else "formula_export.success.ai" if compact_for_ai else "formula_export.success"
@@ -402,9 +445,9 @@ class TabledownWindowsApp:
             ).start()
         except Exception as exc:  # noqa: BLE001 - constructor/start failure must unlock
             self._formula_export_lock.release()
-            log(f"excel formula worker failed to start: {type(exc).__name__}")
+            log(f"{operation} worker failed to start: {type(exc).__name__}")
             self._show_message_box_async(
-                t("formula_export.error.export_failed", self.lang),
+                t(f"{prefix}.error.export_failed", self.lang),
                 t("help.title", self.lang),
             )
 
@@ -444,6 +487,7 @@ class TabledownWindowsApp:
         self._stop_watcher.set()
         self._hotkey.stop()
         self._formula_hotkey.stop()
+        self._xml_hotkey.stop()
         self.icon.stop()
 
     def _set_language(self, code: str) -> None:

@@ -13,8 +13,26 @@ DEFAULT_LANGUAGE = "en"
 
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "ko": {
+        "menu.copy_xml": "XML 변환 복사",
+        "table_export.success": "선택한 표의 표시값·병합 구조를 XML로 복사했습니다.",
+        "table_export.error.in_progress": "XML 복사가 이미 진행 중입니다. 완료될 때까지 기다려 주세요.",
+        "table_export.error.clipboard_changed": "표를 읽는 동안 새 내용이 복사되어 XML 복사를 취소했습니다. 새 클립보드는 유지됩니다.",
+        "table_export.error.clipboard_write_failed": "XML을 클립보드에 기록하지 못했습니다. 클립보드 내용이 완전하지 않을 수 있으니 다시 복사하세요.",
+        "table_export.error.output_too_large": "생성될 XML이 10MB를 넘습니다. 더 작은 범위를 선택하세요.",
+        "table_export.error.excel_not_running": "실행 중인 Excel을 찾을 수 없습니다.",
+        "table_export.error.selection_not_range": "Excel에서 제목 행을 포함한 셀 범위를 선택하세요.",
+        "table_export.error.multiple_areas": "서로 떨어진 여러 범위는 지원하지 않습니다. 하나의 연속된 범위를 선택하세요.",
+        "table_export.error.too_large": "선택 범위가 너무 큽니다. 10,000개 이하의 셀을 선택하세요.",
+        "table_export.error.multiple_instances": "여러 Excel 프로세스가 실행 중입니다. 다른 Excel 창을 닫고 다시 시도하세요.",
+        "table_export.error.too_much_text": "선택한 셀 값이 너무 큽니다. 더 작은 범위를 선택하세요.",
+        "table_export.error.selection_changed": "읽는 동안 선택 영역·표시값·병합이 바뀌었습니다. 범위를 다시 선택해 복사하세요.",
+        "table_export.error.com_failure": "Excel의 표시값·병합 정보를 읽지 못했습니다. 셀 범위를 다시 선택해 복사하세요.",
+        "table_export.error.export_failed": "선택한 표를 XML로 복사하지 못했습니다.",
+        "table_export.error.partial_merge": "선택 경계를 걸친 병합 셀이 있습니다. 병합 영역 전체를 포함해 선택하세요.",
+        "table_export.error.display_overflow": "열이 좁아 숫자나 날짜가 ###로 표시됩니다. Excel 열 너비를 늘린 뒤 다시 복사하세요.",
+        "table_export.error.no_table": "제목 행과 데이터 행을 함께 선택하세요.",
         "menu.toggle": "Tabledown 사용",
-        "menu.fill_blanks": "빈칸을 자동 채우기",
+        "menu.fill_blanks": "그룹·분류 빈칸 채우기",
         "menu.copy_excel_formulas": "셀 값·수식·참조를 XML로 복사",
         "menu.copy_excel_formulas_ai": "AI용 간결 복사",
         "menu.language": "언어",
@@ -28,7 +46,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "formula_export.success.partial_references": "수식과 현재 결과를 복사했습니다. 일부 참조값을 가져오지 못한 부분은 복사한 내용에 표시했습니다.",
         "formula_export.success.calculation_incomplete": "수식과 현재 결과를 복사했습니다. Excel이 계산 중이어서 결과가 달라질 수 있습니다. 최신 결과가 필요하면 계산이 끝난 뒤 다시 복사하세요.",
         "formula_export.success.partial_references_and_calculation": "수식과 현재 결과를 복사했습니다. 일부 참조값이 빠져 있고 Excel도 계산 중입니다. 최신 결과가 필요하면 계산이 끝난 뒤 다시 복사하세요.",
-        "formula_export.error.in_progress": "수식 XML 내보내기가 이미 진행 중입니다. 완료될 때까지 기다려 주세요.",
+        "formula_export.error.in_progress": "XML 복사가 이미 진행 중입니다. 완료될 때까지 기다려 주세요.",
         "formula_export.error.clipboard_changed": "XML을 준비하는 동안 새 내용이 복사되어 보호를 위해 내보내기를 취소했습니다. 필요하면 수식 XML 복사 명령을 다시 실행해 주세요.",
         "formula_export.error.clipboard_write_failed": "수식 XML은 준비했지만 클립보드에 기록하지 못했습니다. 클립보드 내용이 완전하지 않을 수 있으니 명령을 다시 실행해 주세요.",
         "formula_export.error.output_too_large": "생성될 수식 XML이 10MB를 넘습니다. 더 작은 범위를 선택해 주세요.",
@@ -57,11 +75,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "welcome.intro": "Tabledown 이 작업 표시줄 알림 영역(트레이)에서 실행 중입니다 — 표 모양 아이콘을 찾아보세요.",
         "help.message": (
             "Excel ↔ Markdown 표 변환기\n\n"
+            "그룹·분류 빈칸 채우기: 자동 Markdown 변환에서는 병합된 열 그룹 제목과 왼쪽 분류 열의 빈칸을 채웁니다. 일반 XML에서는 왼쪽 분류 열의 빈칸을 위쪽 값으로 채운 뒤, 남은 빈칸을 왼쪽 값으로 채웁니다. 분류 열은 왼쪽부터 처음으로 빈칸 없는 본문 열의 앞까지로 추정합니다. 본문에서 그 열과 오른쪽 열의 빈칸, 수식 XML, 원본 Excel·HTML은 그대로 둡니다.\n\n"
             "사용법:\n"
             "1. Excel/스프레드시트 또는 마크다운 표를 복사 (Ctrl+C)\n"
             "2. 원하는 앱에서 그대로 붙여넣기 (Ctrl+V)\n\n"
             "Excel 표를 복사하면 마크다운 에디터에서 Markdown 표로 붙고,\n"
             "Markdown 표를 복사하면 Excel에서 셀에 분리되어 붙습니다.\n\n"
+            "일반 XML: Excel에서 제목 행과 데이터를 선택하고 ‘XML 변환 복사’ 또는 Ctrl+Alt+X를 누릅니다. 표시값·빈칸·병합 계층·출처를 담으며 먼저 복사할 필요가 없습니다.\n"
             "Excel 수식이 포함된 한 영역을 선택한 뒤 트레이 메뉴의\n"
             "‘셀 값·수식·참조를 XML로 복사’ 를 누르거나 Ctrl+Alt+E 를 누르면 모든 셀의 주소·값 타입·원시값·계산 상태·A1/R1C1 수식과 직접 A1 참조값이 셀 그리드 XML로 복사됩니다. 병합 계층·표시 서식은 포함하지 않으며 XML에 그 제한을 표시합니다.\n"
             "‘AI용 간결 복사’는 제목·항목명을 함께 선택하면 추정한 맥락을 표시하고, 같은 참조범위의 값은 한 번만 기록해 수식에 연결합니다.\n"
@@ -72,8 +92,26 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
     },
     "en": {
+        "menu.copy_xml": "Copy as XML",
+        "table_export.success": "Copied the selected table’s displayed values and merge structure as XML.",
+        "table_export.error.in_progress": "An XML copy is already in progress. Wait for it to finish.",
+        "table_export.error.clipboard_changed": "New content was copied while the table was being read. XML copying was cancelled and the newer clipboard is preserved.",
+        "table_export.error.clipboard_write_failed": "Could not write XML to the clipboard. The clipboard may be incomplete; copy again.",
+        "table_export.error.output_too_large": "The generated XML would exceed 10 MB. Select a smaller range.",
+        "table_export.error.excel_not_running": "Could not find a running Excel application.",
+        "table_export.error.selection_not_range": "Select a cell range including its header row in Excel.",
+        "table_export.error.multiple_areas": "Separate ranges are not supported. Select one contiguous range.",
+        "table_export.error.too_large": "Select 10,000 cells or fewer.",
+        "table_export.error.multiple_instances": "Multiple Excel processes are running. Close the other Excel windows and try again.",
+        "table_export.error.too_much_text": "The selected values contain too much text. Select a smaller range.",
+        "table_export.error.selection_changed": "The selection, displayed values, or merges changed during reading. Select the range again and retry.",
+        "table_export.error.com_failure": "Could not read Excel’s displayed values and merges. Select the range again and retry.",
+        "table_export.error.export_failed": "Could not copy the selected table as XML.",
+        "table_export.error.partial_merge": "A merged cell crosses the selection boundary. Include the entire merged area.",
+        "table_export.error.display_overflow": "A narrow column displays a number or date as ###. Widen the Excel column and copy again.",
+        "table_export.error.no_table": "Select both a header row and data rows.",
         "menu.toggle": "Use Tabledown",
-        "menu.fill_blanks": "Auto-fill blank cells",
+        "menu.fill_blanks": "Fill group and category blanks",
         "menu.copy_excel_formulas": "Copy cell values, formulas, and references as XML",
         "menu.copy_excel_formulas_ai": "Copy compact XML for AI",
         "menu.language": "Language",
@@ -87,7 +125,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "formula_export.success.partial_references": "Copied the formulas and current results. Missing referenced values are marked in the copied content.",
         "formula_export.success.calculation_incomplete": "Copied the formulas and current results. Excel is still calculating, so results may change. For the latest results, copy again after calculation finishes.",
         "formula_export.success.partial_references_and_calculation": "Copied the formulas and current results. Some referenced values are missing and Excel is still calculating. For the latest results, copy again after calculation finishes.",
-        "formula_export.error.in_progress": "A formula XML export is already in progress. Wait for it to finish.",
+        "formula_export.error.in_progress": "An XML copy is already in progress. Wait for it to finish.",
         "formula_export.error.clipboard_changed": "New content was copied while the XML was being prepared, so the export was cancelled to protect it. Run the formula XML command again if needed.",
         "formula_export.error.clipboard_write_failed": "The formula XML was prepared but could not be written to the clipboard. The clipboard may be incomplete; run the command again.",
         "formula_export.error.output_too_large": "The generated formula XML would exceed 10 MB. Select a smaller range.",
@@ -118,11 +156,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "welcome.intro": "Tabledown is running in your notification area (system tray) — look for the table icon.",
         "help.message": (
             "Excel ↔ Markdown table converter\n\n"
+            "Fill group and category blanks: Automatic Markdown conversion fills merged column-group headings and blanks in the left grouping columns. General XML fills the left grouping columns from above, then from the left. Grouping columns are inferred as those before the first body column with no blanks, starting from the left. Body blanks in that column and to its right, formula XML, and the original Excel cells and HTML are unchanged.\n\n"
             "How to use:\n"
             "1. Copy a table from Excel/Sheets or a Markdown table (Ctrl+C)\n"
             "2. Paste in any app (Ctrl+V)\n\n"
             "Excel tables paste as Markdown in a Markdown editor,\n"
             "and Markdown tables paste into separate cells in Excel.\n\n"
+            "General XML: select headers and data in Excel, then choose Copy as XML or press Ctrl+Alt+X. It includes displayed values, blanks, merges and source metadata. No prior clipboard copy is needed.\n"
             "Select one formula range in Excel, then click ‘Copy cell values, formulas, and references as XML’\n"
             "in the tray menu or press Ctrl+Alt+E to copy every cell address, value type, raw value, calculation state, A1/R1C1 formula, and direct A1 reference value as cell-grid XML. The XML explicitly says that merge hierarchy and display formatting are not included.\n"
             "For ‘Copy compact XML for AI’, include headers and item names to add inferred context; identical reference ranges are written once and linked to each formula.\n"

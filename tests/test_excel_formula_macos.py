@@ -1467,14 +1467,13 @@ class AppFormulaActionTests(unittest.TestCase):
             "Copy as XML",
         )
         self.assertEqual(app.copy_xml_item._menuitem.keyEquivalent(), "x")
-        self.assertEqual(app.copy_markdown_item.title, "Copy Markdown")
+        self.assertFalse(hasattr(app, "copy_markdown_item"))
         self.assertEqual(app.copy_excel_formulas_item.title, "Copy as XML with Formulas")
-        self.assertEqual(app.copy_markdown_item._menuitem.keyEquivalent(), "")
         menu_titles = [getattr(item, "title", None) for item in app.menu.values()]
         copy_titles = [title for title in menu_titles if title and title.startswith("Copy")]
         self.assertEqual(
             copy_titles,
-            ["Copy Markdown", "Copy as XML", "Copy as XML with Formulas"],
+            ["Copy as XML", "Copy as XML with Formulas"],
         )
         self.assertNotIn("Copy compact XML for AI", menu_titles)
         self.assertFalse(hasattr(app, "copy_ai_formulas_item"))

@@ -228,7 +228,6 @@ class FormulaCancellationActionTests(unittest.TestCase):
         self._assert_changed_alert()
         self.assertIsNone(self.app._explicit_export_active)
         for item in (
-            self.app.copy_markdown_item,
             self.app.copy_xml_item,
             self.app.copy_excel_formulas_item,
         ):

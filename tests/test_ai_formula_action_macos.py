@@ -131,7 +131,7 @@ class AiFormulaActionTests(unittest.TestCase):
         ):
             app.copy_selected_excel_formulas(None)
             self.assertEqual(app.copy_excel_formulas_item.title, t("menu.copy_excel_formulas_busy", "ko"))
-            for item in (app.copy_markdown_item, app.copy_excel_formulas_item, app.copy_xml_item):
+            for item in (app.copy_excel_formulas_item, app.copy_xml_item):
                 item._menuitem.setEnabled_.assert_called_with(False)
             app.copy_selected_excel_formulas(None)
             app.copy_as_markdown(None)
@@ -228,7 +228,7 @@ class AiFormulaActionTests(unittest.TestCase):
         self.assertFalse(app._explicit_export_lock.locked())
         app.lang = "en"
         app._update_explicit_export_menu()
-        self.assertEqual(app.copy_markdown_item.title, "Copy Markdown")
+        self.assertEqual(app.copy_markdown_item.title, "")
         self.assertEqual(app.copy_xml_item.title, "Copy as XML")
         self.assertEqual(app.copy_excel_formulas_item.title, "Copy as XML with Formulas")
 
