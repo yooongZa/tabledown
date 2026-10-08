@@ -537,7 +537,7 @@ fallback 을 지킬 것(`register()`/`start()` 가 False 를 돌려줄 뿐 예�
   Windows = `windows/tabledown_windows/__init__.py` 의 `__version__`(현재 0.3.x 트랙). Windows 는 macOS 버전을
   **따르지 않는다** — MSIX PackageVersion 이 이 값을 읽으므로 공유하면 잘못 찍힌다(그 파일 주석 참조). 버전
   언급 시 어느 플랫폼인지 명시.
-- CHANGELOG(`CHANGELOG.md`) 와 README 변경 이력(한 `README.md` / 영 `README.en.md`) 둘 다 갱신.
+- 상세 변경 이력·검증·심사 상태는 `CHANGELOG.md`에 기록한다. README(한 `README.md` / 영 `README.en.md`)는 다운로드·현재 사용법을 동기화하고, 변경 이력이나 테스트 로그를 중복해 쌓지 않는다.
 - **macOS 릴리스는 App Store 와 GitHub Release 에 같은 버전으로 동시 배포**(사용자 확정 2026-07-12):
   git 태그 `vX.Y.Z` + GitHub Release DMG(Latest) + App Store(.pkg) 업로드가 **한 세트**다. 셋 중 하나만
   올려 버전이 어긋나지 않게 할 것.

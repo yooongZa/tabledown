@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### 2026-10-08 — README 간소화
+
+- 한글·영문 README를 각각 389/387줄에서 90줄로, Windows 안내를 173줄에서 77줄로 줄였다. 다운로드·기본 사용법·XML 단축키·설정을 중심으로 정리하고 긴 XML 예시·구현 설명·과거 변경 이력을 기존 상세 문서로 연결했다. 개발 명령과 빈칸 채우기 세부 기준은 접기 영역에 두었다.
+- 다운로드 주소·플랫폼 조건·현재 메뉴 이름·내보내기 한도·선택 밖/다른 시트 참조값의 개인정보 범위와 기존 개인정보 제목을 보존했다. 오래된 줄바꿈 제한 설명을 제거하고, 개발 지침의 README 갱신 규칙과 XML 문서의 링크 설명을 맞췄다. 앱 코드는 변경하지 않았다.
+- 검증: Python으로 상대 링크/앵커 28개·Markdown fence/details 짝·다운로드/단축키/한도/개인정보 항목을 확인하고 `git diff --check`를 통과했다. 문서만 수정해 앱·실기기 테스트는 다시 실행하지 않았다. 기존 CHANGELOG 초안과 Word 문서 2개는 보존했다.
+
 ## [0.6.2] / [0.3.2] - 2026-10-08 (macOS / Windows)
 
 - **GitHub 공개 완료:** macOS **0.6.2 / build 0.6.8**의 [DMG·ZIP](https://github.com/yooongZa/tabledown/releases/tag/v0.6.2)과 Windows **0.3.2 / MSIX 0.3.2.0**의 [portable ZIP·자체서명 MSIX](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.2)을 공개했다. 태그 `v0.6.2`·`windows-v0.3.2`는 검증 후보 `4533696`을 가리킨다. 두 플랫폼 공개 파일의 인증 없는 재다운로드 크기·SHA-256, macOS Latest `v0.6.2`와 고정 DMG 링크를 확인했다.

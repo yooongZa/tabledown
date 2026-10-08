@@ -1,389 +1,90 @@
 # Tabledown
 
-<p align="center">
-  <img src="assets/generated/tablemark_app_1024.png" width="96" alt="Tabledown icon">
-</p>
+<img src="assets/generated/tablemark_app_1024.png" width="80" alt="Tabledown 아이콘">
 
-<p align="center">
-  <a href="https://apps.apple.com/app/id6768205551"><img alt="Mac App Store" src="https://img.shields.io/itunes/v/6768205551?label=Mac%20App%20Store"></a>
-  <a href="https://github.com/yooongZa/tabledown/releases/latest"><img alt="GitHub release" src="https://img.shields.io/github/v/release/yooongZa/tabledown?label=GitHub"></a>
-  <img alt="Platform" src="https://img.shields.io/badge/platform-macOS-111111">
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
-</p>
+**Excel·Google Sheets ↔ Markdown(마크다운) 표를 복사·붙여넣기로 변환합니다.**
 
-<p align="center">
-  <a href="README.en.md">English</a> | 한국어
-</p>
+macOS 메뉴바와 Windows 트레이에서 실행됩니다. Excel의 표 구조나 수식은 XML로 복사해 AI에 전달할 수 있습니다.
 
-> 스프레드시트 표를 Markdown source(마크다운 원문)로 바꿔주는 macOS menu bar(메뉴바) 앱
-
-Tabledown은 Excel/Google Sheets에서 복사한 표를 Obsidian, GitHub README, Markdown editor(마크다운 에디터)에 붙이기 좋은 `| ... |` 표로 바꿔줍니다. 별도 창을 열거나 export(내보내기)하지 않고, 평소처럼 `Cmd+C`와 `Cmd+V`만 사용합니다.
+한국어 · [English](README.en.md)
 
 ## 다운로드
 
-Mac App Store에서 받는 것을 권장합니다 (자동 업데이트).
+| 플랫폼 | 스토어 | 직접 다운로드 |
+| --- | --- | --- |
+| macOS 12 이상 · Apple Silicon | [Mac App Store](https://apps.apple.com/app/id6768205551) | [DMG](https://github.com/yooongZa/tabledown/releases/latest/download/Tabledown.dmg) |
+| Windows 10/11 · x64 | [Microsoft Store](https://apps.microsoft.com/detail/9NGS4C0N2Z6L) | [Windows ZIP](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.2) |
 
-<p>
-  <a href="https://apps.apple.com/app/id6768205551">
-    <img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-mac-app-store/black/ko-kr" alt="Mac App Store에서 다운로드" height="48">
-  </a>
-</p>
-
-또는 GitHub Releases(깃허브 릴리스)에서 직접 받을 수 있습니다.
-
-**[Tabledown.dmg 다운로드](https://github.com/yooongZa/tabledown/releases/latest/download/Tabledown.dmg)**
-
-설치 (DMG):
-
-1. `Tabledown.dmg` 열기
-2. `Tabledown.app`을 Applications(응용 프로그램)로 드래그
-3. 앱 실행 후 메뉴바의 table(표) 아이콘 확인
-
-배포용 DMG는 Developer ID signing(개발자 ID 서명)과 Apple notarization(애플 공증)을 통과한 빌드입니다. Mac App Store 빌드는 App Sandbox(앱 샌드박스)에서 동작합니다.
-
-**Windows x64:** [Microsoft Store](https://apps.microsoft.com/detail/9NGS4C0N2Z6L) · [Windows 0.3.2 GitHub 다운로드](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.2) · [Windows 사용법](windows/README.md). ZIP을 풀고 EXE를 실행합니다. 자체 서명 MSIX는 별도 설치 시험용으로 제공합니다. 아래 기능 안내는 macOS 기준입니다.
-
-## 왜 쓰나요
-
-| 입력 | 붙여넣는 곳 | 출력 |
-|------|------------|------|
-| Excel/Google Sheets 표 (`Cmd+C`) | Obsidian/GitHub/마크다운 에디터 (`Cmd+V`) | Markdown 원문 표 |
-| 마크다운 표 (`Cmd+C`) | Excel (`Cmd+V`) | 셀에 분리된 표 |
-| Excel 표 범위 선택 후 메뉴 ‘XML 변환 복사’ 또는 `⌘⌃X` | LLM 프롬프트 (`Cmd+V`) | 계층·실제 병합 범위·출처·표시값 XML |
-| Excel 수식 영역 선택 후 메뉴 ‘수식 포함 XML 변환 복사’ 또는 `⌘⌃E` | LLM 프롬프트 (`Cmd+V`) | 셀 타입·원시값·계산 상태·A1/R1C1 수식·직접 참조값 XML |
-
-Tabledown을 켜 두면 Obsidian 같은 Markdown editor(마크다운 에디터)에서 spreadsheet(스프레드시트) 표가 Markdown source(마크다운 원문)로 붙습니다.
-
-```markdown
-| 이름 | 할 일 |
-| --- | --- |
-| Tabledown | 표를 Markdown으로 붙이기 |
-```
-
-Tabledown은 clipboard(클립보드)의 text(일반 텍스트) 슬롯에 Markdown을 보강하고 HTML table(HTML 표) 슬롯은 그대로 유지합니다 (0.2.4부터). 붙여넣는 앱이 자기에게 맞는 형식을 고르기 때문에, 한 번 복사한 표가 Markdown editor에서는 Markdown source로, TextEdit·Word·Excel 같은 rich text editor(서식 있는 텍스트 편집기)에서는 렌더링된 표로 붙습니다.
-
-<p align="center">
-  <img src="assets/tabledown-paste-comparison.png" width="760" alt="The same copied table pasted as Markdown source and as a rendered table">
-</p>
-
-위 스크린샷은 같은 표가 붙는 두 가지 결과 — Markdown source(위)와 렌더링된 표(아래) — 를 보여줍니다. (0.2.4 이전 버전 캡처라 켬/끔으로 나뉘어 있지만, 지금은 두 형식이 clipboard에 공존하며 도착지 앱이 선택합니다.) 즉 Tabledown은 "예쁜 표 렌더러"가 아니라 "Markdown 문서용 표 변환기"입니다.
-
-Markdown 표는 Excel·Google Sheets에서 복사한 뒤 원하는 앱에 붙여넣으면 자동으로 변환됩니다. macOS 0.6.2부터 별도의 ‘마크다운 복사’ 메뉴를 제거했습니다. Windows에도 이 메뉴를 두지 않습니다. 아래 수동 XML 명령은 Excel 데스크톱 앱의 현재 선택 영역을 읽습니다.
-
-## XML 변환 복사 (AI용)
-
-AI에 표를 전달할 때 제목과 그룹의 관계를 함께 읽을 수 있도록 **다단 헤더 중첩 XML**로 정리합니다. 다단(그룹) 헤더를 XML 중첩 계층으로 표현합니다 — 루트는 `<표>`, 세로 그룹은 `<{헤더}그룹 이름="값">`, 행은 `<행 {헤더}="값">`, 가로 그룹은 `<열그룹 이름="값">`, 셀은 `<열 n="헤더값">셀값</열>`. 이 중첩은 Excel 병합과 값 배치를 바탕으로 한 structural inference(구조 추론)이며, 실제 병합 범위는 루트의 `병합범위`가 별도로 보존합니다.
-
-예: 세로 2단(직급▸부장/차장, 직책) × 가로 2단(1분기▸1,2,3 / 2분기▸4,5,6) 교차표. 아래는 계층을 보기 쉽게 루트의 출처·병합 metadata(메타데이터)만 생략한 축약 예입니다.
-
-```xml
-<표>
-  <직급그룹 이름="부장">
-    <행 직책="대족장">
-      <열그룹 이름="1분기"><열 n="1">동</열><열 n="2">해</열><열 n="3">물</열></열그룹>
-      <열그룹 이름="2분기"><열 n="4">과</열><열 n="5">백</열><열 n="6">두</열></열그룹>
-    </행>
-    <행 직책="족장"> … </행>
-    <행 직책="추장"> … </행>
-  </직급그룹>
-  <직급그룹 이름="차장"> … </직급그룹>
-</표>
-```
-
-- **Excel 표 구조·표시값 → XML (메뉴·⌘⌃X)**: Excel desktop app(데스크톱 앱)에서 하나의 사각형 표 범위를 선택한 뒤 메뉴바의 **‘XML 변환 복사’** 를 누르거나 전역 단축키 **⌘⌃X** 를 누릅니다. `Cmd+C`를 먼저 누르지 않아도 Excel 화면의 숫자·날짜·퍼센트·통화·사용자 지정 서식과 오류값, 데이터 text의 앞뒤·연속 공백, 빈칸·병합 구조를 직접 읽어 LLM 친화 XML로 복사합니다. 수식 자체는 포함하지 않습니다. 데이터 셀에서 문자 그대로의 `<br>`와 실제 셀 줄바꿈도 구분해 보존합니다. 이전 clipboard 표로 fallback(대체)하지 않으므로 오래된 복사본이 변환될 수 없습니다. 성공하면 메뉴바 아이콘이 1초간 체크 표시로 바뀌고, 어디에 붙여도 XML이 나오도록 기존 clipboard 형식을 plain text XML로 교체합니다. Google Sheets·LibreOffice·clipboard의 Markdown/XML은 이 수동 명령의 입력으로 지원하지 않습니다. 자동 XML→표 역변환도 두지 않습니다.
-- **원본 사실과 추론을 구분**: 루트의 `통합문서`·`시트`·`주소`·`행수`·`열수`가 출처를, `병합범위`가 Excel의 실제 merge area(병합 영역)를 기록합니다. 2열 이상에서 계층에서 제외된 선두 전체 폭 제목은 `제목N주소`·`제목N값`으로 남기고, 1열의 세로 병합은 제목으로 오인하지 않습니다. `헤더기준="추정"`은 Excel에 확정적인 헤더 표식이 없어 첫 행·병합 배치로 추론했다는 뜻입니다. 따라서 **헤더 행까지 포함해 선택**하세요. 가로 leaf(리프)의 빈·공백·중복 헤더는 임의 이름으로 바꾸지 않고 원문 `n`과 보조 열 번호 `i`로 구별합니다.
-- **안정된 선택만 내보냄**: 선택 영역·셀 값·병합 구조를 두 번 연속 읽어 같은 snapshot(스냅샷)일 때만 clipboard를 씁니다(최대 3회). 서로 떨어진 다중 영역, **10,000셀 초과**, 선택 경계를 걸친 병합 셀, 최대 3회 안에 두 번 같은 snapshot을 얻지 못한 표는 안내 후 중단하며 기존 clipboard를 보존합니다. Excel이 좁은 열이나 표시 불가 날짜·시간 때문에 값을 `##`로 표시하는 경우도 손상된 text를 내보내지 않고 전체 값이 보이도록 수정할 것을 안내합니다(실제로 입력한 문자 `##`는 그대로 보존). 일반·수식 XML 모두 셀 값 합계 5,000,000자, UTF-8 기준 10MB까지이며, 초과하면 clipboard를 쓰지 않고 더 작은 범위를 선택하도록 안내합니다.
-- **진행 상태와 clipboard 덮어쓰기 방지**: 두 XML 복사 명령은 먼저 메뉴바 아이콘 옆에 `…`를 표시하고 메뉴를 ‘복사 중…’ 상태로 바꾼 뒤 한 번에 하나만 실행됩니다. macOS의 NSAppleScript가 main thread(메인 스레드) 전용이라 큰 범위, 특히 10,000셀에 가까운 선택은 수십 초 동안 메뉴가 응답하지 않을 수 있고 현재 작업 중간 취소는 지원하지 않습니다. 오래 기다리면 범위를 나눠 실행하세요. 준비 중 다른 앱에서 새 내용을 복사하면 마지막 generation check(세대 확인)에서 쓰기를 취소하며, 실제 기록을 다시 확인한 뒤에만 성공 체크 표시를 보여줍니다. macOS clipboard API에는 atomic compare-and-swap(원자적 비교 후 쓰기)이 없어 마지막 확인과 비우기 사이의 아주 작은 경쟁 창까지 절대적으로 없앨 수는 없습니다.
-- **가로·세로 그룹 모두 중첩**: 가로 다단 헤더는 `<열그룹>` 으로, 세로 그룹(직급 부장/차장)은 `<{헤더}그룹>` 으로 중첩해 표의 계층을 그대로 보존합니다. 가로 헤더는 태그가 아니라 `n=`/`이름=` 속성에 넣어 공백·기호·숫자가 있어도 태그가 망가지지 않고 어떤 표준 XML 파서로도 안전합니다. 루트가 한글 `<표>` 라 브라우저·Obsidian 미리보기처럼 HTML 로 렌더링되는 곳에서도 내용이 사라지지 않습니다.
-- **세로 그룹은 부모 노드로 중첩 (이전 버전과 달라진 점)**: 이전 버전은 세로 키 열(직급)을 각 행에 반복해 채워 행 하나하나가 자기완결 레코드였습니다. 지금은 세로 그룹을 부모 노드(`<직급그룹>`)로 중첩합니다 — 계층은 그대로 보존되지만 그룹 값이 부모에만 있어, **행 하나만 떼면 그 행만으로는 직급을 알 수 없습니다**(자기완결성 대신 계층 보존을 택한 의도된 변경).
-- **‘그룹·분류 빈칸 채우기’ (설정 ▸, 기본 꺼짐)**: 자동 Markdown 변환에서는 병합된 열 그룹 제목을 가로로, 왼쪽 분류 열을 세로로 채웁니다. 일반 XML에서는 왼쪽 분류 열을 위쪽 값으로 채운 뒤 남은 빈칸을 왼쪽 값으로 채웁니다. 분류 열은 왼쪽부터 처음으로 빈칸 없는 본문 열의 앞까지로 추정합니다. 본문에서 그 열과 오른쪽 열의 빈칸, 수식 XML, 원본 Excel·HTML은 바꾸지 않습니다. 기존 `fill_blanks` 설정값을 그대로 사용합니다. 일반 XML은 `빈칸채움`·`빈칸채움기준`·`빈칸채움수`·`빈칸채움셀`에 적용 여부와 채운 셀의 원본 A1 주소를 남깁니다.
-
-## 수식 포함 XML 변환 복사 (Excel 전용)
-
-Excel에서 수식이 들어 있는 단일 사각형 영역을 선택한 뒤 메뉴바의 **‘수식 포함 XML 변환 복사’** 를 누르거나 전역 단축키 **⌘⌃E** 를 누르면, 선택 영역의 모든 셀을 행·열 구조 그대로 XML text(일반 텍스트)로 복사합니다. 상수 값·빈 셀·셀 주소와 수식 셀의 현재 결과·A1·R1C1 수식이 함께 들어갑니다. 수식에 직접 적힌 같은 통합문서의 static A1 reference(정적 A1 참조)는 같은 시트와 다른 시트 모두 현재 값까지 공통 참조 목록으로 연결합니다. 병합 계층과 표시 서식은 포함하지 않으며, 먼저 `Cmd+C`를 누를 필요는 없습니다.
-
-제목과 항목명도 함께 선택하세요. 반복 참조는 공통 목록으로 정리하고 각 수식에 연결합니다. 이전 ‘AI용 간결 복사’ 기능을 이 메뉴에 통합했습니다. **AI에는 XML 전체를 붙여넣으세요.** 원본 값·수식·출처와 추정한 맥락을 함께 읽을 수 있습니다.
-
-```xml
-<표범위 통합문서="Book1.xlsx" 시트="Sheet1" 주소="$A$1:$C$2" 행수="2" 열수="3" 형식버전="1" 계산모드="automatic" 계산상태="unavailable" 계산결과상태="freshness_unverified" 값기준="Excel현재원시값" 표시정보상태="미포함" 병합정보상태="미포함" 형식="AI간결수식">
-  <맥락 상태="미확인" 기준="선택범위내단순헤더" 사유="ambiguous_header_labels" />
-  <참조목록>
-    <참조범위 시트="Sheet1" 주소="$A$1" id="r1">
-      <참조셀 주소="$A$1" 값="10" 값종류="number" />
-    </참조범위>
-    <참조범위 시트="Sheet1" 주소="$B$1" id="r2">
-      <참조셀 주소="$B$1" 값="20" 값종류="number" />
-    </참조범위>
-    <참조범위 시트="Sheet1" 주소="$C$1" id="r3">
-      <참조셀 주소="$C$1" 값="30" 값종류="number" />
-    </참조범위>
-  </참조목록>
-  <행 인덱스="1">
-    <셀 주소="$A$1" 값="10" 값종류="number" />
-    <셀 주소="$B$1" 값="20" 값종류="number" />
-    <셀 주소="$C$1" 값="30" 값종류="number" 수식="=A1+B1" 수식R1C1="=RC[-2]+RC[-1]" 값대입수식="=10+20" 값대입수식동등성="보장안함">
-      <참조 ref="r1" />
-      <참조 ref="r2" />
-    </셀>
-  </행>
-  <행 인덱스="2">
-    <셀 주소="$A$2" 값종류="blank" />
-    <셀 주소="$B$2" 값="5" 값종류="number" />
-    <셀 주소="$C$2" 값="60" 값종류="number" 수식="=C1*2" 수식R1C1="=R[-1]C*2" 값대입수식="=30*2" 값대입수식동등성="보장안함">
-      <참조 ref="r3" />
-    </셀>
-  </행>
-</표범위>
-```
-
-- `값`은 Excel이 현재 보유한 상수 또는 수식 결과이고, `값종류`는 `blank`·`number`·`text`·`boolean`·`error`를 구분합니다. 따라서 빈 셀, 빈 문자열을 반환한 수식, 숫자 `123`, 문자 `"123"`을 같은 값으로 오인하지 않습니다. `수식`은 사람이 읽기 쉬운 A1 표현, `수식R1C1`은 상대·절대 참조 관계를 보여줍니다.
-- `값대입수식`은 지원하는 static A1 reference(정적 A1 참조)를 모두 안정적으로 읽고 native type(네이티브 타입)을 확인한 경우에만, 같은 snapshot(스냅샷)의 현재 값으로 바꿔 보여주는 LLM용 설명 표현입니다. 예를 들어 `=SUM(F4:F9)`은 `=SUM({75000;136800;315000;72000;263500;0})`처럼 표시됩니다. 범위는 `{같은행의 열,열;다음행의 열,열}` 순서이고 실제 빈 셀은 `BLANK()`로 표시합니다. 참조 셀 자체가 수식이어도 그 현재 결과만 한 단계 대입하며 수식을 recursive(재귀)하게 펼치지 않습니다. 원본 `수식`과 `값`이 authoritative data(권위 데이터)이며, `값대입수식`은 기존 XML을 바꾸지 않는 optional attribute(선택적 속성)로서 Excel에 다시 실행하거나 모든 연산에서 계산 동등성을 보장하는 수식이 아닙니다.
-- 시트와 주소가 정확히 같은 참조범위는 `<참조목록>`에 한 번 기록하고 각 수식의 `<참조 ref="…">`로 연결합니다. 겹치지만 주소가 다른 범위와 수식별 참조 순서는 유지합니다. 다른 시트는 `시트` 속성으로 구분하고 내부 `<참조셀>`은 행 우선 순서입니다. 반복 참조가 많으면 길이가 줄며 작은 표는 맥락 정보로 더 길어질 수 있습니다.
-- 선택 안의 단순한 열 제목·행 항목을 원본 셀 주소에 연결하고 맥락을 **‘추정’ 또는 ‘미확인’**으로 표시합니다. 복잡한 다단 헤더, 중복·빈 제목, 일반 텍스트 데이터는 미확인으로 남을 수 있습니다. 맥락을 찾기 위해 주변 셀을 추가로 읽지 않습니다.
-- `계산모드`·`계산상태`는 export(내보내기) 당시 Excel 상태이고 Tabledown이 재계산을 실행했다는 뜻이 아닙니다. Windows의 `done`은 `계산결과상태="snapshot_stable"`, `calculating`·`pending`은 `calculation_incomplete`, `unknown`은 `freshness_unverified`로 기록합니다. macOS는 Excel API 한계로 `계산상태="unavailable"`·`계산결과상태="freshness_unverified"`를 기록합니다. `snapshot_stable`이어도 “두 번 같은 현재 값”이라는 뜻이지 manual calculation(수동 계산) 통합문서가 최신 재계산됐다는 보장은 아닙니다.
-- `값기준="Excel현재원시값"`이며 수식 XML에는 표시 문자열·숫자 서식·병합 계층을 넣지 않습니다. 이 제한은 `표시정보상태="미포함"`·`병합정보상태="미포함"`으로 XML 자체에 표시됩니다. 화면에 보이는 날짜·통화·퍼센트와 실제 병합 구조가 필요하면 **‘XML 변환 복사’**를 함께 사용하세요.
-- Excel의 native numeric value(네이티브 숫자 값)는 `3.15E+5` 같은 scientific notation(지수 표기) 대신 `315000`처럼 지수 없는 일반 십진수로 기록합니다. 숫자처럼 보이는 literal text(문자열)는 원문을 그대로 보존합니다.
-- `INDIRECT`·`OFFSET`·defined name(정의된 이름)·structured reference(구조화 참조)·3-D reference(3차원 참조)·외부 통합문서는 임의로 따라가지 않습니다. 이런 참조, 읽기 실패, 크기 한도로 일부 값을 읽지 못하면 수식·현재 결과는 그대로 두고 `참조상태="일부"`·성공적으로 포함한 `참조포함범위수`·`참조누락이유`를 기록합니다. 누락 code(코드)는 `dynamic_reference`·`calculated_range_reference`·`external_or_structured_reference`·`three_dimensional_reference`·`whole_row_or_column_reference`·`defined_name_or_unsupported_syntax`·`invalid_a1_reference`·`range_count_limit`·`cell_count_limit`·`range_size_limit`·`read_failed`·`value_size_limit`·`unspecified`입니다. 다만 함수 호출 모양의 workbook-defined LAMBDA/UDF(통합문서 정의 LAMBDA/사용자 정의 함수)는 새 Excel 내장 함수와 text만으로 안전하게 구별할 수 없어, 식에 직접 적힌 A1 참조만 값으로 바꾸며 함수 내부의 숨은 참조는 펼치지 않습니다.
-- 일부 참조값을 가져오지 못했거나 Excel이 계산 중인 경우에는 복사가 끝난 뒤 짧게 안내합니다. 원본 수식과 현재 결과는 그대로 복사되며, 계산 상태를 확인할 수 없다는 이유만으로 매번 안내하지 않습니다. `A1:INDEX(...)`처럼 계산으로 정해지는 범위는 추측하지 않고 일부 참조로 표시합니다.
-- Tabledown은 수식을 계산하거나 실행하지 않고 Excel의 현재 값을 읽습니다. 빈 셀은 `값` 속성 없이 출력되어 표 모양을 보존합니다.
-- Excel desktop app(데스크톱 앱)만 지원합니다. Google Sheets·LibreOffice는 지원하지 않습니다.
-- 여러 군데를 따로 선택한 multi-area selection(다중 영역 선택)은 지원하지 않으며, 한 번에 최대 10,000셀까지 읽습니다.
-- macOS에서 수식 셀이 64개보다 많은 서로 떨어진 rectangular block(직사각형 블록)으로 흩어져 있으면 더 작은 범위로 나눠 복사해야 합니다.
-- 원본 A1+R1C1 수식 내용은 합계 1,000,000자, 파생 `값대입수식`도 별도 합계 1,000,000자까지 내보냅니다. 파생 표현이 글자 한도를 넘으면 해당 `<셀>`에 `값대입수식상태="omitted_character_limit"`을, 최종 XML byte(바이트) 한도를 넘겨 모든 파생 표현을 뺀 경우 루트에 `값대입수식상태="omitted_xml_size_limit"`을 기록합니다. 두 경우 모두 원본 수식 export(내보내기)는 유지합니다.
-- 직접 참조값은 최대 256개 **고유 범위**·총 10,000셀·개별 범위 2,048셀까지 연결합니다. 더 큰 참조는 기존 수식 복사를 실패시키지 않고 `참조상태="일부"`로 표시합니다.
-- 셀 값은 합계 5,000,000자, 최종 XML은 UTF-8 기준 10MB까지 내보냅니다. 직렬화 중 한도를 넘으면 즉시 중단하며, 설명용 `값대입수식`을 뺀 뒤에도 크면 `값종류`·계산 상태·누락 사유를 조용히 제거하지 않고 전체 내보내기를 중단해 기존 clipboard를 보존합니다.
-- macOS에서는 XML 메뉴를 처음 사용할 때 Excel 제어를 위한 Automation(자동화) 권한을 요청할 수 있습니다. 기존 자동 표 변환에는 이 권한이 필요하지 않습니다.
-
-## 자동 변환 동작 방식
-
-Tabledown은 clipboard를 감시하다가 표를 발견하면 붙여넣기 방향에 맞는 text/html format(텍스트/HTML 형식)을 보강합니다. Excel 표는 Markdown plain text(일반 텍스트)로, Markdown 표는 Excel이 읽을 수 있는 HTML table로 보강합니다.
-
-기존 clipboard format(클립보드 형식)은 보존하고 필요한 text/html 형식만 추가 또는 갱신합니다. 표가 아닌 일반 텍스트일 때는 clipboard를 바꾸지 않습니다.
-
-Excel 표를 복사할 때 함께 들어오는 PNG/PDF/RTF 같은 rendered format(렌더링 형식)은 채팅/마크다운 앱에서 이미지로 선택될 수 있어 제거합니다. Excel native format(네이티브 형식)은 유지합니다.
-
-Excel 복사 범위 오른쪽 끝에 모든 행이 비어 있는 trailing column(뒤쪽 빈 열)이 있으면 Markdown 변환 시 제거합니다. 병합 셀 정렬에 필요한 중간 빈 셀은 유지합니다.
-
-Excel 표에서 만든 Markdown plain text(일반 텍스트)는 앞에 빈 줄을 넣어 독립된 block(블록)으로 붙습니다. Obsidian처럼 표 앞에 빈 줄이 필요할 수 있는 Markdown parser(마크다운 파서)에서 문단이나 목록 바로 아래에 붙여도 표로 인식되게 하기 위함입니다.
-
-Tabledown이 보강한 clipboard에는 `org.nspasteboard.AutoGeneratedType`과 `com.tabledown.generated` marker(마커)를 추가합니다. Maccy 같은 clipboard history manager(클립보드 기록 관리자)가 자동 생성 항목을 history(기록)에서 제외할 수 있게 하기 위함입니다.
-
-Tabledown이 만든 clipboard marker(클립보드 마커)가 있는 항목은 다시 변환하지 않습니다. 같은 표가 반복 변환되는 것을 막고 watcher(감시자)가 idempotent(멱등)하게 동작하도록 하기 위함입니다.
-
-## 설치 (개발 모드)
-
-### 1. 의존성 설치
-
-Python 3.10 이상이 필요합니다 (코드가 `str | None` 같은 PEP 604 union 문법을 런타임에 사용).
-
-```bash
-cd Tabledown
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-### 2. 실행
-
-```bash
-python run.py
-```
-
-메뉴바에 3x2 table(표) 아이콘이 나타납니다.
-
-### 3. macOS 권한
-
-기본 표 변환에는 손쉬운 사용(Accessibility)이나 입력 모니터링(Input Monitoring) 권한이 필요하지 않습니다. ‘XML 변환 복사’·‘수식 포함 XML 변환 복사’는 현재 Excel 선택 영역을 직접 읽으므로 처음 사용할 때 Microsoft Excel Automation(자동화) 권한을 요청할 수 있습니다.
+Mac은 DMG를 열고 앱을 Applications(응용 프로그램)에 옮기세요. 배포 파일은 Developer ID 서명과 Apple 공증을 통과했습니다.
+Windows는 ZIP을 풀고 `Tabledown-Windows.exe`를 실행하세요. 별도의 Python 설치가 필요 없습니다. 자체 서명 MSIX 설치는 [Windows 안내](windows/README.md)를 참고하세요.
 
 ## 사용법
 
-1. Excel 또는 Google Sheets에서 셀 영역 선택 → `Cmd+C`
-2. Obsidian/GitHub README/마크다운 에디터에서 `Cmd+V`
-3. `| ... |` 형태의 Markdown 표로 붙는지 확인
+1. Tabledown을 실행하고 메뉴바 또는 트레이의 표 아이콘을 확인합니다.
+2. Excel·Google Sheets에서 표를 복사합니다.
+3. Obsidian이나 Markdown 문서에 붙여넣습니다. Markdown 표를 복사해 Excel에 붙이면 셀별로 들어갑니다.
 
-성공 여부는 붙여넣기 결과 또는 진단 로그로 확인합니다.
+Mac은 `Cmd+C` / `Cmd+V`, Windows는 `Ctrl+C` / `Ctrl+V`를 사용합니다. 별도의 Markdown 복사 메뉴는 없습니다. 원본 HTML 표도 유지하므로 Excel·Word에서는 표로 붙습니다. Markdown 원문이 필요하면 붙여넣는 앱의 **일반 텍스트로 붙여넣기**를 사용하세요.
 
-역방향:
+## Excel 표를 AI에 전달하기
 
-1. 마크다운 표 전체 선택 → `Cmd+C`
-2. Excel에서 시작 셀 선택 → `Cmd+V`
-3. 셀별로 분리되어 붙는지 확인
+Excel 데스크톱 앱에서 **제목 행과 항목명을 포함한 사각형 영역**을 선택한 뒤 XML 복사 메뉴를 누르세요. 먼저 복사할 필요가 없습니다. 생성된 XML 전체를 원하는 AI에 직접 붙여넣습니다.
 
-자동 변환을 잠깐 멈추거나 다시 켜려면 전역 단축키 **⌘⌃T** (또는 메뉴바 아이콘 ▸ ‘Tabledown 사용’)를 누릅니다. 메뉴바 아이콘에 사선이 그어지면 꺼진 상태입니다.
+| 복사할 정보 | 포함되는 내용 | Mac | Windows |
+| --- | --- | --- | --- |
+| 일반 XML | 화면에 표시된 값·빈칸·병합 구조·출처 | `⌘⌃X` | `Ctrl+Alt+X` |
+| 수식 XML | 현재 값·수식·직접 참조값·계산 상태 | `⌘⌃E` | `Ctrl+Alt+E` |
 
-## 문제 확인
+Mac의 **수식 포함 XML 변환 복사**는 반복 참조를 공통 목록으로 정리합니다. Windows는 **셀 값·수식·참조를 XML로 복사**와 **AI용 간결 복사**를 따로 제공합니다.
 
-붙여넣기 결과가 기대와 다르면 Tabledown이 실행 중인지, 진단 로그에 변환 기록이 남는지 확인하세요.
+XML 복사는 최대 **10,000셀**, 셀 값 합계 **5,000,000자**, 출력 **10MB**까지 지원합니다. 수식 XML은 Excel의 현재 값을 읽으며 재계산하지 않습니다. 표시 서식·병합 구조가 필요하면 일반 XML을 사용하세요. 지원하지 않거나 읽지 못한 참조는 결과에 ‘일부’로 표시합니다.
 
-복사 직후 너무 빠르게 붙여넣으면 앱이 clipboard를 보강하기 전에 원본이 붙을 수 있습니다. 보통 0.1초 안팎에 처리됩니다.
+## 설정
 
-Obsidian에서 Excel 표가 표가 아닌 pipe text(파이프 텍스트)로 붙으면 최신 앱이 실행 중인지 확인하세요. Excel → Markdown 경로에서도 HTML table(HTML 표) clipboard format(클립보드 형식)은 유지되고, text(일반 텍스트) 슬롯에 Markdown이 보강됩니다 (0.2.4부터 — 제거되는 것은 PNG/PDF/RTF 같은 rendered format(렌더링 형식)뿐입니다).
+- **변환 켜기·끄기:** Mac `⌘⌃T`, Windows `Ctrl+Alt+T`. 아이콘에 사선이 보이면 꺼진 상태입니다.
+- **그룹·분류 빈칸 채우기:** 기본값은 꺼짐입니다. 자동 Markdown에서는 병합된 열 그룹 제목과 왼쪽 분류 열을, 일반 XML에서는 왼쪽 분류 열을 채웁니다. 원본 Excel·HTML과 수식 XML은 바꾸지 않습니다.
+- **언어·자동 실행:** 한국어/영어와 로그인 시 실행을 설정할 수 있습니다. Windows 자동 실행은 설치형 MSIX에서 지원합니다.
 
-반대로 Markdown editor(마크다운 에디터)에서 Markdown source(마크다운 원문)가 아니라 리치 표로 붙는다면, HTML 자동 변환 기능이 켜진 에디터(Obsidian 등)가 유지된 HTML 슬롯을 우선 받은 것입니다. 이는 도착지 앱의 정책이라 Tabledown이 제어할 수 없으며, 같은 표를 Excel·Word에 다시 붙여넣을 때 표 형식을 잃지 않기 위한 trade-off(트레이드오프)입니다. 이 경우 에디터의 'Paste as plain text(일반 텍스트로 붙여넣기)' 명령을 쓰면 text 슬롯의 Markdown을 받습니다.
+<details>
+<summary>빈칸 채우기의 적용 기준</summary>
 
-Codex/Claude 같은 채팅 입력창이나 일부 plain text editor(일반 텍스트 편집기)는 Markdown table(마크다운 표)을 렌더링된 표로 보여주지 않고 `| ... |` 원문으로 표시할 수 있습니다. 이 경우 Obsidian, GitHub Markdown preview(마크다운 미리보기), Excel/Google Sheets 같은 기준 앱에서 다시 확인하세요.
+분류 열은 왼쪽부터 처음으로 빈칸 없는 본문 열의 앞까지로 추정합니다. 자동 Markdown은 열 그룹 제목을 가로로, 분류 열을 세로로 채웁니다. 일반 XML은 분류 열을 위쪽 값으로 채운 뒤 남은 빈칸을 왼쪽 값으로 채웁니다. 본문에서 그 열과 오른쪽 열의 빈칸은 유지하며, 일반 XML에는 채운 셀의 원본 A1 주소를 기록합니다.
 
-Maccy를 함께 쓸 때 변환본이 history(기록)에 남는다면 Maccy 설정의 Ignore Pasteboard Types(클립보드 타입 무시)에 `org.nspasteboard.AutoGeneratedType` 또는 `com.tabledown.generated`가 포함되어 있는지 확인하세요.
+</details>
 
-진단 로그는 아래 파일에 기록됩니다.
+## 문제가 생기면
 
-```bash
-tail -f ~/Library/Logs/Tabledown.log
-```
+- **변환 전 표가 붙는 경우:** 앱이 켜져 있는지 확인하고, 복사 후 잠시 기다렸다가 붙여넣으세요.
+- **XML을 복사할 수 없는 경우:** Excel의 단일 사각형 범위를 선택하세요. Mac에서 권한 요청이 나오면 Automation(자동화) 설정에서 Tabledown의 Excel 접근을 허용하세요. 기본 표 변환에는 손쉬운 사용·입력 모니터링 권한이 필요 없습니다.
+- **큰 표가 오래 걸리거나 `###`가 보이는 경우:** 범위를 나누거나 Excel 열 너비를 늘리세요. Mac의 큰 선택 영역은 수십 초가 걸릴 수 있습니다.
 
-진단 로그가 1MB를 넘으면 `Tabledown.log.1`로 rotation(로테이션)되고 새 로그 파일을 다시 씁니다.
+Markdown은 색상·글꼴·병합 모양을 표현하지 못합니다. XML 복사는 Excel 데스크톱 전용이며 Google Sheets·LibreOffice에서는 사용할 수 없습니다.
+
+메뉴의 **문제 신고용 로그 열기**에서 진단 정보를 확인할 수 있습니다. [문제 제보](https://github.com/yooongZa/tabledown/issues) · [변경 이력과 검증 기록](CHANGELOG.md)
 
 ## 개인정보 처리방침
 
-Tabledown은 사용자의 개인정보를 수집, 저장, 판매, 공유하지 않습니다.
+모든 변환은 기기 안에서 처리합니다. Tabledown은 개인정보를 수집·판매·공유하지 않으며 계정, 광고, 사용량 추적, 외부 서버 전송 기능이 없습니다.
 
-‘XML 변환 복사’를 명시적으로 실행하면 현재 Excel 선택 영역의 셀 값·빈칸·병합 구조를, ‘수식 포함 XML 변환 복사’를 실행하면 선택 영역의 셀 값·빈칸·수식·주소와 수식에 직접 적힌 같은 통합문서 A1 참조값을 로컬에서 읽어 같은 clipboard에 XML text로 기록합니다. 셀 값과 수식 내용은 로그에 남지 않고 외부 서버로 전송되지 않습니다.
+자동 변환은 현재 클립보드를 읽고 같은 클립보드에 결과를 기록합니다. XML 복사는 선택한 Excel 셀을 읽습니다. **수식 복사에는 선택 영역 밖이나 같은 통합문서의 다른 시트에 있는 직접 A1 참조 셀 값도 포함될 수 있습니다.** 외부 통합문서를 열거나 참조를 재귀적으로 추적하지 않습니다.
 
-앱은 macOS clipboard(클립보드)의 현재 내용을 로컬에서 읽고, 표 변환에 필요한 text/html format(텍스트/HTML 형식)을 같은 clipboard에 다시 기록합니다. 변환은 사용자의 Mac 안에서만 처리되며 외부 server(서버)로 전송되지 않습니다.
+셀 값과 수식은 진단 로그에 기록하지 않습니다. Mac의 로컬 로그는 `~/Library/Logs/Tabledown.log`에 저장되며 직접 삭제할 수 있습니다. [Windows 개인정보 처리방침](windows/PRIVACY.md)
 
-Tabledown은 계정 생성, analytics(분석), 광고 추적, 위치 정보, 연락처, 사진, 파일 업로드 기능을 사용하지 않습니다.
+<details>
+<summary>개발자 안내</summary>
 
-진단 로그는 앱 동작 확인을 위해 사용자의 Mac 안의 `~/Library/Logs/Tabledown.log`에만 저장됩니다. 로그는 clipboard 원문 전체를 외부로 전송하지 않으며, 사용자가 직접 삭제할 수 있습니다.
-
-## 변경 이력
-
-- 2026-10-08: **macOS 0.6.2 / Windows 0.3.2 공개.** [Mac DMG·ZIP](https://github.com/yooongZa/tabledown/releases/tag/v0.6.2)과 [Windows ZIP·MSIX](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.2)를 배포하고 공개 다운로드 SHA-256을 확인했다. Mac 서명·Apple 공증·후보 검사 463개, Windows 두 빌드 각각 208개와 실제 EXE 검사를 통과했다. App Store는 `WAITING_FOR_REVIEW`, Microsoft Store 0.3.2.0 Submission 6은 `In certification`이며 승인 후 자동 공개다(2026-10-08 확인). 메뉴 정리·빈칸 설정 설명·Windows 일반 XML 직접 선택을 포함한다. 아래 개발판 실기기 검증과 최종 패키지 검증을 구분한다.
-
-- 2026-10-08 (개발판 수정·재설치): macOS QA 0.6.2 / Windows Dev 0.3.2.0에서 명시적 Markdown 메뉴 제거, ‘그룹·분류 빈칸 채우기’ 설명 개선, Windows 일반 XML의 현재 선택 읽기를 반영했다. 이전 개발판의 문자/수식/새 복사 보호 누락을 보완한 소스로 실기기 시나리오 Windows 30개·iMac 31개를 통과했다(준비·성능 포함). 같은 4,008셀/500수식의 단축키 출력은 Windows 6.13초, iMac 17.52초(각 3회 중앙값)였다. 부분 병합 거부의 실기기 재현과 iMac 큰 표 대기는 남는다. 공개 배포는 변경하지 않았다.
-
-- 2026-10-08 (설치 개발판 재검증): **Tabledown.Dev 0.3.0은 macOS와 동등하지 않습니다.** 실제 Excel과 설치 EXE의 17개 시나리오 중 11개 통과·6개 기준 미충족입니다. Markdown 왕복 줄바꿈 손상과 수식 읽기 중 새 복사본 덮어쓰기를 재현했고, 수식 참조값·값 타입·계산 상태 및 일반 XML의 직접 선택 읽기가 없습니다. 500수식 출력은 3.16초였으나 처리 범위가 달라 Mac과 동등 성능으로 비교할 수 없습니다. 아래 공개판 0.2.8 결과와 구분합니다.
-
-- 2026-10-08: **Windows 실기기·macOS 비교 검증.** Windows 공개판 0.2.8은 단위 193/193과 실제 EXE 12/12(연속 복사 32회)를 통과했고, 공통 변환 34개 결과가 macOS와 일치했습니다. 시험 PC의 별도 개발판 0.3.0에서는 특수문자·Office 줄바꿈 손상 2건을 재현했습니다. Windows의 명시적 복사 메뉴는 macOS와 차이가 있으며, Excel 활성화 후 실제 왕복·병합·수식 참조/타입·1만 셀 경계·단축키·새 복사 취소/재시도 10개 시나리오도 모두 통과했습니다. 동일 4,008셀/500수식 읽기는 Windows i5 6.03초, iMac M1 17.45초(각 3회 중앙값)였고 계산 상태를 제외한 데이터가 일치했습니다. 하드웨어·Excel/API 차이를 포함한 비교입니다. 제품 코드와 설치 패키지는 변경하지 않았습니다.
-
-- 2026-10-07: **Windows 0.2.8 공개.** [ZIP·MSIX](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.2.8)을 배포했다. Windows 테스트 193/193, 실제 EXE 자동 변환·단축키·중복 실행, 서명·번들 소스·공개 다운로드 해시 검증을 통과했다. 기존 Microsoft Store 앱에 0.2.8.0 업데이트를 Submission 5로 제출했으며 현재 `In certification`, 승인 후 자동 공개다. 실제 Excel/MSIX 설치 시험은 미실시다. macOS Latest 다운로드는 유지한다.
-
-- 2026-10-07: **macOS 0.6.1 정식 업데이트(빌드 0.6.7).** 세 복사 메뉴와 Excel 왕복의 특수문자·공백·줄바꿈 개선, 수식 읽기 속도 개선을 포함한다. [DMG·ZIP](https://github.com/yooongZa/tabledown/releases/tag/v0.6.1)을 GitHub Latest로 공개했고, 서명·Apple 공증·재다운로드 해시를 확인했다. 후보 검증 448개 통과·Windows 전용 27개 제외, iMac 재시험 58 통과·1 미재현이다. App Store는 `WAITING_FOR_REVIEW`(2026-10-07 확인)이며 승인 후 자동 공개다. 큰 수식 표의 대기는 남는다.
-
-- 2026-10-07 (macOS 소스·iMac QA 설치본): 실제 Excel 왕복에서 특수문자·셀 줄바꿈 손상을 수정했다. 수식 읽기를 최적화하고 오류값·빈 문자열 구분과 복사 중 취소 보호를 유지했다. 4,008셀·500수식은 92.2초에서 41.8초로 줄었으며 기존 XML과 같다. 실기기 54 통과·1 미재현, 로컬/iMac 관련 테스트 각 280/280, 실행 앱 포함 매트릭스 85/85를 확인했다. 큰 수식 표의 대기는 남으며 공개 배포는 별도다.
-
-- 2026-10-02 (개발 소스, 미배포): 자동 생성된 Markdown 원문을 다시 복사할 때 백슬래시·파이프·문자참조·문자 그대로의 `<br>`가 원래 셀 값과 열 구조로 복원되도록 수정했다. macOS·Windows 공용 변환에 적용되며 기존 공백 정리와 HTML 보존은 유지한다.
-
-- 2026-09-10: **macOS 0.6.1 / TestFlight build 0.6.6 배포 완료.** Excel에 Markdown 표를 붙일 때 줄바꿈·앞뒤/연속 공백·병합 위치를 보존하고, 큰 수식 선택의 취소 응답을 개선했다. iMac 자동 검증 350개와 실제 Excel 붙여넣기를 통과했고, 새 복사 후 취소는 5회 모두 1.7~3.9초였다. 커밋 `e07dcfa`와 최종 패키지 소스 일치, 서명·Apple 사전 검증·업로드·처리 `VALID`, 내부 그룹 `22`의 `IN_BETA_TESTING` 및 한·영 변경 안내 저장을 확인했다. 기존 XML·자동 변환·기본 설정·크기 한도와 앱 소개는 유지한다.
-
-- 2026-09-10: **macOS 0.6.1 / TestFlight build 0.6.5 배포 완료.** 세 복사 메뉴 통합을 기존 내부 테스트 그룹 `22`에 제공했다. 후보 검증 375개 통과·Windows 전용 27개 제외, 앱/설치자 서명과 Apple 검사·업로드·처리 VALID 및 IN_BETA_TESTING을 확인했다. 한·영 변경 안내는 표를 문서에 옮기고 AI에 질문하는 편의 중심으로 저장했으며 기존 앱 소개 문구는 보존했다. App Store 심사 제출과 GitHub 공개 배포는 이번에 진행하지 않았다.
-
-- 2026-09-10 (개발 소스, 미배포): macOS 메뉴를 ‘마크다운 복사’·‘XML 변환 복사’·‘수식 포함 XML 변환 복사’로 통일했다. 수식 XML에 AI용 맥락·공통 참조 출력을 통합했고, Markdown 직접 복사와 특수문자·줄바꿈 왕복 보존을 보완했다. 기본 설정·기존 단축키와 자동 복사·붙여넣기 흐름은 유지한다.
-
-- 2026-09-09: **macOS 0.6.0 정식 배포본 (빌드 0.6.4).** Apple Silicon용 DMG·ZIP의 서명·Apple 공증·Gatekeeper와 배포 후보 자동 검증 223개를 통과했다. GitHub [v0.6.0 설치 파일](https://github.com/yooongZa/tabledown/releases/tag/v0.6.0)을 Latest로 공개했고, 실제 DMG·ZIP 다운로드의 크기·SHA-256과 고정 DMG 링크를 확인했다. 2026-09-09 최종 조회에서 App Store는 심사 대기 중이며 승인 후 자동 공개로 설정돼 있다. 확정된 한국어 소개 문구를 그대로 반영했다. Windows 설치 파일은 이번 배포에 포함하지 않는다.
-
-- 2026-09-09: **macOS 0.6.0 / TestFlight build 0.6.4 업로드.** Excel 계산을 AI에 질문할 때 제목·항목명과 계산에 쓰인 값을 함께 가져가는 새 ‘AI용 간결 복사’, 반복 내용 정리, Apple 메모 한글 표 붙여넣기 개선을 포함한다. 한국어·영어 TestFlight 설명은 표 옮기기·Excel에서 이어서 편집하기·자료 설명 준비 등 앱 전체의 사용 편의 중심으로 작성했다. 최종 제목은 “당신의 AI를 더 스마트하게 사용하세요.”이며 한국어 안내는 사용자가 확정한 원문을 반영했다. 배포 후보 자동 검증 223개와 패키지/Apple 검증을 통과했고, 기존 내부 테스트 그룹에서 테스트 가능 상태와 두 언어 설명 저장을 확인했다.
-
-- 2026-09-09: **Markdown 표를 Apple 메모에 붙일 때 한글이 깨지던 문제 수정.** 생성 HTML에 UTF-8 문자 인코딩을 명시했다. Markdown 원문과 기존 Excel·웹 표 HTML은 보존한다. 재설치한 macOS 앱에서 메모·Excel의 한글·이모지·특수문자 8개 셀 및 Excel → Markdown 재복사를 확인했다. 자동 검증은 macOS 인코딩 1개, 변환 51개, Windows 포트 80개 통과·27개 제외(macOS 실행); 이번 변경의 Windows 실기기 검증은 미실시.
-- 2026-07-17: **일반 표→XML도 Excel 직접 선택 방식으로 변경.** Excel에서 표 범위를 선택하고 ‘표 구조·표시값을 XML로 복사’ 또는 `⌘⌃X`를 실행하면 `Cmd+C` 없이 서식 적용값·오류값·유의미한 공백·빈칸·병합 구조를 읽어 XML로 복사한다. clipboard 입력 fallback을 없애 오래된 복사본이 변환되던 UX를 차단했고, 두 번 일치하는 snapshot만 내보내도록 했다.
-- 2026-07-13: **Excel 표의 값·빈칸·수식을 함께 XML로 복사하는 기능 추가 (macOS 0.6.0).** Excel desktop app에서 수식이 포함된 단일 사각형 범위를 선택하고 메뉴 ‘셀 값·수식·참조를 XML로 복사’ 또는 macOS `⌘⌃E` / Windows `Ctrl+Alt+E` 를 실행하면, 모든 셀의 주소·현재 값·빈칸과 수식 셀의 A1/R1C1 수식을 `<표범위>` XML로 함께 복사한다. 일반 빈 셀, `=""` 결과, Excel 오류값을 구분하며 선택 변경·다중 영역·크기 제한은 fail-closed(실패 시 차단) 처리한다. macOS 0.6.0을 **TestFlight build 0.6.1**로 업로드했고 App Store Connect에서 내부 테스트 그룹 `22`의 ‘제출 준비 완료’ 상태를 확인했다. 기능 테스트 39/39, 전체 test matrix 75/75 통과.
-- 2026-07-01: **마크다운 변환에도 ‘빈칸을 자동 채우기’ 적용 (0.5.0).** Excel/Sheets 표를 마크다운으로 변환할 때 병합 셀이 남기던 빈칸을, 설정 ‘빈칸을 자동 채우기’(기본 꺼짐)가 켜져 있으면 채운다 — 그룹 헤더 밴드(`1분기`)를 가로로, 왼쪽 키 열(`부장`)을 세로로 편다. **헤더 프레임만** 채우고 값(데이터) 영역의 빈칸은 그대로 보존(XML 채우기와 동일 가드). 다단 헤더의 평면 구조는 마크다운 표 문법상 그대로 둔다. 이 토글은 이제 XML·마크다운 **두 경로 공통**(옛 ‘XML: 빈칸을 자동 채우기’에서 ‘XML:’ 제거). 토글을 끄면 종전과 동일.
-- 2026-07-01: **Windows: macOS 0.5.0 의 ‘빈칸을 자동 채우기’ 토글 포팅** (macOS 패리티, 0.2.7). 병합 헤더 빈칸을 채우는 로직은 Windows 가 import 하는 공용 `tablemark.converter.html_to_md` 에 이미 있었고, 빠진 건 토글·설정·배선뿐이었다(Windows 엔 `fill_blanks` 옵션이 아예 없었음 — macOS 는 XML 경로에만 있었고 XML 은 macOS 전용). 이제 `conversion.py` 가 `fill_blanks` 플래그를 마크다운 변환(`html_table_to_markdown`/`convert_document_tables`)에 넘기고(기본 꺼짐 → 동작 무변화, HTML 슬롯 유지), 트레이에 체크 가능한 ‘빈칸을 자동 채우기’ 메뉴 항목을 추가(설정 영속, 토글 뒤·언어 앞 — macOS 설정 순서와 동일). Windows 엔 XML 경로가 없어 ‘XML:’ 접두 없음. 회귀 테스트: OFF 면 빈칸 유지·ON 이면 병합 키 열 채움(+HTML 유지)·라벨 번역·메뉴 포함·토글 영속
-- 2026-06-30: **XML 메뉴 라벨을 ‘표를 XML로 복사’ → ‘복사한 표를 XML로 변환’ (영: Convert copied table to XML) (0.4.2).** 동작은 그대로지만 동사를 ‘변환’으로 바꿔 실제 동작을 정확히 표현하고, ‘복사한 표’로 “먼저 표를 복사해야 한다”는 전제조건을 명시(첫 사용자 혼란 해소). 능동형 ‘복사한’이 ‘복사된’보다 자연스러움. 도움말·툴팁·사용법 문구도 일관 갱신.
-- 2026-06-29: **표→XML 전역 단축키를 ⌘⌃C → ⌘⌃X 로 변경 (0.4.1).** X = XML mnemonic 으로 더 직관적. macOS 기본 단축키·앱 단축키와 안 겹치고 토글 ⌘⌃T 와도 멀리 떨어져 오발 위험 낮음. 변환 동작은 그대로(표→XML 복사, HTML drop). 도움말·메뉴 표시·회귀 테스트 갱신.
-- 2026-06-24: **자동변환 켜기/끄기 전역 단축키 추가 — macOS ⌘⌃T (Windows Ctrl+Alt+T) (0.4.0).** 클립보드 자동 변환을 어느 앱에서든 키 하나로 일시정지/재개. 권한 불필요·등록 실패 시 메뉴로 graceful fallback. macOS 는 기존 단일 핫키를 다중 핫키 매니저로 일반화해(Carbon 핸들러 하나가 발화 핫키 ID 로 ⌘⌃C/⌘⌃T 분기) XML(⌘⌃C)과 토글(⌘⌃T)을 함께 처리. Windows 는 user32 `RegisterHotKey` + 전용 메시지 루프 스레드. ⌘⌃/`Ctrl+Alt` 조합은 흔한 시스템·앱 단축키와 안 겹치게 고름.
-- 2026-06-19: **로컬 진단 추가 — 크래시 캡처 + ‘문제 신고용 로그’ (외부 전송 0줄) (0.4.0).** 직배포라 안 보이던 실패를 로컬 로그로 끌어온다 — 외부로 보내는 코드는 0줄이라 "네트워크 연결·텔레메트리 없음, 외부 서버로 아무것도 안 보냄" 약속은 그대로다. `sys.excepthook` + **`threading.excepthook`**(무음으로 사라지던 클립보드 워처 스레드 크래시 포착) + `faulthandler`(네이티브 폴트) 를 `Tabledown.log`/`.crash` 에만 기록하고, 메뉴 ‘문제 신고용 로그 열기’ 로 **스크럽된**(경로·유저명·볼륨·secret 제거) 진단 파일을 만들어 Finder/탐색기로 연다(사용자가 직접 버그리포트에 첨부, 클립보드 미접촉). 변환 에러 메시지·로그도 표 데이터가 새지 않게 하드닝(mac·Windows 동형). DiskOUT 식 *원격* 수집은 이 약속과 충돌해 일부러 안 넣음.
-- 2026-06-19: **자동 변환에 피드백 추가 (0.4.0).** 그동안 Excel↔Markdown 자동 변환이 아무 표시 없이 백그라운드에서 일어나 사용자가 "변환됐다"는 걸 알 수 없었다(붙여넣기 결과가 예상과 달라도 원인이 Tabledown 인지 모름). 이제 표가 변환되면 **메뉴바 아이콘이 0.5초간 체크 표시로 깜빡**인다(수동 XML 의 1초 플래시보다 짧게). 팝업·소리·시스템 알림 없음("권한 0개" 유지).
-- 2026-06-19: **유료화 전면 제거 — 완전 무료 전환 (0.4.0).** XML 변환(메뉴·⌘⌃C)을 가로막던 Pro 구독 게이팅을 풀고, 기부(IAP)·‘구매 복원’·구독 시트·잠금(🔒) 표시를 모두 제거했다(`store.py` 삭제, `settings.py`·`i18n.py`·`setup.py`·`requirements.txt` 의 관련 코드/문자열/의존성도 정리). 전역 단축키와 XML 변환 로직 자체는 그대로 — 게이팅만 사라져 누구나 무료로 쓴다. 클립보드 변환 불변식·테스트 영향 없음(38/38).
-- 2026-06-18: **Windows: 트레이 앱이 여러 개 실행되던 문제 수정 — 단일 인스턴스 가드 추가** (0.2.6). macOS 는 LaunchServices 가 `.app` 두 번째 실행을 막아 단일 인스턴스가 공짜지만, Windows 는 아무것도 막지 않아 수동 실행 + 로그인 자동 실행(StartupTask)·더블클릭 중복·크래시가 남긴 유령 프로세스가 각각 트레이 아이콘 + 클립보드 워처를 하나씩 더 띄웠다 — 워처가 둘이면 클립보드를 서로 덮어써 변환 동작이 깨질 수 있다. `main()` 이 앱을 만들기 전 named mutex(`CreateMutexW("Local\TabledownSingleInstance")`)로 가드해 두 번째 인스턴스를 조용히 종료(세션 한정이라 빠른 사용자 전환 시 사용자별 1개 허용). kernel32 접근은 함수 안으로 미뤄 비-Windows 테스트 러너에서 import 가 안 깨지게 했고(거기선 가드 없이 실행 허용), first/second/no-kernel 3경로 회귀 테스트 추가
-- 2026-06-17: **Windows: Excel/Sheets 표가 마크다운으로 변환 안 되던 핵심 버그 수정** (0.2.5). Excel 은 CF_HTML 의 fragment 마커(`StartFragment`/`EndFragment`)를 `<table>` *안쪽* 에 둬서, 잘라낸 HTML 에 `<table>` 태그가 빠진다 → 표 감지 실패 → 실제 Excel 표를 복사하면 변환 없이 원본 TSV 가 그대로 남았다. `extract_cf_html` 이 표 행만 있고 래퍼가 없으면 `<table>` 로 감싸도록 수정(실제 Windows 클립보드를 떠서 원인 규명·검증, Excel 형식 CF_HTML 회귀 테스트 추가).
-- 2026-06-17: Windows 트레이에 **‘로그인 시 자동 실행’ 토글 추가** (macOS 패리티, 0.2.5). MSIX 매니페스트의 `windows.startupTask` 를 WinRT `StartupTask` API(`winsdk`)로 켜고 끄며, 상태는 OS 의 설정 ▸ 앱 ▸ 시작 프로그램 에 저장(별도 JSON 그림자 없음). 패키지 ID 가 없는 소스/개발 실행과 비-MSIX exe 에서는 항목을 숨김(graceful fallback). 작업 관리자에서 사용자가 꺼둔 경우(`disabled_by_user`)엔 체크가 켜지지 않고 안내 알림을 띄움. 함께 **도움말 창이 안 닫히던 문제 수정** — 모달 `MessageBox` 가 pystray 펌프 스레드를 막고 foreground 권한이 없어 뒤로 떠서 다시 클릭하면 박스가 쌓이던 것을, 전용 스레드 + 단일 인스턴스 가드 + foreground/topmost 플래그로 해결
-- 2026-06-15: Windows 포트를 실제 Windows 에서 처음 구동·검증하고 Microsoft Store 출시를 준비. 트레이 앱이 **시작 즉시 죽던 버그 수정** — 언어 메뉴 콜백이 pystray 가 거부하는 3-인자 lambda 였음(기본 인자까지 인자 수에 포함) → 2-인자 클로저 팩토리(`_language_action`)로 교체. full-trust MSIX 패키징을 실제로 빌드·검증(PyInstaller → 타일 에셋 → makeappx → 자체서명; frozen 앱의 트레이·클립보드 변환 동작 확인). Store 제출용 개인정보 처리방침(`windows/PRIVACY.md`)과 리스팅 문구(`windows/STORE_LISTING.md`) 추가
-- 2026-06-10: UX 정리 1·2차 — 조용히 끝나던 흐름에 피드백 추가. ‘표를 XML로 복사’(메뉴·⌘⌃C) 성공 시 메뉴바 아이콘 1초 체크 플래시(시스템 알림 대신 아이콘 플래시 — 권한 0개 유지), 구매·복원 흐름 알럿(구독 성공/구매 실패/복원 결과 — 사용자 취소는 침묵), 기부 메뉴에 스토어 로컬라이즈 가격 병기 + 구독 시트 가격 동적 표기(하드코딩 가격은 메타데이터 로딩 전 fallback 으로 강등), 비구독 시 ‘표를 XML로 복사 🔒’ 잠금 표시. 첫 실행 1회 환영 안내(메뉴바/트레이 전용 앱이라 설치 후 "아무 일도 안 일어난 것처럼" 보이던 문제), 도움말에 실행 중 버전·⌘⌃C 안내·"GitHub 열기" 버튼 추가. 메뉴 순서 정리(설정 ▸ 을 후원 위로, ‘구매 복원’ 은 후원 서브메뉴 하단으로). Windows: 토글을 고정 라벨 "Tabledown 사용"+체크마크로 통일, 끔 상태를 빨간 사선 트레이 아이콘으로 표시, 트레이 아이콘을 DPI 정확 크기로 렌더(흐릿함 해소), 설정 저장을 read-modify-write JSON 으로 분리, 첫 실행 환영 동일 적용. 변환 토글은 의도적으로 비영속(매 실행 켜짐 — 정책 문서화)
-- 2026-06-08: XML 변환을 **중첩 계층 형식**으로 재설계 — 가로·세로 양방향 다단 헤더를 모두 보존(`<표>` ▸ `<직급그룹 이름>` ▸ `<행 직책>` ▸ `<열그룹 이름>` ▸ `<열 n>`). 세로 그룹도 부모 노드로 중첩(이전 dataset 형식은 행마다 반복; 트레이드오프: 행이 자기완결 아님). 변환 테스트 38/38. (별도: 부분 유료화 스캐폴딩 — 기부 IAP·XML Pro 연간 구독·⌘⌃C 전역 단축키, App Store Connect 설정 전이라 미완성)
-- 2026-06-08: XML 표 변환 추가 (0.3.0). LLM 프롬프트 친화 레코드형+구조 태그 XML — 루트 `<dataset>`, 값마다 `<cell name="…">`, 다단 그룹 헤더는 `<group>` 으로 중첩. 헤더는 태그가 아니라 속성에 넣어(공백·기호·숫자 안전) 어떤 표준 XML 파서로도 깨지지 않고, 루트가 `<table>` 이 아니라 `<dataset>` 이라 HTML 렌더링 환경에서도 내용이 보존됨. 메뉴 ‘표를 XML로 복사’ 로 clipboard 의 표(Excel·마크다운·XML)를 변환 — **클릭 전용**이며 자동 XML→표 역변환은 두지 않음(워처가 일반·설정 XML 을 오인할 위험 방지). Excel 병합 셀 인식(세로 rowspan 은 행마다 채우고, 가로 colspan 그룹 헤더는 `<group>` 중첩). 설정 ‘XML: 빈칸을 자동 채우기’(기본 꺼짐) 로 병합 없이 비운 그룹 열의 빈칸을 위/좌측 값으로 채움(값 열은 보존). 빈칸 채우기·언어·로그인 항목을 ‘설정 ▸’ 서브메뉴로 정리
-- 2026-05-29: Tabledown 0.2.4 를 Mac App Store(TestFlight) 에 build 0.2.4 로 제출하고, notarization(공증)을 거친 DMG·zip 을 GitHub Release(v0.2.4, Latest) 에 첨부
-- 2026-05-29: 순수 Excel/Sheets 표를 마크다운으로 변환할 때도 HTML `<table>` 슬롯을 유지하도록 통일 (0.2.4). 이제 모든 표 케이스에서 HTML 유지 + text 마크다운 보강 — 한 번 복사로 Excel·Word 는 표 형식, 마크다운 에디터는 마크다운을 받음
-- 2026-05-29: Tabledown 0.2.3 을 Mac App Store(TestFlight) 에 build 0.2.3 으로 제출
-- 2026-05-29: 표가 일부 포함된 문서를 붙여넣을 때 text(일반 텍스트) 슬롯의 표 부분만 마크다운 표로 보강하고 HTML `<table>` 슬롯은 유지하도록 변경 (0.2.3). 마크다운 에디터는 마크다운 표를, Word·Excel 등은 원본 표 형식을 그대로 받음. 표 외 문단·헤딩·리스트는 plain text 로 유지
-- 2026-05-29: 표가 일부만 포함된 문서(웹·채팅·Word 등) 를 복사·붙여넣을 때 표만 남고 나머지 텍스트(헤딩·문단·리스트) 가 사라지던 문제 수정 (0.2.2). clipboard HTML 에 `<table>` 외 의미있는 콘텐츠가 있으면 '문서' 로 보고 변환을 건너뛰어 원본을 그대로 보존하고, Excel/Sheets 의 순수 표만 마크다운으로 변환
-- 2026-05-29: Tabledown 0.2.1 을 Mac App Store(TestFlight) 에 제출. App Store Connect 는 build number(`CFBundleVersion`) 가 marketing version 과 무관하게 직전 업로드(0.2.0 의 build 0.2.1)보다 높아야 하므로, build 를 0.2.2 로 올려 빌드 (`TABLEDOWN_BUILD=0.2.2`)
-- 2026-05-29: 웹·채팅 앱(Claude 등)에서 복사한 표를 Excel 에 붙여넣을 때 마크다운 원문이 한 셀에 박히던 회귀 수정 (0.2.1). 이런 표는 clipboard 에 마크다운 text 와 HTML `<table>` 이 함께 실려오는데, 0.2.0 의 `is_markdown_table` 셀 개수 검사 때문에 칸수가 어긋나면 표로 인정되지 않아 HTML 이 제거되고 마크다운으로 변환되던 문제. HTML `<table>` 이 동반된 경우 셀 개수 검사를 건너뛰고(`strict` 파라미터) 원본 clipboard 를 보존하도록 수정. 셀 개수 검사는 HTML 이 없는 순수 텍스트의 false positive(거짓양성) 차단용으로 유지
-- 2026-05-28: Tabledown 0.2.0(빌드 0.2.1)을 Mac App Store 에 심사 제출
-- 2026-05-28: 토글 메뉴를 macOS HIG(휴먼 인터페이스 가이드라인) 컨벤션으로 정리. "활성화 ✓"/"비활성화" 두 라벨 대신 체크마크가 붙는 "Tabledown 사용"(en: "Use Tabledown") 한 라벨로 통일하고, NSMenuItem `state` 로 ON/OFF 를 표시. 변환 OFF 시 메뉴바 아이콘에 사선(slash)을 표시해 메뉴를 열지 않아도 상태 식별 가능. 로그인 자동 실행·언어 선택 항목도 동일한 체크마크 방식으로 통일
-- 2026-05-28: Excel/Sheets 셀 내부 줄바꿈(Alt+Enter)을 공백 대신 `<br>` 로 보존해 Obsidian / GitHub Flavored Markdown 에서 셀 안 줄바꿈이 그대로 렌더링되도록 변경
-- 2026-05-28: `is_markdown_table` 의 false positive(거짓양성) 감소. 헤더와 separator(구분선)의 셀 개수가 일치할 때만 표로 판정해, 둘째 줄이 우연히 `-` 로 시작하는 일반 텍스트가 표로 오인 변환되던 경우를 차단
-- 2026-05-28: Mac App Store 빌드 수정. py2app 의 nested executable(`Contents/MacOS/python`)에 `application-identifier` 대신 sandbox `inherit` entitlements 를 적용해 App Store Connect error 90885 해결. `CFBundleVersion` 을 `TABLEDOWN_BUILD` 환경변수로 분리해 marketing version(`0.2.0`) 을 유지하며 build number 만 올릴 수 있게 해 재업로드 시 error -19232 회피. build number 는 정수 최대 3개여야 하므로 `0.2.0.1`(4개·error 236550) 대신 `0.2.1`(3개) 형식을 사용
-- 2026-05-19: Mac App Store 스크린샷을 실제 앱 UI capture(캡처)로 교체. 1차 거절(Guideline 2.3.3, marketing/promotional 머티리얼 사용 사유) 에 대응해 마케팅 그래픽 4 장을 제거하고, 메뉴바 드롭다운·언어 서브메뉴·변환 결과(Numbers + TextEdit) 등 실제 동작 화면 캡처로 교체
-- 2026-05-19: "메뉴바 아이콘 숨기기" 메뉴 항목 제거. `LSUIElement: True` 앱에서 메뉴바 아이콘이 유일한 UI 였는데 숨기면 종료조차 할 수 없었고, NSStatusItem 의 autosaveName 이 visibility 를 `NSUserDefaults` 에 영구 저장해 앱을 재실행해도 아이콘이 돌아오지 않았음. 시작 시 `NSUserDefaults` 의 stale `NSStatusItem Visible*` 키를 정리해 이전 빌드에서 숨김 상태가 저장된 사용자도 자동 복구
-- 2026-05-15: "로그인 시 자동 실행" 토글 추가. macOS 13+ 의 `SMAppService.mainAppService` API(에이피아이)를 사용해 App Sandbox(앱 샌드박스)와 Mac App Store 빌드와 호환. macOS 12 환경에서는 메뉴 항목을 숨김 (graceful fallback)
-- 2026-05-15: 메뉴바 UI(사용자 인터페이스)와 도움말을 한국어/영어로 다국어화. macOS 시스템 언어를 자동 감지하고, 메뉴의 "언어 / Language" 서브메뉴에서 수동 전환 가능. 선택은 `NSUserDefaults`에 영구 저장
-- 2026-05-11: App Store 제출을 위해 README에 privacy policy(개인정보 처리방침)를 추가
-- 2026-05-11: Tabledown 활성화/비활성화 붙여넣기 차이를 보여주는 비교 스크린샷을 README에 추가
-- 2026-05-11: English README(영어 README)를 추가하고 한국어/영어 문서 간 language link(언어 링크)를 연결
-- 2026-05-11: 공개 GitHub repo(저장소)용 다운로드 안내, 소개문, release badge(릴리스 배지), 설치 안내를 README 상단에 추가
-- 2026-05-11: Tabledown 활성화/비활성화에 따른 Markdown source(마크다운 원문) 변환과 rich text HTML table(서식 있는 텍스트 HTML 표) 붙여넣기 차이를 문서화
-- 2026-05-11: Excel 표에서 만든 Markdown plain text(일반 텍스트)에 block spacing(블록 공백)을 추가하고 HTML table(HTML 표) clipboard format(클립보드 형식)을 제거해 Obsidian에서 기존 문단/목록 바로 아래 붙여넣어도 표 인식 안정화
-- 2026-05-11: Obsidian에서 pipe text(파이프 텍스트)로 붙는 경우를 구분할 수 있도록 troubleshooting(문제 확인)과 known limitations(알려진 제한사항) 문서 정리
-- 2026-05-11: release build script(릴리스 빌드 스크립트)에 `COPYFILE_DISABLE=1`을 적용해 macOS xattr(확장 속성) 때문에 codesign(코드 서명) 검증이 실패하는 문제 완화
-- 2026-05-10: Tabledown이 생성한 clipboard marker(클립보드 마커)를 감지해 자기 출력은 다시 변환하지 않도록 처리
-- 2026-05-10: watcher(감시자)가 변환 직후 외부 clipboard 변경을 놓치지 않도록 changeCount(변경 카운트) 갱신 흐름 조정
-- 2026-05-10: 진단 로그에 1MB rotation(로테이션) 추가
-- 2026-05-10: 사용하지 않는 전역 hotkey(단축키) 코드를 제거하고 Quartz dependency(의존성) 제거
-- 2026-05-10: package version(패키지 버전)을 `tablemark.__version__` 단일 source(소스)로 정리
-- 2026-05-10: build dependency(빌드 의존성)를 `requirements-build.txt`와 `pyproject.toml`로 분리하고 release build script(릴리스 빌드 스크립트) 추가
-- 2026-05-08: Excel 표 복사 시 채팅/마크다운 앱이 PNG로 붙여넣는 문제를 줄이기 위해 rendered format(렌더링 형식) 제거
-- 2026-05-08: Excel 복사 범위 오른쪽 끝의 trailing empty column(뒤쪽 빈 열)을 Markdown 변환 시 제거
-- 2026-05-07: Maccy 같은 clipboard history manager(클립보드 기록 관리자)가 변환본을 자동 생성 항목으로 식별할 수 있도록 pasteboard marker(클립보드 마커) 추가
-- 2026-05-07: 앱 이름을 Tabledown으로 변경하고 bundle metadata(번들 메타데이터), app bundle(앱 번들), 로그 경로를 새 이름에 맞게 갱신
-- 2026-05-07: `Cmd+Ctrl+M` 전역 단축키 방식에서 clipboard watcher(클립보드 감시) 방식으로 변경
-- 2026-05-07: Excel 표 복사 시 Markdown plain text(일반 텍스트)를 추가해 마크다운 에디터에서 바로 붙여넣기 가능
-- 2026-05-07: Markdown 표 복사 시 HTML table(HTML 표)을 추가해 Excel에서 셀 단위로 바로 붙여넣기 가능
-- 2026-05-07: Excel native format(네이티브 형식)을 보존해 Excel → Excel 일반 붙여넣기 호환성 개선
-- 2026-05-07: Excel 병합 셀의 `rowspan`/`colspan`을 빈 셀로 확장해 Markdown 변환 시 행/열 정렬 보존
-- 2026-05-07: 메뉴바 아이콘을 3x2 table(표) 모티브의 40px retina template icon(레티나 템플릿 아이콘)으로 변경
-- 2026-05-07: 기본 사용에서 손쉬운 사용(Accessibility), 입력 모니터링(Input Monitoring) 권한 요구 제거
-- 2026-05-06: crash(충돌) 원인이 되던 `pynput` keyboard hook(키보드 후킹)을 제거하고 Quartz(쿼츠) 기반 구현으로 정리
-
-## .app 빌드
+Mac에서 Python 3.10 이상으로 저장소 루트에서 실행합니다.
 
 ```bash
-pip install -r requirements-build.txt
-scripts/build_release.sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python run.py
 ```
 
-`dist/Tabledown.app`, `dist/Tabledown.zip`이 생성됩니다. 공개 배포에는 notarization(공증)을 거친 `Tabledown.dmg`를 GitHub Release에 첨부합니다.
+앱 코드는 `tablemark/`, 공유 변환 로직은 `tablemark/converter/`, Windows 앱은 `windows/`에 있습니다.
 
-## 프로젝트 구조
+[XML 형식](docs/xml-format-spec.md) · [개발·테스트·배포 지침](AGENTS.md) · [Mac 빌드](scripts/build_release.sh) · [Windows 개발·빌드](windows/README.md#개발)
 
-```
-Tabledown/
-├── run.py                      # 진입점 (macOS)
-├── setup.py                    # py2app 빌드 설정
-├── requirements.txt
-├── requirements-build.txt      # 배포 빌드 의존성
-├── pyproject.toml              # build-system 설정
-├── scripts/                    # 테스트/배포 스크립트
-├── assets/                     # 메뉴바/앱 아이콘
-├── tablemark/                  # macOS 앱 (import 경로는 tablemark 유지)
-│   ├── app.py                  # 메뉴바 메인 (rumps)
-│   ├── clipboard.py            # NSPasteboard 래퍼 + changeCount 확인
-│   ├── settings.py             # 설정 영속 (NSUserDefaults)
-│   ├── i18n.py                 # 한국어/영어 로컬라이제이션
-│   ├── hotkey.py               # 전역 단축키 (Carbon)
-│   ├── login_item.py           # 로그인 시 자동 실행 (SMAppService)
-│   ├── diagnostics.py          # 로컬 크래시 캡처 + 진단 파일
-│   ├── logger.py               # 진단 로그 기록
-│   └── converter/
-│       ├── html_to_md.py       # Excel HTML → 마크다운
-│       ├── md_to_tsv.py        # 마크다운 → TSV/HTML table
-│       └── table_xml.py        # 표 ↔ LLM 친화 XML
-└── windows/                    # Windows 트레이 포트 (독립 버전 트랙)
-    ├── run_windows.py          # Windows 진입점
-    ├── tabledown_windows/      # 트레이 앱 + 클립보드 변환 (pystray)
-    └── tests/                  # Windows 포트 테스트
-```
+</details>
 
-내부 Python package path(패키지 경로)는 기존 import compatibility(임포트 호환성)를 위해 `tablemark/`로 유지합니다.
-
-## 알려진 제한사항
-
-- 병합 셀: 병합 모양은 Markdown에서 표현되지 않지만, 빈 셀을 추가해 행/열 정렬은 유지됨
-- 셀 내부 줄바꿈: 공백으로 치환됨
-- 단일 행 표: 헤더만 있는 표로 변환됨
-- Markdown 표 → Excel 경로는 Excel 호환을 위해 HTML table(HTML 표) 형식을 추가함
-- Excel 표 복사 후 Paste as Picture(그림으로 붙여넣기) 용도는 지원하지 않음
-- clipboard history manager(클립보드 기록 관리자)의 marker(마커) 지원 여부와 설정에 따라 변환본이 history(기록)에 남을 수 있음
-
-## 라이선스
-
-[MIT](LICENSE)
+[MIT License](LICENSE)

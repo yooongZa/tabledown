@@ -141,4 +141,4 @@ macOS 수동 명령의 입력은 clipboard가 아니라 **현재 Excel 단일 �
 - `tablemark/converter/table_xml.py`: `model_to_xml`, bounded serializer(제한 직렬화기), metadata root, `table_xml_to_model`(역변환), `is_table_xml`/`_parse_table_root`/`_validate_column_node`(태그 가드).
 - `tablemark/excel_table.py`: 같은 안정 snapshot에서 source·merge·title metadata 생성.
 - `scripts/run_test_matrix.py`: roundtrip·형식 테스트 갱신.
-- 문서: `CLAUDE.md` 불변식 5, `README.md`/`README.en.md` XML 예시, 기획서.
+- 문서: `CLAUDE.md` 불변식 5, `README.md`/`README.en.md` 사용법, 기획서.
