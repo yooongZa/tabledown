@@ -70,11 +70,12 @@ Tabledown 은 macOS 메뉴바 앱으로, 클립보드를 감시하며 **Excel/Sh
 이 규칙을 건드리면 과거 회귀가 그대로 재발한다.
 
 ### 0. 멀티포맷 클립보드 — 도착지가 슬롯을 고른다
-macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시에** 가진다. 붙여넣는
-앱(도착지)이 자기에게 맞는 슬롯을 고른다 — Excel·Word·메모는 html `<table>`, 마크다운
-에디터(Obsidian 등)는 text. **TableDown 은 복사 시점에 도착지를 알 수 없다.** 따라서
-"한 슬롯만 맞추는" 변환은 틀린 접근이고, 가능하면 **두 슬롯을 공존**시켜 도착지가 각자
-고르게 한다.
+macOS·Windows 클립보드는 **text(일반 텍스트)·HTML·앱별 사용자 정의 형식을 함께** 담는다.
+붙여넣는 앱이 사용할 형식을 고른다. Excel·Word·메모는 HTML 표를 사용할 수 있고,
+Markdown 에디터도 HTML을 우선할 수 있다. Obsidian 1.13.7에서는 `text/markdown` → HTML →
+일반 텍스트 순서의 선택을 확인했다. **Tabledown은 복사 시점에 도착지를 알 수 없다.**
+일반 텍스트의 Markdown·원본 HTML을 함께 유지하고, 자동 변환에서는 브라우저용
+`text/markdown`도 보강한다(불변식 3-M). 일반 텍스트만 검사해 붙여넣기 성공으로 판정하지 말 것.
 
 ### 0-W. Windows CF_HTML — Excel fragment 는 `<table>` 래퍼를 뺀다 (회귀 금지)
 - Windows 의 html 슬롯은 **CF_HTML**("HTML Format") 포맷이다. 헤더에 `StartFragment`/`EndFragment`
@@ -126,9 +127,9 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   (Obsidian 이 html 을 우선해 마크다운이 안 되는 것 회피 — 커밋 `7c677b8`). 그러나 그 표를
   다시 Excel·Word 에 붙이면 표가 깨지는 손실이 있어(불변식 1 과 같은 문제), 0.2.4 에서 다른
   표 케이스와 동일하게 **html 유지로 통일**했다.
-- **트레이드오프(주의)**: html 자동변환이 켜진 마크다운 에디터(Obsidian 등)는 html 을 우선
-  받아 리치 표로 붙일 수 있다(text 의 마크다운이 무시될 수 있음). 이는 도착지 앱 정책이라
-  TableDown 통제 밖이며, "표 형식 붙여넣기를 잃지 않는다"는 이득과의 교환이다.
+- **도착지 호환성**: 형식 선택은 앱·버전에 따라 달라진다. Obsidian의 HTML 재변환 문제는
+  불변식 3-M의 `text/markdown` 보강으로 처리한다. 이 형식을 지원하지 않는 앱의 동작은
+  원본 HTML과 일반 텍스트를 함께 둔 상태에서 실제 붙여넣기로 확인한다.
 
 - **Markdown에서 생성하는 HTML의 UTF-8 선언 유지 (2026-09-09)**: `markdown_table_to_html`의
   `<meta charset="utf-8">`는 Apple 메모가 한글 인코딩을 잘못 추측하지 않도록 한다. Markdown 원문과
@@ -136,10 +137,40 @@ macOS 클립보드는 **text(일반 텍스트) 슬롯과 html 슬롯을 동시�
   writer(클립보드 기록기)와 독립 pasteboard(클립보드)를 거쳐 AppKit HTML importer(가져오기 기능)로
   한글·이모지·특수문자를 확인한다. 단순 HTML 문자열 비교만으로 이 검증을 대체하지 말 것.
 
-- **Obsidian 붙여넣기 보강 (macOS 0.6.3 / Windows 0.3.3)**: 자동 변환 writer는 생성된 text와 같은
-  Markdown을 Chromium DataTransfer의 `text/markdown`에도 기록한다(`tablemark/web_clipboard.py`).
-  HTML과 native 슬롯은 그대로 유지한다. 다른 사용자 정의 MIME은 병합 보존하며 알 수 없는 형식은
-  덮지 않는다. 명시적 XML의 text-only writer에는 이 형식을 추가하지 않는다.
+### 3-M. Excel → Obsidian: HTML 보존과 Markdown 전달을 함께 검증 (2026-10-08)
+
+- **원인**: 일반 텍스트에는 정상 Markdown이 있어도 Obsidian 1.13.7이 원본 Excel HTML을 먼저
+  읽어 다시 변환했다. `<col>`과 태그 사이 CRLF·들여쓰기가 있는 HTML로 빈 헤더 표 뒤에 빈 줄과
+  `|…|` 본문이 생기는 현상을 재현했다. 변환 문자열·HTML 존재 검사만으로는 이 경로를 놓친다.
+- **해결 경로**: 두 플랫폼 `app.py`의 `_augment_clipboard`가 `write_clipboard`에
+  `markdown=updated.get("text")`를 전달한다. 공유 `tablemark/web_clipboard.py::with_markdown`이
+  Chromium DataTransfer(붙여넣기 데이터)의 `text/markdown`을 생성해 Obsidian에 직접 전달한다.
+  macOS 기록기는 `tablemark/clipboard.py`, Windows 기록기는 `windows/tabledown_windows/win_clipboard.py`다.
+- **형식 계약**: macOS는 `org.chromium.web-custom-data`, Windows는
+  `Chromium Web Custom MIME Data Format`에 Chromium `base::Pickle`을 기록한다.
+  UTF-16LE 길이는 code unit(코드 단위), 정렬은 4바이트다. 이모지를 Python 문자 수로 세거나
+  UTF-8 문자열을 그대로 넣지 말 것. Python `pickle`과는 별개이며 실행 객체를 역직렬화하지 않는다.
+- **보존 계약**: 사용자 정의 형식의 Markdown은 일반 텍스트와 같아야 한다. 원본 HTML과 복원 가능한
+  Excel native(고유) 데이터, 다른 MIME 항목을 보존한다. HTML 삭제·공백 제거·표 재생성으로
+  우회하면 다른 앱의 서식·병합이 손실될 수 있다. 알 수 없거나 손상된 사용자 정의 데이터,
+  16 MiB 한도 초과는 덮어쓰지 않는다. 이때 Markdown 보강이 생략될 수 있으므로 모든 입력의
+  Obsidian 호환을 보장한다고 쓰지 말 것.
+- **기존 경계**: 병합은 클립보드를 비우기 전 generation(변경 세대) 검사 안에서 수행한다.
+  새 복사본 보호, 기존 Markdown+HTML의 원본 유지, 명시적 XML의 text-only(일반 텍스트 전용)
+  기록을 유지한다. 이 보강을 XML에 추가하거나 HTML 유지 규칙을 제거하지 말 것.
+- **자동 회귀 검증**: `tests/test_markdown_roundtrip.py`의 `test_chromium_*` 3개는 이모지의
+  UTF-16 길이·정렬, 다른 MIME 보존·재복사, 손상·과대 입력을 확인한다.
+  `tests/test_markdown_html_encoding_macos.py`의
+  `test_browser_markdown_keeps_original_html_and_native_formats`는 독립 pasteboard(클립보드)에서
+  HTML 바이트·native 데이터·Markdown 형식의 공존과 오래된 generation 거부를 확인한다.
+  macOS에서 실행: `.venv/bin/python -m unittest tests.test_markdown_roundtrip tests.test_markdown_html_encoding_macos -v`.
+  Windows는 기존 두 빌드 CI의 `windows/tools/verify_release.py`에서 패키징한 EXE의
+  `native_browser_markdown_format` 검사와 HTML·값·줄바꿈 보존 검사를 함께 통과해야 한다.
+- **실제 붙여넣기 완료 조건**: 자동 변환·writer·Chromium 형식을 수정할 때 실제 Excel 복사본 또는
+  같은 형식의 합성 입력으로 Obsidian 일반 붙여넣기와 Notion/Excel의 표 붙여넣기를 확인한다.
+  최소 3행×2열의 값·한글·이모지·셀 안 줄바꿈, 빈 표와 본문 분리 없음, HTML 보존을 비교한다.
+  실제 Excel 복사/합성 입력, OS·앱 버전, UI 검증/CI 검증을 구분해 기록한다. 미실시 항목을
+  완료로 간주하지 않는다. 이번 재현 예시·확인 범위는 `CHANGELOG.md`의 0.6.3/0.3.3 사고 기록 참조.
 
 ### 4. 표가 포함된 "문서" → text 에 마크다운 표 보강 + html 유지 (0.2.3)
 - 문단·헤딩·리스트 사이에 표가 섞인 문서(`html_has_content_outside_table` 가 True)는

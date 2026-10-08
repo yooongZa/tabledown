@@ -24,6 +24,35 @@
 - **배포·붙여넣기 검증:** macOS 회귀 **286개**, 매트릭스 **77개**, 실제 Windows GitHub/Store CI 각각 **211개**와 패키징한 EXE의 native clipboard `text/markdown` 검사 통과. Windows 두 패키지의 앱 모듈 **22개**가 일치했다. Apple Silicon macOS 앱·DMG 서명, 앱/DMG 공증 `Accepted`, staple·Gatekeeper, 원본 모듈 **17개** 일치, Store PKG 서명·Apple validate/upload를 확인했다. Mac의 실제 Obsidian과 Notion에서 **3행×2열·한글·이모지·셀 줄바꿈**을 확인했다. 이번 긴급 수정의 Windows PC Obsidian 실기기 붙여넣기는 재시험하지 않았다.
 - **주요 실행/근거:** `python -m unittest discover -s tests -v`, 기존 매트릭스 함수, `TABLEDOWN_BUILD=0.6.9 bash scripts/build_app_store.sh`, DMG 빌드·`xcrun notarytool`·`stapler`, `xcrun altool --validate-app/--upload-package`, `gh workflow run windows-build.yml/windows-store.yml`, `python windows/tools/verify_release.py [--store]`, `gh release create/edit`, `git push origin main`. 근거는 `outputs/obsidian_hotfix_20261008/`, `outputs/releases/20261008-0.6.3/`, `20261008-windows-0.3.3/`, `20261008-windows-store-0.3.3/`에 보관했다.
 
+### 2026-10-08 — Obsidian 붙여넣기 오류 원인·재발 방지 기록
+
+- **증상과 원인:** Excel 표를 붙이면 빈 2열 표만 렌더링되고 `|항목|내용|` 같은 데이터 행은 그 아래 문단으로 남았다. 클립보드의 일반 텍스트에는 정상 Markdown이 있었지만, Obsidian 1.13.7은 함께 있던 Excel HTML을 우선 선택해 자체 변환했다. `<col>`과 태그 사이 CRLF·들여쓰기가 있는 입력에서 빈 헤더와 구분선 다음에 빈 줄이 생겨 본문이 표에서 분리됐다. 셀 안 줄바꿈도 이 HTML 재변환 경로를 거쳤다.
+- **검증의 빈틈:** 변환 함수의 문자열, HTML 보존, 배포 파일 검증만으로는 도착지 앱이 어느 형식을 선택하고 어떻게 다시 변환하는지 확인할 수 없었다. “Markdown 에디터는 일반 텍스트를 읽는다”는 개발 지침의 단정도 바로잡았다. 앱·버전별 형식 선택과 실제 붙여넣기 결과를 별도로 확인한다.
+- **최소 재현:** 아래 HTML의 태그 사이 줄바꿈을 CRLF로 만든 합성 입력과 정상 Markdown을 같은 클립보드에 넣고 Obsidian에서 일반 붙여넣기한다. 수정 전에는 빈 표와 본문이 분리됐고, 수정 후에는 헤더 포함 3행×2열과 셀 줄바꿈이 유지됐다. 사용자 원문 대신 합성 값으로 재현한다.
+
+  ```html
+  <meta charset="utf-8"><table>
+   <col width=80>
+   <col width=240>
+   <tr>
+    <td>항목</td>
+    <td>내용</td>
+   </tr>
+   <tr>
+    <td>Q.1</td>
+    <td>한글 테스트 🙂</td>
+   </tr>
+   <tr>
+    <td>A-1</td>
+    <td>줄바꿈<br>둘째 &amp; 값</td>
+   </tr>
+  </table>
+  ```
+
+- **해결:** `fe6b32e`에서 macOS·Windows 자동 변환 기록기에 같은 Markdown의 Chromium `text/markdown` 형식을 보강했다. Obsidian이 이 형식을 우선 읽도록 하고 원본 HTML·복원 가능한 Excel native 형식은 보존했다. `tablemark/web_clipboard.py`의 공용 직렬화기를 두 플랫폼이 함께 쓰며, macOS 0.6.3·Windows 0.3.3에 배포했다. 손상되거나 한도를 넘는 사용자 정의 데이터는 원본을 보존하고 보강을 생략할 수 있다. 기존 노트는 자동 복구되지 않으므로 업데이트 후 Excel에서 다시 복사해 붙여넣는다.
+- **재발 방지:** `AGENTS.md`와 `CLAUDE.md`의 불변식 0·3·3-M에 형식 선택, 두 플랫폼의 호출 경로, UTF-16 길이·4바이트 정렬, 다른 MIME 보존, 새 복사 보호, XML 적용 제외를 기록했다. 해당 경로 수정 시 공용 직렬화·macOS 실제 기록기·Windows 패키지 검사와 도착지 앱 붙여넣기를 함께 확인한다. HTML 제거·공백 정리·재생성으로 이 문제를 우회하지 않는다.
+- **검증 범위:** 긴급 수정 당시 Mac Obsidian·Notion의 실제 붙여넣기와 Windows CI의 패키징 EXE 검증을 통과했다. Windows PC Obsidian 실기기 재시험은 미실시다. 이번 기록 작업에서는 앱 코드·버전을 유지하고 `.venv/bin/python -m unittest tests.test_markdown_roundtrip tests.test_markdown_html_encoding_macos -v`의 **28/28** 통과, 두 지침의 수정 구간 일치, 문서/코드 대응, `git diff --check`를 확인했다. 실제 앱 붙여넣기·Windows CI·배포를 다시 실행하지 않았다.
+
 ## [0.6.2] / [0.3.2] - 2026-10-08 (macOS / Windows)
 
 - **GitHub 공개 완료:** macOS **0.6.2 / build 0.6.8**의 [DMG·ZIP](https://github.com/yooongZa/tabledown/releases/tag/v0.6.2)과 Windows **0.3.2 / MSIX 0.3.2.0**의 [portable ZIP·자체서명 MSIX](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.2)을 공개했다. 태그 `v0.6.2`·`windows-v0.3.2`는 검증 후보 `4533696`을 가리킨다. 두 플랫폼 공개 파일의 인증 없는 재다운로드 크기·SHA-256, macOS Latest `v0.6.2`와 고정 DMG 링크를 확인했다.
