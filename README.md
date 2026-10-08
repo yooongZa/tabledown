@@ -256,6 +256,8 @@ Tabledown은 계정 생성, analytics(분석), 광고 추적, 위치 정보, 연
 
 ## 변경 이력
 
+- 2026-10-08: **Windows 실기기·macOS 비교 검증.** Windows 공개판 0.2.8은 단위 193/193과 실제 EXE 12/12(연속 복사 32회)를 통과했고, 공통 변환 34개 결과가 macOS와 일치했습니다. 시험 PC의 별도 개발판 0.3.0에서는 특수문자·Office 줄바꿈 손상 2건을 재현했습니다. Windows의 명시적 복사 메뉴는 macOS와 차이가 있으며, Excel 라이선스 만료로 실제 셀 붙여넣기·수식 읽기 비교는 남아 있습니다. 제품 코드와 설치 패키지는 변경하지 않았습니다.
+
 - 2026-10-07: **Windows 0.2.8 공개.** [ZIP·MSIX](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.2.8)을 배포했다. Windows 테스트 193/193, 실제 EXE 자동 변환·단축키·중복 실행, 서명·번들 소스·공개 다운로드 해시 검증을 통과했다. 기존 Microsoft Store 앱에 0.2.8.0 업데이트를 Submission 5로 제출했으며 현재 `In certification`, 승인 후 자동 공개다. 실제 Excel/MSIX 설치 시험은 미실시다. macOS Latest 다운로드는 유지한다.
 
 - 2026-10-07: **macOS 0.6.1 정식 업데이트(빌드 0.6.7).** 세 복사 메뉴와 Excel 왕복의 특수문자·공백·줄바꿈 개선, 수식 읽기 속도 개선을 포함한다. [DMG·ZIP](https://github.com/yooongZa/tabledown/releases/tag/v0.6.1)을 GitHub Latest로 공개했고, 서명·Apple 공증·재다운로드 해시를 확인했다. 후보 검증 448개 통과·Windows 전용 27개 제외, iMac 재시험 58 통과·1 미재현이다. App Store는 `WAITING_FOR_REVIEW`(2026-10-07 확인)이며 승인 후 자동 공개다. 큰 수식 표의 대기는 남는다.

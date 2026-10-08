@@ -256,6 +256,8 @@ Diagnostic logs are stored only on the user's Mac at `~/Library/Logs/Tabledown.l
 
 ## Changelog
 
+- 2026-10-08: **Windows device and macOS comparison.** Windows release 0.2.8 passed 193/193 unit tests and 12/12 native EXE scenarios, including 32 repeated copies. All 34 shared conversion decisions matched macOS. The separate 0.3.0 development build installed on the test PC reproduced two literal-text/Office-line-break regressions. Explicit copy menus still differ between platforms. An expired Excel license blocked real-cell paste and formula-reader comparisons. Product code and installed packages were unchanged.
+
 - 2026-10-07: **Windows 0.2.8 released.** Published [ZIP and MSIX packages](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.2.8). Passed 193/193 Windows tests, packaged EXE conversion/hotkey/single-instance checks, signature/source verification, and public download hashes. Submitted version 0.2.8.0 to the existing Microsoft Store app as Submission 5; it is in certification and will publish after approval. Real Excel/MSIX installation was not tested. The macOS Latest download remains unchanged.
 
 - 2026-10-07: **macOS 0.6.1 update (build 0.6.7).** Includes the three copy commands, fixes for special characters, spaces and line breaks in Excel round trips, and faster formula reading. Published the signed and notarized [DMG and ZIP](https://github.com/yooongZa/tabledown/releases/tag/v0.6.1) as GitHub Latest and verified public download hashes. Candidate checks passed 448 tests, with 27 Windows-only skips; iMac retesting passed 58 scenarios with one unexercised case. App Store state: `WAITING_FOR_REVIEW` as checked on October 7, 2026, with automatic release after approval. Large formula ranges still take time.

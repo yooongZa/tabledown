@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### 2026-10-08 — Windows 실기기와 macOS 비교 검증
+
+- **Windows 실기기:** SSH로 Windows 11/i5-12400F/16GB PC를 점검했다. 현재 소스 67개 해시를 확인하고 Windows 포트 116/116·공용 77/77, macOS 단위 282/282·converter 매트릭스 51/51을 통과했다. 17가지 입력의 빈칸 채움 OFF/ON **34개 결정 결과**와 14종 벤치마크의 입력·출력 SHA-256이 두 플랫폼에서 일치했다.
+- **공개 Windows 0.2.8 EXE:** 배포 ZIP과 실행 파일 해시 일치, 실제 사용자 데스크톱에서 **12/12 시나리오**(32회 연속 복사 포함)를 통과했다. 한글/이모지/literal 20종·Office 공백/줄바꿈·Excel 형식 CF_HTML 모사·문서 본문·원본 HTML/native 형식 유지·RTF 제거·중복 실행·단축키 일시정지/재개·재시작/설정 보존을 확인했다. 100/1,000/4,008/10,000셀 자동 변환 중앙값은 **106/155/308/761ms**다. 초기 관찰 도구의 NULL 소유 창/메시지 처리 오류 및 실험용 Python 충돌은 제품 결함으로 집계하지 않았고, 별도 메시지 루프와 유효 소유 창을 갖춘 관찰 프로세스로 최종 재시험했다.
+- **설치 개발판 차이:** PC의 `Tabledown.Dev 0.3.0.0`(앱 0.3.0)은 현재 소스와 다른 빌드다. 같은 관찰 조건의 재시험에서 Office 공백·줄바꿈 손상과 역슬래시/문자참조/literal `<br>` 손상 **2건**을 재현했다(본문 보존 1건 통과). 공개판 0.2.8은 해당 입력을 통과했다. 현재 Windows 공개판에는 macOS의 Excel 직접 선택 Markdown/일반 XML 메뉴가 없고, 수식 XML과 AI 간결 XML도 별도 메뉴다. 설치 패키지·제품 코드는 변경하지 않았다.
+- **속도와 남은 검증:** Python 3.12.10/3.12.9·BeautifulSoup 4.14.3에서 동일 입력을 9회씩 측정했다. Windows i5와 Mac M4 Max 비교에서 순수 변환은 약 1.7~2.3배 차이이며 하드웨어 영향을 포함한다(1만 셀 HTML→Markdown **279ms/160ms**). Windows Excel은 라이선스 만료로 새 문서 생성/선택 조작이 차단돼 실제 Excel 붙여넣기·수식 읽기/취소·병합/셀 한도 실기기 검증은 미완료다. 별도 iMac M1에서는 같은 참조 2개를 반복하는 4,008셀·500수식 안정 읽기를 3회 측정해 중앙값 **17.45초**를 확인했으며 Windows 값이 없어 플랫폼 비교에는 사용하지 않았다. 최종 클립보드 복원·기존 앱 재실행·설정 보존과 iMac 임시 문서/Excel 정리를 확인했다.
+- **주요 실행/근거:** `.venv/bin/python -m unittest discover -s tests -v`, converter 매트릭스, Windows `C:\py312\python.exe …\run_qa.py unit/bench`, SSH로 생성한 임시 사용자 데스크톱 작업의 `portable_retest_final.py`·`installed_retest_final.py`. `outputs/windows_parity_20261008/REPORT.html`·`FINAL-RESULT.json`에 버전별 결과, 원시 시간, 제외한 검사 도구 실패와 남은 범위를 기록했다.
+
 ## [0.2.8] - 2026-10-07 (Windows)
 
 - **Microsoft Store 0.2.8.0 업데이트 심사 접수 완료:** 기존 출시 앱 [`9NGS4C0N2Z6L`](https://apps.microsoft.com/detail/9NGS4C0N2Z6L)의 공개 0.2.7.0을 잇는 Submission 5(`1152921505702064353`)를 제출했다. 2026-10-07 확인 상태는 **In certification / Pre-processing**, 승인 후 자동 공개다. 새 0.2.8.0의 사용자 공개는 아직 확인되지 않았다. Partner Center 패키지 Validated, 한·영 변경 안내 저장 원문 일치, 기존 소개·가격·시장·속성 보존을 확인했다.
