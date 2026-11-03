@@ -342,6 +342,7 @@ class CopyAsXmlActionTests(unittest.TestCase):
             return_value={
                 "text": "| A |",
                 "html": "<table><tr><td>A</td></tr></table>",
+                "markdown": "| A |",
                 "drop_types": set(),
             }
         )

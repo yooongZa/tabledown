@@ -295,6 +295,43 @@ def run_converter_tests() -> list[TestResult]:
             RENDERED_TABLE_TYPES,
         ),
     )
+    check("html_single_cell_row_or_column_left_untouched", _single_cell_row_or_column_untouched)
+    check(
+        "html_bare_table_injects_browser_markdown",
+        lambda: _assert_equal(
+            # Excel/Sheets bare table: text/markdown carries the same Markdown
+            # as the text slot so Obsidian does not re-convert Excel HTML (3-M).
+            (lambda r: r["markdown"] == r["text"])(
+                TabledownApp._converted_clipboard(None, {"html": HTML_BASIC, "text": "x"})
+            ),
+            True,
+        ),
+    )
+    check(
+        "html_document_does_not_inject_browser_markdown",
+        lambda: _assert_equal(
+            # Documents keep Obsidian's own HTML conversion (headings, links):
+            # only the text slot is augmented (0.6.3 regression).
+            "markdown" in TabledownApp._converted_clipboard(
+                None, {"html": HTML_NOISE, "text": "Before\n제품 수량\n키보드 3\nAfter"}
+            ),
+            False,
+        ),
+    )
+    check(
+        "html_link_table_does_not_inject_browser_markdown",
+        lambda: _assert_equal(
+            "markdown" in TabledownApp._converted_clipboard(
+                None,
+                {
+                    "html": '<table><tr><td>이름</td><td>링크</td></tr><tr><td>A</td>'
+                    '<td><a href="https://example.test">문서</a></td></tr></table>',
+                    "text": "이름\t링크\nA\t문서",
+                },
+            ),
+            False,
+        ),
+    )
     check(
         "html_table_with_markdown_text_preserved",
         lambda: _assert_equal(
@@ -1144,6 +1181,20 @@ def _is_tabledown_running() -> bool:
         text=True,
     )
     return bool(result.stdout.strip())
+
+
+def _single_cell_row_or_column_untouched() -> str:
+    """One Excel cell, row or column must paste as the value, not a table."""
+    cases = (
+        ("<table><tr><td>1,234</td></tr></table>", "1,234"),
+        ("<table><tr><td>이름</td><td>부서</td></tr></table>", "이름\t부서"),
+        ("<table><tr><td>a@x.test</td></tr><tr><td>b@x.test</td></tr></table>", "a@x.test\nb@x.test"),
+        # A trailing empty column is trimmed, so this is still one column.
+        ("<table><tr><td>A-001</td><td></td></tr><tr><td>A-002</td><td></td></tr></table>", "A-001\t\nA-002\t"),
+    )
+    for html, text in cases:
+        _assert_equal(TabledownApp._converted_clipboard(None, {"html": html, "text": text}), None)
+    return f"{len(cases)} small selections untouched"
 
 
 def _xml_key_header_survives_own_parser() -> str:

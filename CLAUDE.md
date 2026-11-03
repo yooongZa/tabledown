@@ -138,6 +138,10 @@ Markdown 에디터도 HTML을 우선할 수 있다. Obsidian 1.13.7에서는 `te
 - **도착지 호환성**: 형식 선택은 앱·버전에 따라 달라진다. Obsidian의 HTML 재변환 문제는
   불변식 3-M의 `text/markdown` 보강으로 처리한다. 이 형식을 지원하지 않는 앱의 동작은
   원본 HTML과 일반 텍스트를 함께 둔 상태에서 실제 붙여넣기로 확인한다.
+- **자동 변환 최소 크기 (2026-11-03)**: 순수 표 분기는 변환 결과가 **2행 이상·2열 이상**일 때만
+  쓴다(`is_auto_table_markdown`, 빈 마지막 열 정리 후 기준). Excel 한 칸(주문번호·금액)·한 행·한 열
+  (이메일 목록)은 값으로 붙여야 하므로 클립보드를 건드리지 않는다. 한 칸 Markdown 표가 검색창·터미널·
+  메신저에 `| 1,234 |`로 들어가던 문제다. 문서 분기와 Markdown 텍스트 분기에는 적용하지 않는다.
 
 - **Markdown에서 생성하는 HTML의 UTF-8 선언 유지 (2026-09-09)**: `markdown_table_to_html`의
   `<meta charset="utf-8">`는 Apple 메모가 한글 인코딩을 잘못 추측하지 않도록 한다. Markdown 원문과
@@ -150,10 +154,17 @@ Markdown 에디터도 HTML을 우선할 수 있다. Obsidian 1.13.7에서는 `te
 - **원인**: 일반 텍스트에는 정상 Markdown이 있어도 Obsidian 1.13.7이 원본 Excel HTML을 먼저
   읽어 다시 변환했다. `<col>`과 태그 사이 CRLF·들여쓰기가 있는 HTML로 빈 헤더 표 뒤에 빈 줄과
   `|…|` 본문이 생기는 현상을 재현했다. 변환 문자열·HTML 존재 검사만으로는 이 경로를 놓친다.
-- **해결 경로**: 두 플랫폼 `app.py`의 `_augment_clipboard`가 `write_clipboard`에
-  `markdown=updated.get("text")`를 전달한다. 공유 `tablemark/web_clipboard.py::with_markdown`이
+- **해결 경로**: 두 플랫폼 `app.py`의 `_augment_clipboard`가 변환 결과의 `markdown` 값을
+  `write_clipboard`에 전달한다. 공유 `tablemark/web_clipboard.py::with_markdown`이
   Chromium DataTransfer(붙여넣기 데이터)의 `text/markdown`을 생성해 Obsidian에 직접 전달한다.
   macOS 기록기는 `tablemark/clipboard.py`, Windows 기록기는 `windows/tabledown_windows/win_clipboard.py`다.
+- **주입 범위 (2026-11-03, 0.6.3/0.3.3 회귀 수정)**: `markdown` 값은 **링크 없는 순수 표**(Excel·Sheets
+  bare table) 분기와 **Markdown 텍스트 → HTML** 분기에서만 넣는다. 표가 섞인 **문서** 분기와 셀에
+  `<a href>`가 있는 표는 넣지 않는다 — Obsidian이 `text/markdown`을 HTML보다 먼저 읽어서, 문서의
+  제목·목록·링크·코드를 Tabledown 평탄화본으로 덮었기 때문이다. 이 경우 Obsidian은 예전처럼 원본 HTML을
+  직접 변환한다(링크 셀이 있는 Excel 표는 3-M 증상이 다시 날 수 있는 의도된 trade-off). 링크를
+  `[텍스트](URL)`로 직렬화하는 안은 escape 왕복 검증 뒤 별도로 검토한다. 주입을 다시 모든 분기로
+  넓히지 말 것.
 - **형식 계약**: macOS는 `org.chromium.web-custom-data`, Windows는
   `Chromium Web Custom MIME Data Format`에 Chromium `base::Pickle`을 기록한다.
   UTF-16LE 길이는 code unit(코드 단위), 정렬은 4바이트다. 이모지를 Python 문자 수로 세거나
@@ -171,6 +182,10 @@ Markdown 에디터도 HTML을 우선할 수 있다. Obsidian 1.13.7에서는 `te
   `tests/test_markdown_html_encoding_macos.py`의
   `test_browser_markdown_keeps_original_html_and_native_formats`는 독립 pasteboard(클립보드)에서
   HTML 바이트·native 데이터·Markdown 형식의 공존과 오래된 generation 거부를 확인한다.
+  주입 범위는 converter 매트릭스의 `html_bare_table_injects_browser_markdown`·
+  `html_document_does_not_inject_browser_markdown`·`html_link_table_does_not_inject_browser_markdown`과
+  Windows `test_browser_markdown_is_injected_only_for_plain_tables`가, 최소 크기는
+  `html_single_cell_row_or_column_left_untouched`·`test_single_excel_cell_row_or_column_is_left_untouched`가 지킨다.
   macOS에서 실행: `.venv/bin/python -m unittest tests.test_markdown_roundtrip tests.test_markdown_html_encoding_macos -v`.
   Windows는 기존 두 빌드 CI의 `windows/tools/verify_release.py`에서 패키징한 EXE의
   `native_browser_markdown_format` 검사와 HTML·값·줄바꿈 보존 검사를 함께 통과해야 한다.

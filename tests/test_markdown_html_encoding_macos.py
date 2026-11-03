@@ -39,7 +39,9 @@ class MarkdownHtmlEncodingTests(unittest.TestCase):
             original_html = bytes(pasteboard.dataForType_("public.html"))
             with patch("tablemark.clipboard.NSPasteboard") as pasteboards:
                 pasteboards.generalPasteboard.return_value = pasteboard
-                write_clipboard(**update, markdown=update["text"], mark_generated=True,
+                # A plain spreadsheet table carries its own text/markdown payload.
+                self.assertEqual(update["markdown"], update["text"])
+                write_clipboard(**update, mark_generated=True,
                                 expected_change_count=int(pasteboard.changeCount()))
             self.assertEqual(bytes(pasteboard.dataForType_("public.html")), original_html)
             self.assertEqual(pasteboard.stringForType_("test.excel-native"), "native-data")

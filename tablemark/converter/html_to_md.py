@@ -562,6 +562,36 @@ def _clean_cell(text: str) -> str:
     return _escape_markdown_cell("\n".join(lines)) or " "
 
 
+# Automatic conversion leaves smaller selections alone: one Excel cell, row or
+# column is usually a value to paste (an order number, a list of e-mail
+# addresses), not a table — a one-cell Markdown table breaks search boxes,
+# terminals and chat inputs.
+MIN_AUTO_TABLE_ROWS = 2
+MIN_AUTO_TABLE_COLUMNS = 2
+
+_LINK_PATTERN = re.compile(r"<a\b[^>]*\bhref\s*=", re.IGNORECASE)
+
+
+def is_auto_table_markdown(markdown: str) -> bool:
+    """True if ``html_table_to_markdown`` output spans at least 2×2 cells.
+
+    Reads the shape from this module's own output (one header line, the
+    generated ``| --- |`` separator, one line per body row; cell line breaks
+    are already ``<br>``), so the HTML is not parsed a second time.
+    """
+    lines = markdown.split("\n")
+    if len(lines) < 2:
+        return False
+    rows = len(lines) - 1
+    columns = lines[1].count("| ---")
+    return rows >= MIN_AUTO_TABLE_ROWS and columns >= MIN_AUTO_TABLE_COLUMNS
+
+
+def html_has_links(html: str) -> bool:
+    """True if the HTML carries a hyperlink (``<a href>``) anywhere."""
+    return bool(_LINK_PATTERN.search(html))
+
+
 def html_has_content_outside_table(html: str) -> bool:
     """True if the HTML carries meaningful content beyond its table(s).
 

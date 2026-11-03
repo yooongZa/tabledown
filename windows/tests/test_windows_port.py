@@ -136,6 +136,34 @@ class WindowsPortTests(unittest.TestCase):
         self.assertIn("| 마르고 | 닳도록 |", result["text"])
         self.assertNotIn(CF_HTML_FORMAT_NAME, result["drop_formats"])
 
+    def test_single_excel_cell_row_or_column_is_left_untouched(self):
+        # One cell, row or column is a value to paste (an order number, a list
+        # of e-mails), not a table — the clipboard must stay as Excel wrote it.
+        for interior, text in (
+            ("<col width=80><tr><td>1,234</td></tr>", "1,234"),
+            ("<tr><td>이름</td><td>부서</td><td>직급</td></tr>", "이름\t부서\t직급"),
+            ("<tr><td>a@x.test</td></tr><tr><td>b@x.test</td></tr>", "a@x.test\r\nb@x.test"),
+        ):
+            with self.subTest(text=text):
+                html = extract_cf_html(_excel_style_cf_html(interior))
+                self.assertIsNone(converted_clipboard({"html": html, "text": text}))
+
+    def test_browser_markdown_is_injected_only_for_plain_tables(self):
+        table = converted_clipboard({"html": HTML_BASIC, "text": "Name\tScore\nAlice\t95"})
+        self.assertEqual(table["markdown"], table["text"])
+        pasted = converted_clipboard({"text": MARKDOWN_BASIC})
+        self.assertEqual(pasted["markdown"], MARKDOWN_BASIC)
+        # Obsidian converts documents and link cells from HTML itself.
+        document = converted_clipboard({"html": HTML_DOCUMENT, "text": "x"})
+        self.assertNotIn("markdown", document)
+        linked = converted_clipboard({
+            "html": '<table><tr><td>이름</td><td>링크</td></tr>'
+                    '<tr><td>A</td><td><a href="https://example.test">문서</a></td></tr></table>',
+            "text": "이름\t링크\nA\t문서",
+        })
+        self.assertIn("| A | 문서 |", linked["text"])
+        self.assertNotIn("markdown", linked)
+
     def test_cf_html_roundtrip_preserves_utf8_fragment(self):
         payload = build_cf_html("<table><tr><td>한글</td></tr></table>")
 
@@ -2539,6 +2567,23 @@ class LoginMenuTests(unittest.TestCase):
             app._watch_clipboard()
 
         self.assertEqual(app._last_change_count, 10)
+
+    def test_augment_passes_only_the_branch_markdown_payload(self):
+        from tabledown_windows import app as app_module
+
+        app = self._make_app(supported=False)
+        for updated, expected_markdown in (
+            ({"text": "| a | b |", "markdown": "| a | b |", "drop_formats": set()}, "| a | b |"),
+            ({"text": "document", "drop_formats": set()}, None),
+        ):
+            with self.subTest(expected_markdown=expected_markdown), \
+                 mock.patch.object(app_module, "clipboard_change_count", return_value=7), \
+                 mock.patch.object(app_module, "read_clipboard", return_value={"text": "x"}), \
+                 mock.patch.object(app_module, "converted_clipboard", return_value=updated), \
+                 mock.patch.object(app_module, "write_clipboard") as write, \
+                 mock.patch.object(app_module, "log"):
+                self.assertTrue(app._augment_clipboard())
+                self.assertEqual(write.call_args.kwargs["markdown"], expected_markdown)
 
     def test_excel_formula_export_after_quit_skips_excel_and_clipboard(self):
         from tabledown_windows import app as app_module

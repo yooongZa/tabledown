@@ -12,7 +12,9 @@ from __future__ import annotations
 from tablemark.converter.html_to_md import (
     convert_document_tables,
     html_has_content_outside_table,
+    html_has_links,
     html_table_to_markdown,
+    is_auto_table_markdown,
 )
 from tablemark.converter.md_to_tsv import is_markdown_table, markdown_table_to_html
 
@@ -74,6 +76,7 @@ def converted_clipboard(content: dict, fill_blanks: bool = False) -> dict | None
         return {
             "text": text,
             "html": markdown_table_to_html(text),
+            "markdown": text,
         }
 
     if has_html_table:
@@ -92,11 +95,18 @@ def converted_clipboard(content: dict, fill_blanks: bool = False) -> dict | None
         # <table> so one copy works for every destination. Only rendered images
         # are dropped — never the HTML (invariant 3, unified in 0.2.4).
         markdown = html_table_to_markdown(html, fill_blanks)
+        # One cell, row or column is a value to paste, not a table.
+        if not is_auto_table_markdown(markdown):
+            return None
         if text.strip() == markdown.strip():
             return None
-        return {
-            "text": markdown_paste_block(markdown),
-            "drop_formats": WINDOWS_DROP_FORMATS,
-        }
+        block = markdown_paste_block(markdown)
+        updated = {"text": block, "drop_formats": WINDOWS_DROP_FORMATS}
+        # Obsidian reads text/markdown before HTML (invariant 3-M). Inject it
+        # only for plain spreadsheet tables; documents and tables with link
+        # cells keep Obsidian's own HTML conversion (headings, URLs).
+        if not html_has_links(html):
+            updated["markdown"] = block
+        return updated
 
     return None

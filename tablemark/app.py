@@ -28,8 +28,10 @@ from .converter.html_to_md import (
     convert_document_tables,
     forward_fill_key_columns,
     html_has_content_outside_table,
+    html_has_links,
     html_table_to_markdown,
     html_table_to_model,
+    is_auto_table_markdown,
 )
 from .converter.md_to_tsv import (
     is_markdown_table,
@@ -862,7 +864,6 @@ class TabledownApp(rumps.App):
 
                 write_clipboard(
                     **updated,
-                    markdown=updated.get("text"),
                     mark_generated=True,
                     expected_change_count=source_change_count,
                 )
@@ -913,6 +914,7 @@ class TabledownApp(rumps.App):
             return {
                 "text": text,
                 "html": markdown_table_to_html(text),
+                "markdown": text,
             }
 
         # Same opt-in toggle as the XML path: when on, forward-fill the merged
@@ -944,13 +946,20 @@ class TabledownApp(rumps.App):
             # one copy works for every destination (same rule as web tables and
             # documents). Only RENDERED image formats are dropped, never HTML.
             markdown = html_table_to_markdown(html, fill)
+            # One cell, row or column is a value to paste, not a table.
+            if not is_auto_table_markdown(markdown):
+                return None
             if text.strip() == markdown.strip():
                 return None
             log("detected html table")
-            return {
-                "text": _markdown_paste_block(markdown),
-                "drop_types": RENDERED_TABLE_TYPES,
-            }
+            block = _markdown_paste_block(markdown)
+            updated = {"text": block, "drop_types": RENDERED_TABLE_TYPES}
+            # Obsidian reads text/markdown before HTML (invariant 3-M). Inject
+            # it only for plain spreadsheet tables; documents and tables with
+            # link cells keep Obsidian's own HTML conversion (headings, URLs).
+            if not html_has_links(html):
+                updated["markdown"] = block
+            return updated
 
         return None
 
