@@ -19,7 +19,7 @@ if sys.platform == "darwin":
 
     from tablemark.app import MAX_MARKDOWN_EXPORT_BYTES, _EXPORT_MARKDOWN, _EXPORT_TABLE
     from tablemark.clipboard import (
-        GENERATED_MARKER_TYPES, HTML_TYPES, STRING_TYPES, write_table_clipboard,
+        EXPLICIT_EXPORT_MARKER_TYPES, HTML_TYPES, STRING_TYPES, write_table_clipboard,
     )
     from tablemark.converter.html_to_md import html_table_to_markdown
     from tablemark.converter.md_to_tsv import markdown_table_to_rows
@@ -266,7 +266,7 @@ class ExcelPasteHtmlTests(unittest.TestCase):
                 )
             self.assertEqual(
                 {str(kind) for kind in pasteboard.types()},
-                STRING_TYPES | HTML_TYPES | set(GENERATED_MARKER_TYPES),
+                STRING_TYPES | HTML_TYPES | set(EXPLICIT_EXPORT_MARKER_TYPES),
             )
             for kind in STRING_TYPES:
                 self.assertEqual(str(pasteboard.stringForType_(kind)), markdown)

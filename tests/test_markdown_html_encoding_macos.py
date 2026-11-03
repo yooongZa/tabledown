@@ -16,7 +16,7 @@ if sys.platform == "darwin":
 
     from tablemark.app import TabledownApp
     from tablemark.clipboard import (
-        GENERATED_MARKER_TYPES,
+        EXPLICIT_EXPORT_MARKER_TYPES,
         HTML_TYPES,
         STRING_TYPES,
         ClipboardChangedError,
@@ -166,13 +166,13 @@ class MarkdownHtmlEncodingTests(unittest.TestCase):
 
             self.assertEqual(
                 {str(pb_type) for pb_type in pasteboard.types()},
-                STRING_TYPES | HTML_TYPES | set(GENERATED_MARKER_TYPES),
+                STRING_TYPES | HTML_TYPES | set(EXPLICIT_EXPORT_MARKER_TYPES),
             )
             for pb_type in stale_types:
                 self.assertIsNone(pasteboard.dataForType_(pb_type))
             for pb_type in STRING_TYPES:
                 self.assertEqual(str(pasteboard.stringForType_(pb_type)), markdown)
-            for pb_type, expected in GENERATED_MARKER_TYPES.items():
+            for pb_type, expected in EXPLICIT_EXPORT_MARKER_TYPES.items():
                 self.assertEqual(str(pasteboard.stringForType_(pb_type)), expected)
             for html_type in HTML_TYPES:
                 with self.subTest(html_type=html_type):
@@ -258,7 +258,7 @@ class MarkdownHtmlEncodingTests(unittest.TestCase):
         pasteboard.setString_forType_.assert_not_called()
 
     def test_explicit_table_reports_false_write_for_every_format_without_retry(self):
-        for failed_type in STRING_TYPES | HTML_TYPES | set(GENERATED_MARKER_TYPES):
+        for failed_type in STRING_TYPES | HTML_TYPES | set(EXPLICIT_EXPORT_MARKER_TYPES):
             with self.subTest(failed_type=failed_type):
                 pasteboard, data = self._mock_pasteboard()
 
@@ -281,7 +281,7 @@ class MarkdownHtmlEncodingTests(unittest.TestCase):
                 )
 
     def test_explicit_table_reports_missing_or_different_readback_for_every_format(self):
-        for failed_type in STRING_TYPES | HTML_TYPES | set(GENERATED_MARKER_TYPES):
+        for failed_type in STRING_TYPES | HTML_TYPES | set(EXPLICIT_EXPORT_MARKER_TYPES):
             for incorrect_value in (None, "different synthetic content"):
                 with self.subTest(failed_type=failed_type, missing=incorrect_value is None):
                     pasteboard, data = self._mock_pasteboard()

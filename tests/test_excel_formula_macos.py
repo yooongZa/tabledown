@@ -1290,18 +1290,22 @@ class TextOnlyClipboardTests(unittest.TestCase):
         expected_types = {
             str(clipboard.NSPasteboardTypeString),
             clipboard.LEGACY_STRING_TYPE,
-            *clipboard.GENERATED_MARKER_TYPES,
+            *clipboard.EXPLICIT_EXPORT_MARKER_TYPES,
         }
         self.assertEqual(pasteboard.clear_count, 1)
         self.assertEqual(set(pasteboard.declared_types), expected_types)
         self.assertNotIn("com.microsoft.excel.biff12", pasteboard.declared_types)
         self.assertNotIn(str(clipboard.NSPasteboardTypeHTML), pasteboard.declared_types)
+        # Explicit exports stay visible to clipboard history apps.
+        self.assertNotIn(clipboard.AUTO_GENERATED_TYPE, pasteboard.declared_types)
+        # The private marker alone still keeps the watcher from re-processing.
+        self.assertTrue(clipboard.has_generated_marker(pasteboard))
         for pb_type in (
             str(clipboard.NSPasteboardTypeString),
             clipboard.LEGACY_STRING_TYPE,
         ):
             self.assertEqual(pasteboard.values[pb_type], "<수식범위 />")
-        for pb_type, marker in clipboard.GENERATED_MARKER_TYPES.items():
+        for pb_type, marker in clipboard.EXPLICIT_EXPORT_MARKER_TYPES.items():
             self.assertEqual(pasteboard.values[pb_type], marker)
 
     def test_expected_change_count_mismatch_does_not_clear_clipboard(self):
