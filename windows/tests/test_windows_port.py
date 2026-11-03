@@ -52,8 +52,11 @@ def _excel_style_cf_html(interior: str) -> bytes:
     markers sit *inside* the table, so the fragment is the table interior
     (``<col>``/``<tr>``/``<td>``) with the ``<table>`` tag left outside it.
     """
-    pre = "<html>\r\n<body>\r\n<table border=0>"  # <table> precedes the fragment
-    post = "</table>\r\n</body>\r\n</html>"
+    # <table> precedes the fragment
+    return _cf_html("<html>\r\n<body>\r\n<table border=0>", interior, "</table>\r\n</body>\r\n</html>")
+
+
+def _cf_html(pre: str, interior: str, post: str) -> bytes:
     html = pre + interior + post
 
     header_tmpl = (
@@ -183,6 +186,36 @@ class WindowsPortTests(unittest.TestCase):
             "| 항목 | 금액 |\n| --- | --- |\n| 서버 | 1,200 |",
         )
         self.assertNotIn(CF_HTML_FORMAT_NAME, result["drop_formats"])
+
+    def test_word_cf_html_fragment_is_an_office_document(self):
+        # Real Word CF_HTML (2026-11-03): the Office namespace sits on <html>,
+        # outside the fragment, and Word folds long source lines mid-sentence.
+        pre = (
+            '<html xmlns:o="urn:schemas-microsoft-com:office:office"\r\n'
+            'xmlns:w="urn:schemas-microsoft-com:office:word">\r\n<body lang=KO>\r\n<!--StartFragment-->'
+        )
+        fragment = (
+            "<h1><span lang=EN-US>QA </span>제목<span lang=EN-US><o:p></o:p></span></h1>\r\n"
+            "<p class=MsoListBulletCxSpFirst style='mso-list:l0 level1 lfo1'><![if !supportLists]><span\r\n"
+            "lang=EN-US style='font-family:Wingdings'><span style='mso-list:Ignore'>l<span\r\n"
+            "style='font:7.0pt \"Times New Roman\"'>&nbsp;&nbsp; </span></span></span><![endif]>첫\r\n"
+            "항목<span lang=EN-US><o:p></o:p></span></p>\r\n"
+            "<p class=MsoNormal>링크 문단 <span lang=EN-US><a href=\"https://example.test/doc\">문서</a>"
+            "<o:p></o:p></span></p>\r\n"
+            "<table class=MsoNormalTable border=1>\r\n <tr>\r\n  <td><p class=MsoNormal>항목<o:p></o:p></p></td>\r\n"
+            "  <td><p class=MsoNormal>값<o:p></o:p></p></td>\r\n </tr>\r\n <tr>\r\n"
+            "  <td><p class=MsoNormal>가<o:p></o:p></p></td>\r\n  <td><p class=MsoNormal>1<o:p></o:p></p></td>\r\n"
+            " </tr>\r\n</table>\r\n"
+        )
+        html = extract_cf_html(_cf_html(pre, fragment, "<!--EndFragment-->\r\n</body>\r\n</html>"))
+        self.assertNotIn("urn:schemas-microsoft-com:office", html)
+        result = converted_clipboard({"html": html, "text": "x"})
+        self.assertEqual(
+            result["text"],
+            "# QA 제목\n\n- 첫 항목\n\n링크 문단 [문서](https://example.test/doc)\n\n"
+            "| 항목 | 값 |\n| --- | --- |\n| 가 | 1 |",
+        )
+        self.assertEqual(result["markdown"], result["text"])
 
     def test_cf_html_roundtrip_preserves_utf8_fragment(self):
         payload = build_cf_html("<table><tr><td>한글</td></tr></table>")

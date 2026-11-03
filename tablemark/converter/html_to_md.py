@@ -630,7 +630,8 @@ def html_has_content_outside_table(html: str) -> bool:
 
 # Word/Outlook HTML declares this namespace. Office tables have no header
 # cells, so Obsidian's own HTML conversion puts an empty row above each one.
-_OFFICE_HTML = re.compile(r"urn:schemas-microsoft-com:office", re.IGNORECASE)
+# A Windows CF_HTML fragment leaves the declaration out but keeps <o:p> tags.
+_OFFICE_HTML = re.compile(r"urn:schemas-microsoft-com:office|<o:p>", re.IGNORECASE)
 _LIST_NUMBER = re.compile(r"\(?[0-9A-Za-z]{1,4}[.)]")
 _WEB_LINK = re.compile(r"(?:https?|mailto):", re.IGNORECASE)
 
@@ -698,6 +699,7 @@ _NON_TEXT_STRINGS = (Comment, Declaration, Doctype, ProcessingInstruction)
 
 # Word renders list numbers as "1." plus &nbsp; padding in this span.
 _WORD_LIST_MARKER_STYLE = re.compile(r"mso-list\s*:\s*ignore", re.IGNORECASE)
+_HTML_SPACE = re.compile(r"[ \t\n\r\f]+")
 
 
 def _block_text(node, structured: bool = False) -> str:
@@ -711,7 +713,11 @@ def _block_text(node, structured: bool = False) -> str:
         if isinstance(child, _NON_TEXT_STRINGS):
             continue
         if isinstance(child, NavigableString):
-            parts.append(str(child))
+            if structured and child.find_parent("pre") is None:
+                # HTML whitespace: Office folds long source lines mid-sentence.
+                parts.append(_HTML_SPACE.sub(" ", str(child)))
+            else:
+                parts.append(str(child))
         elif child.name == "br":
             parts.append("\n")
         elif child.name in _BLOCK_TAGS:

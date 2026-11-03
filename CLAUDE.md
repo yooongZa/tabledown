@@ -207,6 +207,11 @@ Markdown 에디터도 HTML을 우선할 수 있다. Obsidian 1.13.7에서는 `te
   `office_document_markdown`이 제목(`#`)·목록(`-`/`1.`)·문단 링크(`[텍스트](URL)`)까지 **최소 Markdown**으로 쓰고,
   같은 값을 text와 `text/markdown`에 함께 넣는다. Word 표에는 header 셀이 없어 Obsidian이 HTML을 직접 변환하면
   표마다 빈 헤더 행이 생기기 때문이다(실기기 확인). 표 셀 링크는 위 3-M의 셀 링크 규칙대로 유지된다.
+  **Windows 판별**: CF_HTML fragment에는 `<html>`의 네임스페이스 선언이 빠지므로 Office의 `<o:p>` 태그로도
+  판별한다(2026-11-03 Windows Word 실기기에서 발견 — 네임스페이스만 보면 Windows에선 이 예외가 동작하지 않음).
+  Office 문서의 일반 텍스트는 HTML 공백 규칙대로 줄바꿈·연속 공백을 한 칸으로 합친다(`<pre>` 제외) — Word가
+  긴 소스 줄을 문장 중간에서 꺾어 `- 첫\n항목`처럼 깨지던 문제다. 회귀 테스트:
+  `windows/tests/test_windows_port.py`의 `test_word_cf_html_fragment_is_an_office_document`(실제 Word CF_HTML 형식).
   다른 문서는 바꾸지 않는다(대상 앱의 변환기가 강조·코드·이미지까지 처리).
   강조·코드 블록·중첩 목록 들여쓰기는 일부러 다루지 않는다 — 범위를 넓히려면 Obsidian 결과와 비교 검증부터.
 
