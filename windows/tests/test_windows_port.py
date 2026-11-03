@@ -148,21 +148,22 @@ class WindowsPortTests(unittest.TestCase):
                 html = extract_cf_html(_excel_style_cf_html(interior))
                 self.assertIsNone(converted_clipboard({"html": html, "text": text}))
 
-    def test_browser_markdown_is_injected_only_for_plain_tables(self):
+    def test_browser_markdown_is_injected_for_tables_and_markdown_text(self):
         table = converted_clipboard({"html": HTML_BASIC, "text": "Name\tScore\nAlice\t95"})
         self.assertEqual(table["markdown"], table["text"])
         pasted = converted_clipboard({"text": MARKDOWN_BASIC})
         self.assertEqual(pasted["markdown"], MARKDOWN_BASIC)
-        # Obsidian converts documents and link cells from HTML itself.
+        # Obsidian converts non-Office documents from HTML itself.
         document = converted_clipboard({"html": HTML_DOCUMENT, "text": "x"})
         self.assertNotIn("markdown", document)
+        # Cell links stay as [text](url), so link tables are injected too.
         linked = converted_clipboard({
             "html": '<table><tr><td>이름</td><td>링크</td></tr>'
                     '<tr><td>A</td><td><a href="https://example.test">문서</a></td></tr></table>',
             "text": "이름\t링크\nA\t문서",
         })
-        self.assertIn("| A | 문서 |", linked["text"])
-        self.assertNotIn("markdown", linked)
+        self.assertIn("| A | [문서](https://example.test) |", linked["text"])
+        self.assertEqual(linked["markdown"], linked["text"])
 
     def test_office_document_offers_structured_markdown(self):
         # Mirrors the macOS converter test: Word tables have no header cells,

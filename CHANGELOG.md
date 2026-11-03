@@ -7,6 +7,28 @@
 
 ## [Unreleased]
 
+### 2026-11-03 — Excel·Sheets 표의 셀 링크를 `[텍스트](URL)`로 유지 (소스, 미배포)
+
+- **문제(실기기 확인):** 1-C 이후 링크 셀이 있는 표는 `text/markdown`을 넣지 않았다. Excel·Sheets 표처럼 header 셀이 없는 표는 Obsidian이 직접 변환하면서 빈 헤더 행을 만들고, 실제 헤더를 본문 첫 행으로 내렸다. 0.6.3처럼 링크 없이 주입하면 표는 맞지만 URL이 사라진다.
+  - 실제 Excel 하이퍼링크 표로 두 손실을 모두 재현했다.
+  - 셀 링크를 Markdown 링크로 넣으면 표와 링크가 모두 유지되는 것도 확인했다.
+- **수정 (공유 converter, macOS·Windows 분기 미러):**
+  - 자동 Markdown은 셀의 `<a href>`(http/https/mailto)를 `[텍스트](URL)`로 쓴다. 보이는 글자가 주소와 같으면 `<URL>`로 쓴다.
+  - URL의 공백·`|`·`<>`·`()`는 퍼센트 인코딩해 표 행이 깨지지 않게 했다.
+  - 모든 순수 표에 `text/markdown`을 넣고, 링크 예외(`html_has_links`)는 지웠다. Office 문서의 링크 셀 예외도 함께 지웠다.
+  - XML 경로의 셀 텍스트와 원본 HTML·Excel 고유 데이터는 바꾸지 않았다.
+  - **알아 둘 점:** 일반 텍스트로 붙이는 곳에도 링크 셀이 `[텍스트](URL)`로 보인다. 그 Markdown을 다시 Excel에 붙이면 셀에 이 문자열이 들어간다.
+- **검증 (자동 테스트):** 비클립보드 매트릭스 86/86(converter 60/60), macOS 단위 290/290, Windows 포트 140건 중 111 pass + 29 skip, `compileall`, `git diff --check`를 통과했다.
+  - 링크 예외를 전제로 한 테스트 3개를 새 계약에 맞게 바꿨다: `html_link_table_keeps_cell_links_and_injects`, `html_office_document_keeps_link_cells`, Windows `test_browser_markdown_is_injected_for_tables_and_markdown_text`.
+- **검증 (macOS 실기기):** 이 Mac에서 소스 실행·Excel 16.114.3·Obsidian 1.15.0(분리 인스턴스)으로 확인했다. 키 입력은 쓰지 않았다.
+  - 하이퍼링크 2개(`문서A`, 주소 자체가 글자인 링크)가 있는 3×3 표를 Excel 자체 복사 명령으로 복사했다. text와 `text/markdown`이 같았고 HTML은 유지됐다.
+  - Obsidian 붙여넣기 결과는 정상 헤더 표에 `[문서A](…)`·`<…%28bar%29>` 링크가 들어간 형태였다.
+  - 같은 통합문서에 다시 붙이면 값과 하이퍼링크 2개가 유지됐다.
+  - 수정 전 비교(현재·0.6.3 방식·셀 링크안)와 Sheets 형식 합성 표 결과도 함께 보존했다.
+  - 클립보드는 바이트 단위로 같게 복원했고, Excel과 시험용 Obsidian은 저장하지 않고 종료했다.
+  - 근거는 gitignore된 `outputs/device_check/link-cells-20261103/`에 있다.
+  - Windows 실기기는 미검증이다.
+
 ### 2026-11-03 — iMac SSH 실기기 확인 (`f297717` QA 앱)
 
 - **대상:** `f297717`로 만든 ad-hoc QA 앱이다(`build_release.sh`, ZIP SHA-256 `2d5ad4a4…`, deep strict 서명 검증). `ssh imac`(macOS 27.2 arm64)의 `~/Tabledown-QA-20261103`에 설치해 실행했다. 사용자 설치본 0.6.3은 시험 동안 종료했다가 다시 실행했다.

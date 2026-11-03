@@ -12,7 +12,6 @@ from __future__ import annotations
 from tablemark.converter.html_to_md import (
     convert_document_tables,
     html_has_content_outside_table,
-    html_has_links,
     html_table_to_markdown,
     is_auto_table_markdown,
     office_document_markdown,
@@ -106,12 +105,12 @@ def converted_clipboard(content: dict, fill_blanks: bool = False) -> dict | None
         if text.strip() == markdown.strip():
             return None
         block = markdown_paste_block(markdown)
-        updated = {"text": block, "drop_formats": WINDOWS_DROP_FORMATS}
-        # Obsidian reads text/markdown before HTML (invariant 3-M). Inject it
-        # only for plain spreadsheet tables; documents and tables with link
-        # cells keep Obsidian's own HTML conversion (headings, URLs).
-        if not html_has_links(html):
-            updated["markdown"] = block
-        return updated
+        # Obsidian reads text/markdown before HTML (invariant 3-M); cell links
+        # are kept as [text](url), so every bare table gets it.
+        return {
+            "text": block,
+            "markdown": block,
+            "drop_formats": WINDOWS_DROP_FORMATS,
+        }
 
     return None

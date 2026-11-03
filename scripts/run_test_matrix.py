@@ -352,31 +352,42 @@ def run_converter_tests() -> list[TestResult]:
         ),
     )
     check(
-        "html_office_document_with_link_cell_left_to_destination",
-        lambda: _assert_equal(
-            # A link cell would lose its URL in a Markdown table: no
-            # text/markdown, and the text slot keeps the plain flattening.
-            (lambda r: ("markdown" in r, "#" in r["text"]))(
+        "html_office_document_keeps_link_cells",
+        lambda: _assert_contains(
+            # A link cell inside a Word table keeps its URL in the Markdown
+            # table, so the document still gets text/markdown.
+            (lambda r: r["markdown"] if r["markdown"] == r["text"] else "MISMATCH")(
                 TabledownApp._converted_clipboard(
                     None,
                     {"html": HTML_OFFICE_DOC.replace("<p>서버</p>", '<p><a href="https://x.test">서버</a></p>'), "text": "x"},
                 )
             ),
-            (False, False),
+            "| [서버](https://x.test) | 1,200 |",
         ),
     )
     check(
-        "html_link_table_does_not_inject_browser_markdown",
+        "html_link_table_keeps_cell_links_and_injects",
         lambda: _assert_equal(
-            "markdown" in TabledownApp._converted_clipboard(
-                None,
-                {
-                    "html": '<table><tr><td>이름</td><td>링크</td></tr><tr><td>A</td>'
-                    '<td><a href="https://example.test">문서</a></td></tr></table>',
-                    "text": "이름\t링크\nA\t문서",
-                },
+            # Spreadsheet/web tables carry the URL only in HTML. Cell links are
+            # written as [text](url) (url percent-encoded where it would break
+            # the row) and the table is injected like any other bare table.
+            (lambda r: (r["text"], r["markdown"] == r["text"]))(
+                TabledownApp._converted_clipboard(
+                    None,
+                    {
+                        "html": '<table><tr><td>이름</td><td>링크</td></tr><tr><td>A</td>'
+                        '<td><a href="https://example.test/a?x=1|2">문서 [A]</a></td></tr>'
+                        '<tr><td>B</td><td><a href="https://example.test/b">https://example.test/b</a></td></tr></table>',
+                        "text": "이름\t링크\nA\t문서 [A]\nB\thttps://example.test/b",
+                    },
+                )
             ),
-            False,
+            (
+                "\n| 이름 | 링크 |\n| --- | --- |\n"
+                "| A | [문서 \\[A\\]](https://example.test/a?x=1%7C2) |\n"
+                "| B | <https://example.test/b> |\n",
+                True,
+            ),
         ),
     )
     check(

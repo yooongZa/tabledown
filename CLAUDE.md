@@ -158,13 +158,15 @@ Markdown 에디터도 HTML을 우선할 수 있다. Obsidian 1.13.7에서는 `te
   `write_clipboard`에 전달한다. 공유 `tablemark/web_clipboard.py::with_markdown`이
   Chromium DataTransfer(붙여넣기 데이터)의 `text/markdown`을 생성해 Obsidian에 직접 전달한다.
   macOS 기록기는 `tablemark/clipboard.py`, Windows 기록기는 `windows/tabledown_windows/win_clipboard.py`다.
-- **주입 범위 (2026-11-03, 0.6.3/0.3.3 회귀 수정)**: `markdown` 값은 **링크 없는 순수 표**(Excel·Sheets
-  bare table) 분기와 **Markdown 텍스트 → HTML** 분기에서만 넣는다. 표가 섞인 **문서** 분기와 셀에
-  `<a href>`가 있는 표는 넣지 않는다 — Obsidian이 `text/markdown`을 HTML보다 먼저 읽어서, 문서의
-  제목·목록·링크·코드를 Tabledown 평탄화본으로 덮었기 때문이다. 이 경우 Obsidian은 예전처럼 원본 HTML을
-  직접 변환한다(링크 셀이 있는 Excel 표는 3-M 증상이 다시 날 수 있는 의도된 trade-off). 링크를
-  `[텍스트](URL)`로 직렬화하는 안은 escape 왕복 검증 뒤 별도로 검토한다. 주입을 다시 모든 분기로
-  넓히지 말 것. 예외는 위 불변식 4의 Office 문서다(`office_document_markdown`이 값을 줄 때만 문서에도 주입).
+- **주입 범위 (2026-11-03, 0.6.3/0.3.3 회귀 수정)**: `markdown` 값은 **순수 표**(Excel·Sheets·웹
+  bare table) 분기와 **Markdown 텍스트 → HTML** 분기에서 넣는다. 표가 섞인 **문서** 분기는 넣지 않는다 —
+  Obsidian이 `text/markdown`을 HTML보다 먼저 읽어서, 문서의 제목·목록·링크·코드를 Tabledown 평탄화본으로
+  덮었기 때문이다(예외: 불변식 4의 Office 문서, `office_document_markdown`이 값을 줄 때만).
+  **셀 링크**: 자동 Markdown은 셀의 `<a href>`(http/https/mailto)를 `[텍스트](URL)`(글자=주소면 `<URL>`)로
+  쓴다(`_markdown_cell`). URL의 공백·`|`·`<>`·`()`는 퍼센트 인코딩해 표 행이 깨지지 않게 한다. 링크 셀 표를
+  주입에서 빼면 Excel·Sheets처럼 header 셀이 없는 표가 Obsidian에서 빈 헤더 행을 갖고, 0.6.3처럼 링크 없이
+  주입하면 URL이 사라진다 — 둘 다 실기기로 확인한 손실이라 이 방식을 택했다(2026-11-03). XML 경로의
+  셀 텍스트(`_cell_text_plain`)는 바꾸지 않는다. 주입을 문서 분기 전체로 넓히지 말 것.
 - **형식 계약**: macOS는 `org.chromium.web-custom-data`, Windows는
   `Chromium Web Custom MIME Data Format`에 Chromium `base::Pickle`을 기록한다.
   UTF-16LE 길이는 code unit(코드 단위), 정렬은 4바이트다. 이모지를 Python 문자 수로 세거나
@@ -183,8 +185,8 @@ Markdown 에디터도 HTML을 우선할 수 있다. Obsidian 1.13.7에서는 `te
   `test_browser_markdown_keeps_original_html_and_native_formats`는 독립 pasteboard(클립보드)에서
   HTML 바이트·native 데이터·Markdown 형식의 공존과 오래된 generation 거부를 확인한다.
   주입 범위는 converter 매트릭스의 `html_bare_table_injects_browser_markdown`·
-  `html_document_does_not_inject_browser_markdown`·`html_link_table_does_not_inject_browser_markdown`과
-  Windows `test_browser_markdown_is_injected_only_for_plain_tables`가, 최소 크기는
+  `html_document_does_not_inject_browser_markdown`·`html_link_table_keeps_cell_links_and_injects`과
+  Windows `test_browser_markdown_is_injected_for_tables_and_markdown_text`가, 최소 크기는
   `html_single_cell_row_or_column_left_untouched`·`test_single_excel_cell_row_or_column_is_left_untouched`가 지킨다.
   macOS에서 실행: `.venv/bin/python -m unittest tests.test_markdown_roundtrip tests.test_markdown_html_encoding_macos -v`.
   Windows는 기존 두 빌드 CI의 `windows/tools/verify_release.py`에서 패키징한 EXE의
@@ -204,8 +206,8 @@ Markdown 에디터도 HTML을 우선할 수 있다. Obsidian 1.13.7에서는 `te
 - **Office 문서 예외 (2026-11-03)**: Word·Outlook HTML(`urn:schemas-microsoft-com:office` 네임스페이스)은
   `office_document_markdown`이 제목(`#`)·목록(`-`/`1.`)·문단 링크(`[텍스트](URL)`)까지 **최소 Markdown**으로 쓰고,
   같은 값을 text와 `text/markdown`에 함께 넣는다. Word 표에는 header 셀이 없어 Obsidian이 HTML을 직접 변환하면
-  표마다 빈 헤더 행이 생기기 때문이다(실기기 확인). 표 셀에 링크가 있으면 셀 URL이 사라지므로 None을 돌려
-  기존 평탄화·미주입으로 둔다. 다른 문서는 바꾸지 않는다(대상 앱의 변환기가 강조·코드·이미지까지 처리).
+  표마다 빈 헤더 행이 생기기 때문이다(실기기 확인). 표 셀 링크는 위 3-M의 셀 링크 규칙대로 유지된다.
+  다른 문서는 바꾸지 않는다(대상 앱의 변환기가 강조·코드·이미지까지 처리).
   강조·코드 블록·중첩 목록 들여쓰기는 일부러 다루지 않는다 — 범위를 넓히려면 Obsidian 결과와 비교 검증부터.
 
 ### 4-M. 내부 Markdown 복사 helper (메뉴 제거: 2026-10-08)

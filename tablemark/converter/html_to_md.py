@@ -412,7 +412,7 @@ def _table_to_grid(table, *, preserve_layout: bool = False) -> list[list[str]]:
             rowspan = _span_value(cell.get("rowspan"))
             colspan = _span_value(cell.get("colspan"))
             clean = _clean_selected_cell if preserve_layout else _clean_cell
-            row.append(clean(_cell_text(cell)))
+            row.append(_markdown_cell(cell, clean))
 
             for offset in range(1, colspan):
                 row.append(" ")
@@ -520,6 +520,33 @@ def _cell_text(cell) -> str:
     return cell.get_text()
 
 
+def _markdown_cell(cell, clean) -> str:
+    """Clean one cell for Markdown, keeping web links as ``[text](url)``.
+
+    Spreadsheet and web tables carry the URL only in their HTML; the plain text
+    has just the label. Links are swapped for placeholders that survive
+    ``clean`` (whitespace and escaping) and are written back as Markdown links.
+    """
+    links = []
+    for anchor in cell.find_all("a", href=lambda href: bool(href and _WEB_LINK.match(href))):
+        label = " ".join(anchor.get_text().split())
+        if label:
+            links.append(_markdown_link(label, anchor["href"].strip()))
+            anchor.replace_with(f"\x00{len(links) - 1}\x00")
+    text = clean(_cell_text(cell))
+    for index, link in enumerate(links):
+        text = text.replace(f"\x00{index}\x00", link)
+    return text
+
+
+def _markdown_link(label: str, href: str) -> str:
+    # Percent-encode what would end the link or split the table row.
+    url = re.sub(r"[\s|<>()]", lambda m: "%{:02X}".format(ord(m.group())), href)
+    if label == href:
+        return f"<{url}>"
+    return f"[{_escape_markdown_cell(label)}]({url})"
+
+
 def _escape_markdown_cell(text: str) -> str:
     """Encode literal text before adding the only meaningful HTML: line breaks.
 
@@ -569,9 +596,6 @@ def _clean_cell(text: str) -> str:
 MIN_AUTO_TABLE_ROWS = 2
 MIN_AUTO_TABLE_COLUMNS = 2
 
-_LINK_PATTERN = re.compile(r"<a\b[^>]*\bhref\s*=", re.IGNORECASE)
-
-
 def is_auto_table_markdown(markdown: str) -> bool:
     """True if ``html_table_to_markdown`` output spans at least 2×2 cells.
 
@@ -585,11 +609,6 @@ def is_auto_table_markdown(markdown: str) -> bool:
     rows = len(lines) - 1
     columns = lines[1].count("| ---")
     return rows >= MIN_AUTO_TABLE_ROWS and columns >= MIN_AUTO_TABLE_COLUMNS
-
-
-def html_has_links(html: str) -> bool:
-    """True if the HTML carries a hyperlink (``<a href>``) anywhere."""
-    return bool(_LINK_PATTERN.search(html))
 
 
 def html_has_content_outside_table(html: str) -> bool:
@@ -620,15 +639,11 @@ def office_document_markdown(html: str, fill_merged_headers: bool = False) -> st
     """Minimal Markdown for a Word/Outlook document, or None to leave it alone.
 
     For Office documents the result keeps headings (``#``), list items
-    (``-``/``1.``) and paragraph links (``[text](url)``) next to proper Markdown
-    tables, so it can also be offered as text/markdown. Link cells would lose
-    their URL in a Markdown table, so those documents return None, as do all
-    non-Office documents: the destination's own converter handles more markup.
+    (``-``/``1.``) and links (``[text](url)``) next to proper Markdown tables,
+    so it can also be offered as text/markdown. Non-Office documents return
+    None: the destination's own converter handles more markup.
     """
     if not _OFFICE_HTML.search(html):
-        return None
-    soup = BeautifulSoup(html, "html.parser")
-    if any(table.find("a", href=True) for table in soup.find_all("table")):
         return None
     return convert_document_tables(html, fill_merged_headers, structured=True)
 
