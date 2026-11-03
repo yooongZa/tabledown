@@ -851,6 +851,16 @@ def _valid_xml_name(name: str) -> bool:
     # The "xml" prefix (any case) is reserved by the spec.
     if name[:3].lower() == "xml":
         return False
+    # The ranges above follow XML 1.0 5th edition, but expat (ElementTree —
+    # our own parser) still applies the narrower 4th-edition name classes and
+    # rejects e.g. full-width "（", "㈜", "ㆍ", "Ａ" or emoji. Emitting such a
+    # name would break is_table_xml / table_xml_to_model on our own output, so
+    # the name must also survive expat. Safe to interpolate: every character
+    # already passed the Name-character check (no "<", ">", "/", spaces).
+    try:
+        ET.fromstring(f"<{name}/>")
+    except ET.ParseError:
+        return False
     return True
 
 

@@ -254,6 +254,8 @@ Markdown 에디터도 HTML을 우선할 수 있다. Obsidian 1.13.7에서는 `te
   `그룹`), 행 최하위 키는 `<행 {헤더}="값">` 의 속성 key 로 헤더를 쓴다. 그래서 세로 키 열은
   **헤더가 유효 XML 이름인 동안만** 키로 인정한다 — 왼쪽부터 첫 가로 group 앞까지의 leaf 중,
   XML 이름 규칙 위반(공백·기호·숫자시작·`xml` 접두) 열을 만나면 거기서 키 종료(그 열부터 데이터).
+  이름은 XML 1.0 5판 범위 검사와 **expat 시험 파싱을 함께** 통과해야 한다 — expat(앱 자신의 파서)은 4판 규칙이라
+  전각 괄호·`㈜`·`ㆍ`·전각 영문·이모지를 거부하므로, 범위 검사만 남기면 앱이 자기 출력을 못 읽는다(2026-11-03).
   → **정규화 불필요, 무손실 roundtrip 유지.** 가로 group 이 하나도 없으면(단순 표) 세로 키 0개 →
   모든 열이 데이터, 행은 `<행>`(키 속성 없음). 키 1개면 `<행 {헤더}="값">`(세로 그룹 없음).
 - **가로도 세로도 중첩 (v2 의 핵심 변경: 세로 forward-fill → 세로 중첩)**: 가로 그룹 헤더(병합으로
@@ -393,6 +395,7 @@ Markdown 에디터도 HTML을 우선할 수 있다. Obsidian 1.13.7에서는 `te
 - `table_xml_not_auto_converted` → 불변식 5 (워처가 XML 을 표로 자동 변환하지 않음)
 - `model_to_xml_roundtrip` → 불변식 5 (모델↔XML 무손실 — 세로 중첩 포함)
 - `model_to_xml_header_in_attribute` → 불변식 5 (가로 헤더는 `n=`/`이름=` 속성, 가로 header→tag 금지)
+- `model_to_xml_key_header_survives_own_parser` → 불변식 5 (expat이 거부하는 세로 키 헤더는 데이터로 강등, 자기 출력 왕복)
 - `merged_excel_to_xml_nests_group_header`, `merged_excel_to_xml_keeps_subheader_cell` → 불변식 5
   (가로 다단 헤더를 `<열그룹>` 으로 중첩 보존)
 - `forward_fill_fills_left_key_column`, `forward_fill_stops_at_data_column` → 불변식 5

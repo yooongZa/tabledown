@@ -388,6 +388,7 @@ def run_converter_tests() -> list[TestResult]:
             '<열 n="Q1 2024">12</열>',
         ),
     )
+    check("model_to_xml_key_header_survives_own_parser", _xml_key_header_survives_own_parser)
     check(
         "model_to_xml_preserves_literal_br_and_whitespace",
         lambda: _assert_contains(
@@ -1103,6 +1104,32 @@ def _is_tabledown_running() -> bool:
         text=True,
     )
     return bool(result.stdout.strip())
+
+
+def _xml_key_header_survives_own_parser() -> str:
+    """Key headers expat rejects (full-width, ㈜, ㆍ, emoji) must be demoted to data.
+
+    _valid_xml_name follows XML 1.0 5th-edition ranges, but expat applies the
+    older name classes; a header that passed the first check alone produced
+    XML that our own is_table_xml / table_xml_to_model could not read.
+    """
+    checked = []
+    for header in ("거래처", "구분·항목", "매출액（원）", "㈜거래처", "구분ㆍ항목", "Ａ사", "이모지🙂"):
+        html = (
+            f"<table><tr><td rowspan=2>{header}</td><td colspan=2>1분기</td></tr>"
+            "<tr><td>1월</td><td>2월</td></tr>"
+            "<tr><td>가</td><td>1</td><td>2</td></tr>"
+            "<tr><td>나</td><td>3</td><td>4</td></tr></table>"
+        )
+        model = html_table_to_model(html)
+        xml = model_to_xml(*model)
+        if not is_table_xml(xml):
+            raise AssertionError(f"own parser rejected key header #{len(checked) + 1}")
+        _assert_equal(table_xml_to_model(xml), model)
+        checked.append(header)
+    # Valid Korean/ASCII-like names still become the row key (no over-demotion).
+    _assert_contains(model_to_xml(*html_table_to_model(html.replace("이모지🙂", "거래처"))), '<행 거래처="가">')
+    return f"{len(checked)} key headers round-trip"
 
 
 def _assert_equal(actual, expected) -> str:
