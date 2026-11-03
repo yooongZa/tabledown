@@ -7,6 +7,48 @@
 
 ## [Unreleased]
 
+### 2026-11-03 — Windows SSH 실기기 확인과 Word 판별 수정 (`f4a40d8` QA MSIX, 미배포)
+
+- **대상:**
+  - `ssh siyong`(Windows 11 Pro build 26300)에 설치돼 있던 Tabledown.Dev 0.3.3.0(GitHub 시험용 MSIX)을 QA 빌드로 업데이트했다.
+  - 1차는 `6b637f3` 소스로 만든 0.3.3.1(EXE SHA-256 `ac05426f…`)이다. 최종은 `f4a40d8` 소스로 만든 0.3.3.2(EXE SHA-256 `cd7661a9…`, 설치본과 일치, PID 17720)다.
+  - 빌드는 그 PC의 Python 3.12.10·PyInstaller 6.21(`--collect-all winsdk` 포함)·makeappx로 했다. 묶인 converter·Windows 모듈 소스가 빌드한 소스와 같은 것을 확인했고, 기존 `CN=Tabledown.Dev` 시험 인증서로 서명했다.
+  - 네 번째 자리(.1/.2)는 QA 빌드 구분용이다. 앱 버전(`__version__`)은 0.3.3 그대로다.
+- **환경:** Excel 16.0(build 20527), Word 16.0, Obsidian 1.14.4 portable(사용자 vault와 분리된 프로필)을 썼다. 시험은 로그인 사용자 세션의 예약 작업(Interactive)으로 실행했다. 키 입력은 실제 키 이벤트(`keybd_event`)로 보냈다.
+- **Windows 단위 테스트(실제 Windows, skip 0):**
+  - 처음 222개 중 3개가 실패했다. Ctrl+Alt+E 연결 테스트 2종이 Excel 앞 창 확인(2-E)을 stub하지 않아서, Excel이 앞에 없으면 내보내기를 부르지 않았다.
+  - macOS에서는 이 테스트들이 skip돼 드러나지 않았다. CI에서도 실패했을 것이다. 테스트만 고쳤다(`cebb07c`). 이후 222/222, Word 수정 뒤 223/223이다.
+  - converter 매트릭스는 AppKit을 import해 Windows에서 실행되지 않는다(macOS 60/60).
+- **발견·수정: Windows Word 문서가 Office 문서로 판별되지 않음 (`f4a40d8`, 공유 converter):**
+  - Windows CF_HTML은 fragment만 넘긴다. Word는 Office 네임스페이스를 fragment 밖 `<html>`에 선언한다. 그래서 1단계의 Office Markdown(제목·목록·링크·헤더 있는 표)이 Windows에서는 동작하지 않았다.
+  - 실제 결과: `QA 제목` / `l 첫` / `항목` 같은 평문이 나왔고, `text/markdown`도 넣지 않았다. 그러면 Obsidian이 HTML로 표를 다시 만들어 빈 헤더 행이 생긴다.
+  - Office의 `<o:p>` 태그로도 판별하게 했다. Office 문서의 일반 텍스트는 HTML 공백 규칙대로 줄바꿈을 한 칸으로 합친다(`<pre>` 제외). Word가 긴 소스 줄을 문장 중간에서 꺾기 때문이다.
+  - 이 공백 처리는 macOS Office 출력에도 적용된다. macOS는 단위 테스트(290/290, converter 60/60)로만 확인했고 실기기는 미검증이다.
+  - 회귀 테스트 `test_word_cf_html_fragment_is_an_office_document`는 실제 Word CF_HTML 모양(네임스페이스가 fragment 밖)을 쓴다.
+- **최종 실기기 결과(0.3.3.2): 13/13 통과.**
+  - Excel 3×2(한글·이모지·셀 줄바꿈)를 Ctrl+C로 복사하면 Markdown·HTML 유지·`text/markdown`이 text와 같았다. Obsidian 일반 붙여넣기 노트가 생성 Markdown과 같았고, 헤더 행도 정상이었다.
+  - 링크 표(`문서A`, 주소 자체가 글자인 링크): `[문서A](…)`와 `<…%28bar%29>`로 변환됐다. Obsidian 결과는 정상 헤더 표였다. Excel에 다시 붙이면 값과 하이퍼링크 2개가 유지됐다.
+  - 한 칸(`1,234`)·한 행·한 열을 복사하면 클립보드를 건드리지 않았다(생성 marker·`text/markdown` 없음).
+  - 일시정지 중 복사한 뒤 다시 켜도 변환하지 않았다. 다음 복사는 변환됐다.
+  - Obsidian이 앞일 때 Ctrl+Alt+X/E를 누르면 안내만 뜨고 클립보드는 그대로였다. Excel이 앞일 때는 일반 XML(`$A$1:$B$3`)과 수식 XML(`=R2*S2`, 결과 24)이 text-only로 나왔다.
+  - 전각 괄호 키 헤더 `구분（가）`가 있는 병합 표의 XML을 Python expat으로 파싱했다. 헤더는 값으로 남았다.
+  - Word 문서(제목·글머리표 2개·링크·3×2 표)는 `# QA 제목`·`- 첫 항목`·`[참고 링크](…)`·헤더 있는 표가 됐다. text와 `text/markdown`이 같았고, Obsidian 노트도 같았다.
+  - 화면 확인 중 관찰: 주소 자체가 글자인 링크는 Obsidian에 `…Foo_%28bar%29`처럼 인코딩된 모양으로 보인다. 링크 동작은 정상이다.
+- **바로 붙여넣기(참고, 통과 수에 넣지 않음):** 3회 모두 복사→붙여넣기 간격 0.156~0.157초 시점에 이미 변환돼 있었고, 노트는 생성 Markdown과 같았다. 경쟁 구간(변환 전 붙여넣기)은 재현되지 않았다.
+- **관찰 도구 오류(최초 실패 보존):**
+  - 1차 13개 중 4개 실패: 그중 3개가 도구 오류, 1개가 위 Word 문제다.
+    - 창 전환에 쓴 Alt 키가 Excel 리본 KeyTips를 켜서 Ctrl+V가 들어가지 않았다(Escape로 보정).
+    - 예약 작업을 관리자 권한으로 돌려 Excel도 관리자 권한으로 떴다. 일반 권한으로 도는 Tabledown이 그 Excel을 찾지 못해 "실행 중인 Excel을 찾을 수 없습니다"가 떴다(일반 권한으로 재실행).
+  - 2차는 12/13이었고, 남은 실패는 Word 문제였다. 이때 시험 문서의 링크 글자 지정(`TextToDisplay`)이 무시돼 문서를 고쳐 만들었다.
+- **정리:**
+  - 시험 통합문서·Word 문서는 저장하지 않고 닫았다. 시험 Obsidian을 종료하고 예약 작업도 지웠다.
+  - 1·2차에서 남은 자동화용 Excel 프로세스 2개(`/automation`, 창 없음)를 종료했다.
+  - 시작 시 클립보드에는 복원할 데이터가 없어 비워 두었다.
+  - 설치본은 0.3.3.2 QA 빌드로 실행 중이다. 되돌리려면 `C:\Users\Public\Tabledown-Release-Retest-20261008\Tabledown-0.3.3.0.msix`를 `-ForceUpdateFromAnyVersion`으로 설치한다.
+  - 사용자 설정의 빈칸 채우기 ON은 그대로 두었다.
+- **미검증:** Windows CI(`windows-build.yml`·`verify_release.py`), Store 패키지, Notion, 사용자 원본 문서, 재로그인, macOS Word 실기기(공백 처리 변경 후).
+- **근거:** gitignore된 `outputs/windows_qa_20261103/`(스크립트, `evidence/`의 1·2차·최종 JSON, 단위 로그, 빌드·설치 결과, 캡처한 Word CF_HTML, Obsidian 화면)와 Windows `C:\Users\Public\Tabledown-QA-20261103`.
+
 ### 2026-11-03 — Excel·Sheets 표의 셀 링크를 `[텍스트](URL)`로 유지 (소스, 미배포)
 
 - **문제(실기기 확인):** 1-C 이후 링크 셀이 있는 표는 `text/markdown`을 넣지 않았다. Excel·Sheets 표처럼 header 셀이 없는 표는 Obsidian이 직접 변환하면서 빈 헤더 행을 만들고, 실제 헤더를 본문 첫 행으로 내렸다. 0.6.3처럼 링크 없이 주입하면 표는 맞지만 URL이 사라진다.

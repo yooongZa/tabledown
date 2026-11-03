@@ -65,6 +65,7 @@ Tabledown 은 macOS 메뉴바 앱으로, 클립보드를 감시하며 **Excel/Sh
 - **변환 완료를 기다리는 경로와 바로 붙여넣는 경로를 따로 검증한다.** 후자는 실제 Excel 복사 완료까지만 확인하고 생성 marker나 `text/markdown`을 기다리지 않는다. 복사·붙여넣기 전후의 generation, 형식 목록, 시각을 기록한다. 두 플랫폼의 0.1초 polling과 변환/기록은 비동기이므로, 나중에 정상 Markdown이 생겼다는 사실만으로 앞선 붙여넣기를 성공 처리하지 않는다.
 - 판정 기준은 원래 셀 값·행열 구조와 대상 앱의 실제 결과다. Markdown의 선행 개행·정상 entity escape는 오류로 세지 않는다. 앱 포커스/편집 모드, 실제 복사 여부, Obsidian 저장 완료를 확인하고 관찰 도구 오류는 제품 오류와 분리한다. 형식 존재만 조사할 때 지연 렌더링된 모든 native/GDI 데이터를 강제로 읽지 않는다.
 - 실패한 최초 실행·관찰 도구 보정·최종 재시험을 각각 보존한다. 기능 실패가 남으면 전체 실기기 통과라고 쓰지 않는다. 시험하지 않은 OS/앱/Store 설치·재로그인·사용자 원본 입력은 미검증으로 표시한다. 관련 재현 근거는 CHANGELOG의 2026-10-08 GitHub 배포본 재시험 기록을 따른다.
+- **Windows 원격 시험 주의 (2026-11-03)**: 로그인 사용자 세션의 예약 작업은 **일반 권한(Limited)** 으로 실행한다. 관리자 권한 작업이 COM으로 띄운 Excel은 일반 권한 Tabledown이 찾지 못한다("실행 중인 Excel을 찾을 수 없습니다"). 창 전환용 Alt 입력이 Excel 리본 KeyTips를 켜므로 Excel에 키를 보내기 전 Escape를 누른다. Windows 전용(tray) 테스트는 macOS에서 skip되므로 Windows 실행 결과를 따로 확인한다.
 
 ### 자주 쓰는 명령 포인터
 - 로컬 실행: `.venv/bin/python run.py` (Windows 포트는 `windows/run_windows.py`).
