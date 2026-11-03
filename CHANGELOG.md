@@ -16,7 +16,11 @@ Windows 독립 버전 0.3.4(MSIX 0.3.4.0)다. 아래 2026-11-03 항목의 공유
 - Excel 한 칸·한 행·한 열은 값 그대로 둔다. 웹 문서는 Obsidian이 직접 변환하도록 `text/markdown`을 넣지 않는다(0.3.3 회귀 수정).
 - Ctrl+Alt+X/E는 Excel 창이 앞에 있을 때만 Excel을 읽는다. 일시정지 중 복사한 내용은 다시 켜도 변환하지 않는다.
 - XML: expat이 거부하는 전각·특수 문자 키 헤더는 값으로 남겨 앱 자신의 파서로 읽힌다. 수식 XML의 참조 누락 사유(전체 행·열, 3-D, spill, LET/LAMBDA)를 바로잡았다.
-- 배포 기록(빌드·검증·공개·Store 제출)은 완료 후 이 절에 덧붙인다.
+- **GitHub 공개 완료:** 태그 `windows-v0.3.4`(소스 `2dc6aab`)로 [portable ZIP·자체서명 MSIX 0.3.4.0](https://github.com/yooongZa/tabledown/releases/tag/windows-v0.3.4)을 공개했다. Latest는 macOS `v0.6.3`을 유지했고 고정 DMG 링크가 `v0.6.3`으로 연결되는 것을 확인했다. 공개 파일 5개를 인증 없이 다시 받아 SHA-256과 CI 산출물과의 바이트 일치를 확인했다. README 3개의 Windows 링크를 새 태그로 바꿨다.
+- **패키지 검증:** [GitHub용 CI](https://github.com/yooongZa/tabledown/actions/runs/41587505952)와 [Store용 CI](https://github.com/yooongZa/tabledown/actions/runs/41587509372)가 모두 성공했다. 각각 Windows 포트 141개·공용 82개 테스트를 통과했고, `verify_release.py` 11개 검사를 통과했다. identity는 `Tabledown.Dev`·`LIMOD.Tabledown` 0.3.4.0이고, 두 패키지의 앱 모듈 22개 해시가 같다. Store MSIX SHA-256은 `2d55595a…`다.
+- **공개 파일 실기기 확인:** Windows PC(`ssh siyong`)가 GitHub에서 직접 받은 MSIX의 SHA-256 일치·서명 `Valid`를 확인하고 설치했다(Tabledown.Dev 0.3.3.2 QA → 0.3.4.0). 설치된 EXE(`d8549198…`)는 공개 ZIP 안의 EXE와 같다. 같은 13개 시나리오(위 2026-11-03 Windows 항목)를 모두 통과했다.
+  - 첫 실행은 화면 보호기(`scrnsave.scr`, 해제 시 잠금 없음)가 켜져 창 전환이 거부돼 첫 단계에서 멈췄다. 화면 보호기를 끄고 다시 실행했다. 실패 기록은 보존했다.
+- **Microsoft Store:** 제출 결과는 아래에 덧붙인다.
 
 ### 2026-11-03 — Windows SSH 실기기 확인과 Word 판별 수정 (`f4a40d8` QA MSIX, 미배포)
 
