@@ -336,6 +336,35 @@ class CopyAsXmlActionTests(unittest.TestCase):
         reader.assert_not_called()
         writer.assert_not_called()
 
+    def test_shortcut_export_runs_only_with_excel_in_front(self):
+        for frontmost, started in ((False, False), (True, True), (None, True)):
+            for action, kind in (
+                (TabledownApp._copy_as_xml_from_hotkey, "table"),
+                (TabledownApp._copy_selected_excel_formulas_from_hotkey, "formulas"),
+            ):
+                with self.subTest(frontmost=frontmost, kind=kind):
+                    app = SimpleNamespace(
+                        _start_explicit_export=Mock(),
+                        _alert_explicit_export_error=Mock(),
+                    )
+                    app._start_hotkey_export = TabledownApp._start_hotkey_export.__get__(app)
+                    with (
+                        patch("tablemark.app.excel_is_frontmost", return_value=frontmost),
+                        patch("tablemark.app.read_clipboard") as clipboard_reader,
+                        patch("tablemark.app.log"),
+                    ):
+                        action(app, None)
+                    clipboard_reader.assert_not_called()
+                    if started:
+                        app._start_explicit_export.assert_called_once_with(kind)
+                        app._alert_explicit_export_error.assert_not_called()
+                    else:
+                        # Another app is in front: nothing is read or written.
+                        app._start_explicit_export.assert_not_called()
+                        app._alert_explicit_export_error.assert_called_once_with(
+                            kind, "excel_not_frontmost"
+                        )
+
     def test_resume_skips_copies_made_while_paused(self):
         app = SimpleNamespace(
             enabled=False,

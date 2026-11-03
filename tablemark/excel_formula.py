@@ -311,6 +311,20 @@ def _error_number(error_info) -> int | None:
         return None
 
 
+def excel_is_frontmost() -> bool | None:
+    """Whether Excel is the active app; ``None`` when that cannot be read.
+
+    Needs no permission: the frontmost application is public workspace state.
+    """
+    try:
+        application = NSWorkspace.sharedWorkspace().frontmostApplication()
+        if application is None:
+            return False
+        return str(application.bundleIdentifier() or "") == EXCEL_BUNDLE_ID
+    except Exception:  # noqa: BLE001 - an unreadable state must not break the action
+        return None
+
+
 class NSAppleScriptExecutor:
     """Native executor backed by ``NSAppleScript`` and running-app lookup."""
 

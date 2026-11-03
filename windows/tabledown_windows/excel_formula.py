@@ -883,6 +883,37 @@ def _window_process_id(hwnd: Any, user32: Any | None = None) -> int:
     return int(pid.value)
 
 
+_GA_ROOTOWNER = 3
+
+
+def excel_window_is_foreground(user32: Any | None = None) -> bool | None:
+    """Whether the foreground window belongs to Excel; ``None`` if unknown.
+
+    Excel's own dialogs and cell editing are owned by its ``XLMAIN`` window, so
+    the root owner of the foreground window is compared. Off Windows (or if
+    user32 cannot be read) the state is unknown and callers keep working.
+    """
+
+    if user32 is None:
+        user32 = _load_user32()
+    if user32 is None:
+        return None
+    try:
+        foreground = user32.GetForegroundWindow()
+        if not foreground:
+            return False
+        handle = ctypes.c_void_p(int(foreground))
+        root = user32.GetAncestor(handle, _GA_ROOTOWNER) or foreground
+        class_name = ctypes.create_unicode_buffer(_WINDOW_CLASS_BUFFER_SIZE)
+        if user32.GetClassNameW(
+            ctypes.c_void_p(int(root)), class_name, _WINDOW_CLASS_BUFFER_SIZE
+        ) <= 0:
+            return None
+        return class_name.value.upper() == _EXCEL_WINDOW_CLASS
+    except Exception:  # noqa: BLE001 - an unreadable state must not break the action
+        return None
+
+
 def _load_user32() -> Any | None:
     windll = getattr(ctypes, "windll", None)
     return getattr(windll, "user32", None) if windll is not None else None

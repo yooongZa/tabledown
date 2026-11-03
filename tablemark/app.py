@@ -50,7 +50,11 @@ from .i18n import (
     save_preferred_language,
     t,
 )
-from .excel_formula import ExcelFormulaError, read_stable_selected_excel_formulas
+from .excel_formula import (
+    ExcelFormulaError,
+    excel_is_frontmost,
+    read_stable_selected_excel_formulas,
+)
 from .excel_table import (
     excel_table_selection_to_html,
     excel_table_selection_to_model,
@@ -203,10 +207,10 @@ class TabledownApp(rumps.App):
         # handler dispatches all by id (see hotkey.py). Graceful: if a hotkey
         # fails to register, its menu item still works.
         self.hotkeys = GlobalHotkeys()
-        self.hotkeys.add(KEY_X, CMD | CONTROL, self.copy_as_xml)
+        self.hotkeys.add(KEY_X, CMD | CONTROL, self._copy_as_xml_from_hotkey)
         self.hotkeys.add(KEY_T, CMD | CONTROL, self.toggle)
         self.hotkeys.add(
-            KEY_E, CMD | CONTROL, self.copy_selected_excel_formulas
+            KEY_E, CMD | CONTROL, self._copy_selected_excel_formulas_from_hotkey
         )
         self.hotkeys.register()
 
@@ -372,6 +376,26 @@ class TabledownApp(rumps.App):
     def copy_selected_excel_formulas(self, _sender):
         """Schedule a values/formulas/references XML export."""
         self._start_explicit_export(_EXPORT_FORMULAS)
+
+    def _copy_as_xml_from_hotkey(self, _sender):
+        self._start_hotkey_export(_EXPORT_TABLE)
+
+    def _copy_selected_excel_formulas_from_hotkey(self, _sender):
+        self._start_hotkey_export(_EXPORT_FORMULAS)
+
+    def _start_hotkey_export(self, export_kind: str) -> None:
+        """Run a global-shortcut export only while Excel is the active app.
+
+        A chord pressed in another app (Chrome showing Google Sheets, a chat
+        window) must not copy whatever range a background workbook last had
+        selected. The menu items stay available from any app: choosing one is
+        an explicit request for the Excel selection.
+        """
+        if excel_is_frontmost() is False:
+            log("explicit export shortcut ignored: Excel is not frontmost")
+            self._alert_explicit_export_error(export_kind, "excel_not_frontmost")
+            return
+        self._start_explicit_export(export_kind)
 
     def copy_as_markdown(self, _sender):
         """Copy the selected Excel table with its displayed values and layout."""

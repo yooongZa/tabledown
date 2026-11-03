@@ -22,7 +22,7 @@ from tablemark.excel_formula import ExcelFormulaError
 
 from . import diagnostics, single_instance, startup_task
 from .conversion import converted_clipboard
-from .excel_formula import read_stable_selected_excel_formulas
+from .excel_formula import excel_window_is_foreground, read_stable_selected_excel_formulas
 from .excel_table import read_stable_selected_excel_table, selection_to_xml
 from .hotkey import MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, VK_E, VK_T, VK_X, GlobalHotkey
 from .i18n import SUPPORTED_LANGUAGES, resolve_language, save_preferred_language, t
@@ -292,7 +292,25 @@ class TabledownWindowsApp:
         self._copy_selected_excel_formula_xml(compact_for_ai=False, table=True)
 
     def _copy_as_xml_from_hotkey(self) -> None:
-        self.copy_as_xml(None, None)
+        if self._excel_in_front_for_hotkey("table_export"):
+            self.copy_as_xml(None, None)
+
+    def _excel_in_front_for_hotkey(self, prefix: str) -> bool:
+        """Global shortcuts read Excel only while an Excel window is in front.
+
+        A chord pressed in another app must not copy whatever range a
+        background workbook last had selected. Tray menu items stay available:
+        choosing one is an explicit request (and the tray owns the foreground
+        then). An unknown foreground state keeps the shortcut working.
+        """
+        if excel_window_is_foreground() is not False:
+            return True
+        log("explicit export shortcut ignored: Excel is not in front")
+        self._show_message_box_async(
+            t(f"{prefix}.error.excel_not_foreground", self.lang),
+            t("help.title", self.lang),
+        )
+        return False
 
     def copy_selected_excel_formulas(self, _icon, _item) -> None:
         """Export the active Excel table values and formulas without blocking."""
@@ -458,7 +476,8 @@ class TabledownWindowsApp:
 
     def _copy_selected_excel_formulas_from_hotkey(self) -> None:
         """Route Ctrl+Alt+E through the same action as the tray menu item."""
-        self.copy_selected_excel_formulas(None, None)
+        if self._excel_in_front_for_hotkey("formula_export"):
+            self.copy_selected_excel_formulas(None, None)
 
     def share_diagnostics(self, _icon, _item) -> None:
         """Write a scrubbed local log and open its folder in Explorer.

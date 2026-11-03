@@ -1494,12 +1494,13 @@ class AppFormulaActionTests(unittest.TestCase):
         self.assertEqual(
             hotkey_class.return_value.add.call_args_list,
             [
-                call(KEY_X, CMD | CONTROL, app.copy_as_xml),
+                # Shortcuts go through the Excel-in-front check (menu items don't).
+                call(KEY_X, CMD | CONTROL, app._copy_as_xml_from_hotkey),
                 call(KEY_T, CMD | CONTROL, app.toggle),
                 call(
                     KEY_E,
                     CMD | CONTROL,
-                    app.copy_selected_excel_formulas,
+                    app._copy_selected_excel_formulas_from_hotkey,
                 ),
             ],
         )

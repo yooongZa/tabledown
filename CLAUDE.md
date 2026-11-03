@@ -509,6 +509,12 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
 항상 **액셀러레이터일 뿐** — 등록 실패해도 메뉴 항목은 그대로 동작하게 두는 graceful
 fallback 을 지킬 것(`register()`/`start()` 가 False 를 돌려줄 뿐 예외를 던지지 않음).
 
+**XML·수식 단축키는 Excel이 앞에 있을 때만 읽는다 (2026-11-03)**: macOS `_start_hotkey_export`
+(NSWorkspace frontmost bundle id), Windows `_excel_in_front_for_hotkey`(foreground 창의 root owner 클래스
+`XLMAIN`). 다른 앱이 앞이면 Excel을 읽지 않고 클립보드도 그대로 둔 채 안내한다 — Sheets·채팅 창에서 누른
+단축키가 백그라운드 통합문서의 마지막 선택을 복사하던 개인정보 문제다. 확인할 수 없으면(None) 예전처럼 실행한다.
+메뉴 항목에는 적용하지 않는다(명시적 선택이고, Windows는 트레이 클릭 때 foreground가 트레이 창이 됨). 권한은 필요 없다.
+
 **키 배정(2026-06-24 확정, XML 키는 2026-06-29 ⌘⌃C→⌘⌃X 로 변경)**:
 | 동작 | macOS | Windows |
 |------|-------|---------|

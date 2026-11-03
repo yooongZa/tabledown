@@ -1694,6 +1694,34 @@ class FormulaExportActionPortableTests(unittest.TestCase):
         app._show_message_box_async = mock.Mock()
         return app
 
+    def test_shortcut_export_runs_only_with_excel_in_front(self):
+        for foreground, started in ((False, False), (True, True), (None, True)):
+            for hotkey, action, prefix in (
+                ("_copy_as_xml_from_hotkey", "copy_as_xml", "table_export"),
+                (
+                    "_copy_selected_excel_formulas_from_hotkey",
+                    "copy_selected_excel_formulas",
+                    "formula_export",
+                ),
+            ):
+                with self.subTest(foreground=foreground, hotkey=hotkey):
+                    app = self._app(lang="en")
+                    with mock.patch.object(
+                        self.module, "excel_window_is_foreground", return_value=foreground
+                    ), mock.patch.object(
+                        self.module.TabledownWindowsApp, action
+                    ) as export, mock.patch.object(self.module, "log"):
+                        getattr(app, hotkey)()
+                    if started:
+                        export.assert_called_once_with(None, None)
+                        app._show_message_box_async.assert_not_called()
+                    else:
+                        export.assert_not_called()
+                        app._show_message_box_async.assert_called_once_with(
+                            self.module.t(f"{prefix}.error.excel_not_foreground", "en"),
+                            self.module.t("help.title", "en"),
+                        )
+
     @staticmethod
     def _selection(*, partial=False, state="done"):
         return excel_formula.ExcelFormulaSelection(
@@ -2635,6 +2663,41 @@ class LoginMenuTests(unittest.TestCase):
             app.toggle_fill_blanks(None, None)
         self.assertTrue(app.fill_blanks)
         self.assertEqual(saved, [(FILL_BLANKS_KEY, True)])
+
+
+class ExcelForegroundTests(unittest.TestCase):
+    """The shortcut gate reads only the foreground window's root-owner class."""
+
+    @staticmethod
+    def _user32(foreground, root, class_name):
+        user32 = mock.Mock()
+        user32.GetForegroundWindow.return_value = foreground
+        user32.GetAncestor.return_value = root
+
+        def get_class_name(_handle, buffer, _size):
+            buffer.value = class_name
+            return len(class_name)
+
+        user32.GetClassNameW.side_effect = get_class_name
+        return user32
+
+    def test_excel_window_or_its_dialog_counts_as_excel(self):
+        user32 = self._user32(101, 100, "XLMAIN")
+        self.assertTrue(excel_formula.excel_window_is_foreground(user32))
+        self.assertEqual(user32.GetAncestor.call_args.args[1], 3)  # GA_ROOTOWNER
+
+    def test_other_app_or_no_window_is_not_excel(self):
+        self.assertFalse(
+            excel_formula.excel_window_is_foreground(self._user32(7, 7, "Chrome_WidgetWin_1"))
+        )
+        self.assertFalse(excel_formula.excel_window_is_foreground(self._user32(0, 0, "")))
+
+    def test_unreadable_state_is_unknown(self):
+        user32 = mock.Mock()
+        user32.GetForegroundWindow.side_effect = OSError("denied")
+        self.assertIsNone(excel_formula.excel_window_is_foreground(user32))
+        with mock.patch.object(excel_formula, "_load_user32", return_value=None):
+            self.assertIsNone(excel_formula.excel_window_is_foreground())
 
 
 class SingleInstanceTests(unittest.TestCase):
