@@ -335,6 +335,11 @@ class TabledownApp(rumps.App):
     # --- Menu actions ---
 
     def toggle(self, _sender):
+        if not self.enabled:
+            # Copies made while paused are not converted on resume — only new
+            # copies are, as after a fresh launch. Record the generation before
+            # flipping so the watcher never sees enabled with a stale count.
+            self._last_change_count = clipboard_change_count()
         self.enabled = not self.enabled
         self.toggle_item.state = 1 if self.enabled else 0
         self.icon = self._current_icon_path()

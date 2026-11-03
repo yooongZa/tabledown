@@ -2568,6 +2568,18 @@ class LoginMenuTests(unittest.TestCase):
 
         self.assertEqual(app._last_change_count, 10)
 
+    def test_resume_skips_copies_made_while_paused(self):
+        from tabledown_windows import app as app_module
+
+        app = self._make_app(supported=False)
+        app.enabled = False
+        app._last_change_count = 10
+        with mock.patch.object(app_module, "clipboard_change_count", return_value=12), \
+             mock.patch.object(app_module, "log"):
+            app._set_enabled(True, refresh_menu=False)
+        self.assertTrue(app.enabled)
+        self.assertEqual(app._last_change_count, 12)
+
     def test_augment_passes_only_the_branch_markdown_payload(self):
         from tabledown_windows import app as app_module
 

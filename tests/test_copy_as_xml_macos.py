@@ -336,6 +336,32 @@ class CopyAsXmlActionTests(unittest.TestCase):
         reader.assert_not_called()
         writer.assert_not_called()
 
+    def test_resume_skips_copies_made_while_paused(self):
+        app = SimpleNamespace(
+            enabled=False,
+            _last_change_count=10,
+            toggle_item=SimpleNamespace(state=0),
+            _current_icon_path=Mock(return_value="icon.png"),
+            icon=None,
+        )
+        with (
+            patch("tablemark.app.clipboard_change_count", return_value=12),
+            patch("tablemark.app.log"),
+        ):
+            TabledownApp.toggle(app, None)
+        self.assertTrue(app.enabled)
+        # The copy made while paused (generation 12) counts as handled.
+        self.assertEqual(app._last_change_count, 12)
+
+        with (
+            patch("tablemark.app.clipboard_change_count", return_value=15) as count,
+            patch("tablemark.app.log"),
+        ):
+            TabledownApp.toggle(app, None)
+        self.assertFalse(app.enabled)
+        count.assert_not_called()
+        self.assertEqual(app._last_change_count, 12)
+
     def test_watcher_does_not_overwrite_a_newer_external_copy(self):
         app = self._app()
         app._converted_clipboard = Mock(

@@ -232,6 +232,11 @@ class TabledownWindowsApp:
         self._set_enabled(not self.enabled, refresh_menu=False)
 
     def _set_enabled(self, value: bool, *, refresh_menu: bool) -> None:
+        if value and not self.enabled:
+            # Copies made while paused are not converted on resume — only new
+            # copies are, as after a fresh launch. Record the generation before
+            # flipping so the watcher never sees enabled with a stale count.
+            self._last_change_count = clipboard_change_count()
         self.enabled = value
         if refresh_menu:
             self._refresh_menu()

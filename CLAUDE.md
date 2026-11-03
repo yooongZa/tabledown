@@ -444,6 +444,9 @@ r=run_converter_tests(); print(sum(x.ok for x in r),'/',len(r),'passed'); \
 | 로그인 시 자동 실행 | 영속 — **OS 가 보관**, 우리 설정 파일엔 안 씀 | macOS: SMAppService(시스템 로그인 항목). Windows: MSIX StartupTask(설정 ▸ 앱 ▸ 시작 프로그램). 둘 다 OS 가 진실의 원천이라 JSON/NSUserDefaults 그림자를 두지 말 것(드리프트 발생). |
 
 - `enabled` 를 영속화하자는 제안이 다시 나오면 위 근거와 함께 재논의할 것 (실수로 "정리"하지 말 것).
+- **재개는 새 복사부터 (2026-11-03)**: 일시정지 중 복사한 내용은 다시 켤 때 변환하지 않는다(앱 시작 때와 같은
+  동작). 켜는 순간 `_last_change_count`를 현재 세대로 맞춘 뒤 `enabled`를 뒤집는다(macOS `toggle`, Windows
+  `_set_enabled`). 원본 TSV가 필요해 끄고 복사한 클립보드가 재개 시 Markdown으로 바뀌던 문제다.
 - Windows 설정 저장은 `tabledown_windows/settings.py` 의 **read-modify-write** 만 사용 — 통째로 덮어쓰면 다른 키가 소실된다(과거 i18n 저장기가 그랬음).
 
 ### 로그인 시 자동 실행 (macOS `login_item` ↔ Windows `startup_task`)
