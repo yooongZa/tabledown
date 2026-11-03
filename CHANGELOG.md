@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-11-03 (Windows)
+
+Windows 독립 버전 0.3.4(MSIX 0.3.4.0)다. 아래 2026-11-03 항목의 공유 converter·Windows 분기 변경을 담는다. macOS는 같은 소스를 아직 배포하지 않았다(최신 0.6.3).
+
+- 표 셀의 링크를 `[텍스트](URL)`로 유지한다. 링크가 있는 표도 Obsidian에 정상 헤더 표로 붙는다.
+- Word 문서는 제목·목록·문단 링크·헤더가 있는 표로 변환한다(Windows CF_HTML fragment 판별 포함).
+- Excel 한 칸·한 행·한 열은 값 그대로 둔다. 웹 문서는 Obsidian이 직접 변환하도록 `text/markdown`을 넣지 않는다(0.3.3 회귀 수정).
+- Ctrl+Alt+X/E는 Excel 창이 앞에 있을 때만 Excel을 읽는다. 일시정지 중 복사한 내용은 다시 켜도 변환하지 않는다.
+- XML: expat이 거부하는 전각·특수 문자 키 헤더는 값으로 남겨 앱 자신의 파서로 읽힌다. 수식 XML의 참조 누락 사유(전체 행·열, 3-D, spill, LET/LAMBDA)를 바로잡았다.
+- 배포 기록(빌드·검증·공개·Store 제출)은 완료 후 이 절에 덧붙인다.
+
 ### 2026-11-03 — Windows SSH 실기기 확인과 Word 판별 수정 (`f4a40d8` QA MSIX, 미배포)
 
 - **대상:**
