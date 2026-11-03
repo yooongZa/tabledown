@@ -7,6 +7,23 @@
 
 ## [Unreleased]
 
+### 2026-11-03 — Word 문서의 표를 Obsidian에 붙일 때 생기던 빈 헤더 행 수정 (소스, 미배포)
+
+- **원인:** 1단계 1-C 이후 문서에는 `text/markdown`을 넣지 않아 Obsidian이 HTML을 직접 변환한다. Word·Outlook 표에는 header 셀(`<th>`)이 없어서, Obsidian 변환이 표마다 빈 헤더 행을 만들고 원래 헤더를 본문 첫 행으로 내렸다. 2차 실기기 확인에서 발견했다.
+- **수정 (공유 converter, macOS·Windows 분기 미러):** Office HTML(`urn:schemas-microsoft-com:office` 네임스페이스)이면 `office_document_markdown`이 최소 Markdown을 만든다. 제목은 `#`, 목록은 `-`/`1.`, 문단 링크는 `[텍스트](URL)`로 쓰고, 그 옆에 정상 Markdown 표를 둔다. 이 값을 text와 `text/markdown`에 똑같이 넣는다.
+  - 표 셀에 링크가 있으면 Markdown 표에서 셀 URL이 사라지므로 기존 평탄화·미주입을 유지한다.
+  - Office가 아닌 문서는 바꾸지 않는다.
+  - Word 기호 글머리표(`·` 등)는 `- `로 바꾸고, 원본 줄바꿈으로 나뉜 제목은 한 줄로 합친다.
+  - 강조·코드 블록·중첩 목록 들여쓰기는 복잡도를 늘리지 않으려고 일부러 다루지 않았다.
+- **검증 (자동 테스트):** 비클립보드 매트릭스 86/86(converter 60/60), macOS 단위 290/290, Windows 포트 140건 중 111 pass + 29 skip, `compileall`, `git diff --check`를 통과했다. 새 테스트는 `html_office_document_offers_structured_markdown`, `html_office_document_with_link_cell_left_to_destination`, Windows `test_office_document_offers_structured_markdown`이다.
+- **검증 (macOS 실기기):** 환경은 소스 실행·Word 16.114.3·Obsidian 1.15.0(분리 인스턴스)이다. 키 입력 없이 Word 자체 복사(AppleScript `copy object`)와 CDP `paste` 명령으로 확인했다.
+  - Word 클립보드 HTML에 Office 네임스페이스가 있었다.
+  - text와 `text/markdown`이 같았다.
+  - Obsidian 결과는 `# 회의 안건`·번호 목록·`[회의록 링크](…)`·**정상 헤더 행을 가진 표**였다.
+  - Word 문서에서 만든 기본 목록 문단(`MsoListParagraph`)과 Windows 실기기는 확인하지 못했다.
+  - 클립보드는 바이트 단위로 같게 복원했고, Word와 시험용 Obsidian은 저장하지 않고 종료했다.
+  - 근거는 gitignore된 `outputs/device_check/round3/`에 있다.
+
 ### 2026-11-03 — 기능 점검 1단계: 자동 변환 범위·문서 주석·수식 사유·단축키 보호 (소스, 미배포)
 
 - **한 칸·한 행·한 열은 자동 변환하지 않음 (macOS·Windows):** Excel에서 주문번호·금액 한 칸이나 이메일 한 열을 복사하면 `| 1,234 |` 같은 Markdown 표가 검색창·터미널·메신저에 들어갔다. 순수 표 분기는 결과가 2행 이상·2열 이상일 때만 클립보드를 바꾼다(`is_auto_table_markdown`, 빈 마지막 열 정리 후 기준). 문서·Markdown 텍스트 분기는 바꾸지 않았다.

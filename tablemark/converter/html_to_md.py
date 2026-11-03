@@ -609,13 +609,41 @@ def html_has_content_outside_table(html: str) -> bool:
     return bool(soup.get_text(strip=True))
 
 
-def convert_document_tables(html: str, fill_merged_headers: bool = False) -> str:
+# Word/Outlook HTML declares this namespace. Office tables have no header
+# cells, so Obsidian's own HTML conversion puts an empty row above each one.
+_OFFICE_HTML = re.compile(r"urn:schemas-microsoft-com:office", re.IGNORECASE)
+_LIST_NUMBER = re.compile(r"\(?[0-9A-Za-z]{1,4}[.)]")
+_WEB_LINK = re.compile(r"(?:https?|mailto):", re.IGNORECASE)
+
+
+def office_document_markdown(html: str, fill_merged_headers: bool = False) -> str | None:
+    """Minimal Markdown for a Word/Outlook document, or None to leave it alone.
+
+    For Office documents the result keeps headings (``#``), list items
+    (``-``/``1.``) and paragraph links (``[text](url)``) next to proper Markdown
+    tables, so it can also be offered as text/markdown. Link cells would lose
+    their URL in a Markdown table, so those documents return None, as do all
+    non-Office documents: the destination's own converter handles more markup.
+    """
+    if not _OFFICE_HTML.search(html):
+        return None
+    soup = BeautifulSoup(html, "html.parser")
+    if any(table.find("a", href=True) for table in soup.find_all("table")):
+        return None
+    return convert_document_tables(html, fill_merged_headers, structured=True)
+
+
+def convert_document_tables(
+    html: str, fill_merged_headers: bool = False, *, structured: bool = False
+) -> str:
     """Render each <table> in a document as Markdown, keep other text as-is.
 
     Every <table> becomes a GFM Markdown table; the surrounding content
     (headings, paragraphs, lists) is flattened to plain text — their Markdown
     syntax (`#`, `-`) is NOT added, only tables are converted. Block elements
     are separated by newlines so the result keeps the document's line layout.
+    ``structured`` (used only by office_document_markdown) also writes
+    headings, list items and paragraph links as Markdown.
 
     Intended for the text/plain clipboard slot while the original HTML slot is
     left intact: a Markdown editor that reads text sees Markdown tables, while
@@ -627,7 +655,11 @@ def convert_document_tables(html: str, fill_merged_headers: bool = False) -> str
         noise.decompose()
 
     for marker in soup.find_all("span", style=_WORD_LIST_MARKER_STYLE):
-        marker.replace_with(" ".join(marker.get_text().split()) + " ")
+        label = " ".join(marker.get_text().split())
+        # Word bullets are symbol-font glyphs (·, U+F0B7, o); keep numbers as-is.
+        if structured and not _LIST_NUMBER.fullmatch(label):
+            label = "-"
+        marker.replace_with(label + " ")
 
     placeholders = {}
     for index, table in enumerate(soup.find_all("table")):
@@ -638,7 +670,7 @@ def convert_document_tables(html: str, fill_merged_headers: bool = False) -> str
             placeholders[key] = ""
         table.replace_with(key)
 
-    text = _block_text(soup)
+    text = _block_text(soup, structured)
     for key, markdown in placeholders.items():
         text = text.replace(key, "\n" + markdown + "\n")
     return _collapse_blank_lines(text)
@@ -653,8 +685,12 @@ _NON_TEXT_STRINGS = (Comment, Declaration, Doctype, ProcessingInstruction)
 _WORD_LIST_MARKER_STYLE = re.compile(r"mso-list\s*:\s*ignore", re.IGNORECASE)
 
 
-def _block_text(node) -> str:
-    """Extract text, inserting newlines around block-level elements."""
+def _block_text(node, structured: bool = False) -> str:
+    """Extract text, inserting newlines around block-level elements.
+
+    ``structured`` prefixes headings and list items with their Markdown marker
+    and writes web links as ``[text](url)``.
+    """
     parts = []
     for child in node.children:
         if isinstance(child, _NON_TEXT_STRINGS):
@@ -664,10 +700,26 @@ def _block_text(node) -> str:
         elif child.name == "br":
             parts.append("\n")
         elif child.name in _BLOCK_TAGS:
-            parts.append("\n" + _block_text(child) + "\n")
+            inner = _block_text(child, structured)
+            prefix = _markdown_block_prefix(child) if structured else ""
+            if prefix.startswith("#"):
+                # A heading must stay on one line; Office folds long source lines.
+                inner = " ".join(inner.split())
+            parts.append("\n" + (prefix + inner.strip() if prefix else inner) + "\n")
+        elif structured and child.name == "a" and _WEB_LINK.match(child.get("href", "")):
+            label = _block_text(child, structured).strip()
+            parts.append(f"[{label}]({child['href']})" if label else "")
         else:
-            parts.append(_block_text(child))
+            parts.append(_block_text(child, structured))
     return "".join(parts)
+
+
+def _markdown_block_prefix(node) -> str:
+    if node.name in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+        return "#" * int(node.name[1]) + " "
+    if node.name == "li":
+        return "1. " if node.parent is not None and node.parent.name == "ol" else "- "
+    return ""
 
 
 def _collapse_blank_lines(text: str) -> str:

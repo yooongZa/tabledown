@@ -91,6 +91,27 @@ HTML_WORD_LIST_DOC = (
     "<table><tr><td>항목</td><td>금액</td></tr><tr><td>서버</td><td>1,200</td></tr></table>\r\n"
     "<!--EndFragment-->\r\n</body></html>"
 )
+# Word (Office) document: namespace-marked HTML, folded heading source line,
+# HTML list, Word bullet/number paragraphs, a paragraph link and a td-only table.
+HTML_OFFICE_DOC = (
+    '<html xmlns:o="urn:schemas-microsoft-com:office:office" '
+    'xmlns:w="urn:schemas-microsoft-com:office:word"><body>\r\n<!--StartFragment-->\r\n'
+    "<h1>회의\r\n안건<o:p></o:p></h1>\r\n"
+    "<ol><li class=MsoNormal>예산 검토</li><li class=MsoNormal>일정 확정</li></ol>\r\n"
+    "<p class=MsoListParagraph style='mso-list:l1 level1 lfo2'><![if !supportLists]>"
+    "<span style='mso-list:Ignore'>·<span>&nbsp;&nbsp; </span></span><![endif]>준비물</p>\r\n"
+    "<p class=MsoListParagraph style='mso-list:l0 level1 lfo1'><![if !supportLists]>"
+    "<span style='mso-list:Ignore'>1.<span>&nbsp;&nbsp; </span></span><![endif]>첫 안건</p>\r\n"
+    '<p class=MsoNormal>참고 <a href="https://example.test/minutes">회의록 링크</a> 확인</p>\r\n'
+    "<table class=MsoTableGrid><tr><td><p>항목</p></td><td><p>금액</p></td></tr>"
+    "<tr><td><p>서버</p></td><td><p>1,200</p></td></tr></table>\r\n<!--EndFragment-->\r\n</body></html>"
+)
+OFFICE_DOC_MARKDOWN = (
+    "# 회의 안건\n\n1. 예산 검토\n\n1. 일정 확정\n\n- 준비물\n\n1. 첫 안건\n\n"
+    "참고 [회의록 링크](https://example.test/minutes) 확인\n\n"
+    "| 항목 | 금액 |\n| --- | --- |\n| 서버 | 1,200 |"
+)
+
 # Framework placeholders (Vue/Angular) are HTML comments between blocks.
 HTML_FRAMEWORK_COMMENTS_DOC = (
     '<div><h3>주간 현황</h3><!--v-if--><p>업데이트</p>'
@@ -316,6 +337,32 @@ def run_converter_tests() -> list[TestResult]:
                 None, {"html": HTML_NOISE, "text": "Before\n제품 수량\n키보드 3\nAfter"}
             ),
             False,
+        ),
+    )
+    check(
+        "html_office_document_offers_structured_markdown",
+        lambda: _assert_equal(
+            # Word tables have no header cells, so Obsidian's own conversion
+            # adds an empty header row; Office documents get minimal Markdown
+            # (headings, lists, links) in text and text/markdown alike.
+            (lambda r: (r["text"], r["markdown"]))(
+                TabledownApp._converted_clipboard(None, {"html": HTML_OFFICE_DOC, "text": "x"})
+            ),
+            (OFFICE_DOC_MARKDOWN, OFFICE_DOC_MARKDOWN),
+        ),
+    )
+    check(
+        "html_office_document_with_link_cell_left_to_destination",
+        lambda: _assert_equal(
+            # A link cell would lose its URL in a Markdown table: no
+            # text/markdown, and the text slot keeps the plain flattening.
+            (lambda r: ("markdown" in r, "#" in r["text"]))(
+                TabledownApp._converted_clipboard(
+                    None,
+                    {"html": HTML_OFFICE_DOC.replace("<p>서버</p>", '<p><a href="https://x.test">서버</a></p>'), "text": "x"},
+                )
+            ),
+            (False, False),
         ),
     )
     check(

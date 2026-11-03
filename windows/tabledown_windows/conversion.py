@@ -15,6 +15,7 @@ from tablemark.converter.html_to_md import (
     html_has_links,
     html_table_to_markdown,
     is_auto_table_markdown,
+    office_document_markdown,
 )
 from tablemark.converter.md_to_tsv import is_markdown_table, markdown_table_to_html
 
@@ -84,13 +85,17 @@ def converted_clipboard(content: dict, fill_blanks: bool = False) -> dict | None
         # its tables as Markdown in the text slot but KEEP the original HTML so
         # rich editors still paste a real table. Only rendered images are dropped.
         if html_has_content_outside_table(html):
-            converted = convert_document_tables(html, fill_blanks)
+            # Office documents get minimal Markdown (headings, lists, links)
+            # that is also offered as text/markdown: Obsidian's own conversion
+            # would give their header-less tables an empty header row.
+            office = office_document_markdown(html, fill_blanks)
+            converted = office or convert_document_tables(html, fill_blanks)
             if not converted.strip() or converted.strip() == text.strip():
                 return None
-            return {
-                "text": converted,
-                "drop_formats": WINDOWS_DROP_FORMATS,
-            }
+            updated = {"text": converted, "drop_formats": WINDOWS_DROP_FORMATS}
+            if office:
+                updated["markdown"] = office
+            return updated
         # A bare Excel/Sheets table: Markdown into the text slot, KEEP the HTML
         # <table> so one copy works for every destination. Only rendered images
         # are dropped — never the HTML (invariant 3, unified in 0.2.4).

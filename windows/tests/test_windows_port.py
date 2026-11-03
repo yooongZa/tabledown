@@ -164,6 +164,25 @@ class WindowsPortTests(unittest.TestCase):
         self.assertIn("| A | 문서 |", linked["text"])
         self.assertNotIn("markdown", linked)
 
+    def test_office_document_offers_structured_markdown(self):
+        # Mirrors the macOS converter test: Word tables have no header cells,
+        # so Office documents carry minimal Markdown in text and text/markdown.
+        html = (
+            '<html xmlns:w="urn:schemas-microsoft-com:office:word"><body>'
+            "<h1>회의 안건</h1><ol><li>예산 검토</li></ol>"
+            '<p>참고 <a href="https://example.test/m">링크</a></p>'
+            "<table><tr><td>항목</td><td>금액</td></tr><tr><td>서버</td><td>1,200</td></tr></table>"
+            "</body></html>"
+        )
+        result = converted_clipboard({"html": html, "text": "x"})
+        self.assertEqual(result["markdown"], result["text"])
+        self.assertEqual(
+            result["text"],
+            "# 회의 안건\n\n1. 예산 검토\n\n참고 [링크](https://example.test/m)\n\n"
+            "| 항목 | 금액 |\n| --- | --- |\n| 서버 | 1,200 |",
+        )
+        self.assertNotIn(CF_HTML_FORMAT_NAME, result["drop_formats"])
+
     def test_cf_html_roundtrip_preserves_utf8_fragment(self):
         payload = build_cf_html("<table><tr><td>한글</td></tr></table>")
 

@@ -32,6 +32,7 @@ from .converter.html_to_md import (
     html_table_to_markdown,
     html_table_to_model,
     is_auto_table_markdown,
+    office_document_markdown,
 )
 from .converter.md_to_tsv import (
     is_markdown_table,
@@ -961,14 +962,19 @@ class TabledownApp(rumps.App):
             # <table> from HTML and paste a real table. Only RENDERED image
             # formats are dropped, never the HTML.
             if html_has_content_outside_table(html):
-                converted = convert_document_tables(html, fill)
+                # Office documents get minimal Markdown (headings, lists,
+                # links) that is also offered as text/markdown: Obsidian's own
+                # conversion would give their header-less tables an empty
+                # header row. Other documents are left to the destination.
+                office = office_document_markdown(html, fill)
+                converted = office or convert_document_tables(html, fill)
                 if not converted.strip() or converted.strip() == text.strip():
                     return None
                 log("detected table in document")
-                return {
-                    "text": converted,
-                    "drop_types": RENDERED_TABLE_TYPES,
-                }
+                updated = {"text": converted, "drop_types": RENDERED_TABLE_TYPES}
+                if office:
+                    updated["markdown"] = office
+                return updated
             # A bare table (Excel/Sheets): put a Markdown table in the text slot
             # but KEEP the original HTML <table>. A Markdown editor reading text
             # gets Markdown; Excel/Word reading HTML still paste a real table, so

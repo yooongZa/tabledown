@@ -164,7 +164,7 @@ Markdown 에디터도 HTML을 우선할 수 있다. Obsidian 1.13.7에서는 `te
   제목·목록·링크·코드를 Tabledown 평탄화본으로 덮었기 때문이다. 이 경우 Obsidian은 예전처럼 원본 HTML을
   직접 변환한다(링크 셀이 있는 Excel 표는 3-M 증상이 다시 날 수 있는 의도된 trade-off). 링크를
   `[텍스트](URL)`로 직렬화하는 안은 escape 왕복 검증 뒤 별도로 검토한다. 주입을 다시 모든 분기로
-  넓히지 말 것.
+  넓히지 말 것. 예외는 위 불변식 4의 Office 문서다(`office_document_markdown`이 값을 줄 때만 문서에도 주입).
 - **형식 계약**: macOS는 `org.chromium.web-custom-data`, Windows는
   `Chromium Web Custom MIME Data Format`에 Chromium `base::Pickle`을 기록한다.
   UTF-16LE 길이는 code unit(코드 단위), 정렬은 4바이트다. 이모지를 Python 문자 수로 세거나
@@ -201,6 +201,12 @@ Markdown 에디터도 HTML을 우선할 수 있다. Obsidian 1.13.7에서는 `te
 - text 슬롯: `convert_document_tables` 로 **표 부분만 마크다운 표**로, 나머지는 plain text 로 보강.
 - html 슬롯: **원본 유지** (PNG/PDF/RTF 등 RENDERED 이미지 형식만 drop, html 은 절대 drop 금지).
 - 결과: 마크다운 에디터는 마크다운 표를, Word·Excel 은 원본 표 형식을 받는다. **양쪽 동시 만족.**
+- **Office 문서 예외 (2026-11-03)**: Word·Outlook HTML(`urn:schemas-microsoft-com:office` 네임스페이스)은
+  `office_document_markdown`이 제목(`#`)·목록(`-`/`1.`)·문단 링크(`[텍스트](URL)`)까지 **최소 Markdown**으로 쓰고,
+  같은 값을 text와 `text/markdown`에 함께 넣는다. Word 표에는 header 셀이 없어 Obsidian이 HTML을 직접 변환하면
+  표마다 빈 헤더 행이 생기기 때문이다(실기기 확인). 표 셀에 링크가 있으면 셀 URL이 사라지므로 None을 돌려
+  기존 평탄화·미주입으로 둔다. 다른 문서는 바꾸지 않는다(대상 앱의 변환기가 강조·코드·이미지까지 처리).
+  강조·코드 블록·중첩 목록 들여쓰기는 일부러 다루지 않는다 — 범위를 넓히려면 Obsidian 결과와 비교 검증부터.
 
 ### 4-M. 내부 Markdown 복사 helper (메뉴 제거: 2026-10-08)
 - macOS·Windows에 ‘마크다운 복사’ 메뉴를 노출하지 않는다. 아래 helper와 테스트는 내부 호환용으로 유지하며 사용자는 자동 Markdown 변환을 쓴다.
