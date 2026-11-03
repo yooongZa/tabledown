@@ -46,7 +46,12 @@
   - 시작 시 클립보드에는 복원할 데이터가 없어 비워 두었다.
   - 설치본은 0.3.3.2 QA 빌드로 실행 중이다. 되돌리려면 `C:\Users\Public\Tabledown-Release-Retest-20261008\Tabledown-0.3.3.0.msix`를 `-ForceUpdateFromAnyVersion`으로 설치한다.
   - 사용자 설정의 빈칸 채우기 ON은 그대로 두었다.
-- **미검증:** Windows CI(`windows-build.yml`·`verify_release.py`), Store 패키지, Notion, 사용자 원본 문서, 재로그인, macOS Word 실기기(공백 처리 변경 후).
+- **Windows CI (`windows-build.yml`, run 41586779789, `b37b498`): 성공(1분 26초).**
+  - windows-latest 러너에서 Windows 포트 테스트 141개와 공용 변환·수식 테스트 82개가 모두 통과했다. 위 PC의 223개와 같은 묶음이다.
+  - MSIX·포터블 zip을 빌드하고 서명을 검증했다. `verify_release.py`는 11개 검사를 통과했다. 패키지 내용 일치, 묶인 소스, 앱 시작·중복 실행 차단, HTML→Markdown·`text/markdown`·Markdown→HTML 기록, 일반 텍스트·XML 미변경, 일시정지·재개 단축키다.
+  - 이 실행은 `cebb07c`의 테스트 보정 이후다. 보정 전 소스였다면 Windows 테스트 단계에서 3개가 실패했을 것이다(PC에서 재현).
+  - 알림: GitHub이 Node.js 20 기반 action(checkout·setup-python·upload-artifact v4) 지원 종료를 경고했다. 지금은 Node.js 24로 강제 실행돼 동작한다.
+- **미검증:** Store 패키지(`windows-store.yml`), Notion, 사용자 원본 문서, 재로그인, macOS Word 실기기(공백 처리 변경 후).
 - **근거:** gitignore된 `outputs/windows_qa_20261103/`(스크립트, `evidence/`의 1·2차·최종 JSON, 단위 로그, 빌드·설치 결과, 캡처한 Word CF_HTML, Obsidian 화면)와 Windows `C:\Users\Public\Tabledown-QA-20261103`.
 
 ### 2026-11-03 — Excel·Sheets 표의 셀 링크를 `[텍스트](URL)`로 유지 (소스, 미배포)
