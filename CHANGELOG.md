@@ -20,7 +20,12 @@ Windows 독립 버전 0.3.4(MSIX 0.3.4.0)다. 아래 2026-11-03 항목의 공유
 - **패키지 검증:** [GitHub용 CI](https://github.com/yooongZa/tabledown/actions/runs/41587505952)와 [Store용 CI](https://github.com/yooongZa/tabledown/actions/runs/41587509372)가 모두 성공했다. 각각 Windows 포트 141개·공용 82개 테스트를 통과했고, `verify_release.py` 11개 검사를 통과했다. identity는 `Tabledown.Dev`·`LIMOD.Tabledown` 0.3.4.0이고, 두 패키지의 앱 모듈 22개 해시가 같다. Store MSIX SHA-256은 `2d55595a…`다.
 - **공개 파일 실기기 확인:** Windows PC(`ssh siyong`)가 GitHub에서 직접 받은 MSIX의 SHA-256 일치·서명 `Valid`를 확인하고 설치했다(Tabledown.Dev 0.3.3.2 QA → 0.3.4.0). 설치된 EXE(`d8549198…`)는 공개 ZIP 안의 EXE와 같다. 같은 13개 시나리오(위 2026-11-03 Windows 항목)를 모두 통과했다.
   - 첫 실행은 화면 보호기(`scrnsave.scr`, 해제 시 잠금 없음)가 켜져 창 전환이 거부돼 첫 단계에서 멈췄다. 화면 보호기를 끄고 다시 실행했다. 실패 기록은 보존했다.
-- **Microsoft Store:** 제출 결과는 아래에 덧붙인다.
+- **Microsoft Store 심사 접수:** 기존 앱 `9NGS4C0N2Z6L`에 `LIMOD.Tabledown` 0.3.4.0(SHA-256 `2d55595a…`)을 Submission 8(`1152921505702302722`)로 제출했다. 상태는 `In certification / Pre-processing`이고 승인 후 자동 공개다. 승인과 사용자 설치는 아직 확인하지 않았다.
+  - 제출 전 확인: 직전 Submission 7(0.3.3.0)이 Store에 공개된 상태였다.
+  - 바꾼 것은 패키지(0.3.4.0 추가, 0.3.3.0 제거)와 한·영 "What's new" 문구뿐이다. 가격·속성·연령 등급·제출 옵션·소개·스크린샷·키워드는 그대로다.
+  - 제출은 Windows PC(`ssh siyong`)의 로그인된 Chrome Partner Center에서 했다. 로그인 사용자 세션의 예약 작업으로 클릭·붙여넣기를 하고, 매 단계 화면을 캡처했다. 패키지는 Windows 파일 선택 창으로 올렸다.
+  - 제출 후 만족도 설문은 응답 없이 닫았다. 작업용 Chrome 탭을 닫고, 붙여넣기에 쓴 클립보드를 원래대로 비웠다.
+  - 근거: `outputs/releases/20261103-windows-store-0.3.4/`(CI 산출물, `submission-result.json`, `store-submitted.png`).
 
 ### 2026-11-03 — Windows SSH 실기기 확인과 Word 판별 수정 (`f4a40d8` QA MSIX, 미배포)
 
