@@ -1,5 +1,5 @@
 """Convert HTML <table> (e.g. from Excel) to Markdown table."""
-from bs4 import BeautifulSoup, NavigableString
+from bs4 import BeautifulSoup, Comment, Declaration, Doctype, NavigableString, ProcessingInstruction
 from html import escape
 import re
 
@@ -596,6 +596,9 @@ def convert_document_tables(html: str, fill_merged_headers: bool = False) -> str
     for noise in soup(["style", "script", "meta", "title", "head", "link"]):
         noise.decompose()
 
+    for marker in soup.find_all("span", style=_WORD_LIST_MARKER_STYLE):
+        marker.replace_with(" ".join(marker.get_text().split()) + " ")
+
     placeholders = {}
     for index, table in enumerate(soup.find_all("table")):
         key = f"\x00TABLE{index}\x00"
@@ -611,10 +614,21 @@ def convert_document_tables(html: str, fill_merged_headers: bool = False) -> str
     return _collapse_blank_lines(text)
 
 
+# Markup that bs4 keeps as NavigableString subclasses but that is never page
+# text: Word's <!--StartFragment--> and <![if !supportLists]> conditionals,
+# framework placeholders such as Vue's <!--v-if-->, doctypes and PIs.
+_NON_TEXT_STRINGS = (Comment, Declaration, Doctype, ProcessingInstruction)
+
+# Word renders list numbers as "1." plus &nbsp; padding in this span.
+_WORD_LIST_MARKER_STYLE = re.compile(r"mso-list\s*:\s*ignore", re.IGNORECASE)
+
+
 def _block_text(node) -> str:
     """Extract text, inserting newlines around block-level elements."""
     parts = []
     for child in node.children:
+        if isinstance(child, _NON_TEXT_STRINGS):
+            continue
         if isinstance(child, NavigableString):
             parts.append(str(child))
         elif child.name == "br":

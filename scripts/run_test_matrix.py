@@ -80,6 +80,24 @@ HTML_NOISE = """
 </body></html>
 """
 
+# Word (Mac) document fragment: StartFragment comments, an Office conditional
+# comment around the list number, and the mso-list:Ignore number span.
+HTML_WORD_LIST_DOC = (
+    "<html><body>\r\n<!--StartFragment-->\r\n"
+    "<p class=MsoNormal>회의 안건<o:p></o:p></p>\r\n"
+    "<p class=MsoListParagraph style='mso-list:l0 level1 lfo1'><![if !supportLists]>"
+    "<span style='mso-list:Ignore'>1.<span style='font:7.0pt \"Times New Roman\"'>"
+    "&nbsp;&nbsp;&nbsp; </span></span><![endif]><span>예산 검토</span></p>\r\n"
+    "<table><tr><td>항목</td><td>금액</td></tr><tr><td>서버</td><td>1,200</td></tr></table>\r\n"
+    "<!--EndFragment-->\r\n</body></html>"
+)
+# Framework placeholders (Vue/Angular) are HTML comments between blocks.
+HTML_FRAMEWORK_COMMENTS_DOC = (
+    '<div><h3>주간 현황</h3><!--v-if--><p>업데이트</p>'
+    '<!--bindings={"ng-reflect-ng-if": "false"}-->'
+    "<table><tr><th>팀</th><th>건수</th></tr><tr><td>A</td><td>3</td></tr></table></div>"
+)
+
 # Markdown header-frame fill (fill_merged_headers): merged headers leave blanks
 # the toggle forward-fills. VKEY = vertical key merge (부장 spans 2 rows). HV =
 # horizontal group band (1분기/2분기 colspan) + vertical key. VGUARD = a value
@@ -300,6 +318,28 @@ def run_converter_tests() -> list[TestResult]:
                 {"html": HTML_NOISE, "text": "Before\n제품 수량\n키보드 3\nAfter"},
             )["text"],
             "| 제품 | 수량 |",
+        ),
+    )
+    check(
+        "html_document_drops_word_comments",
+        lambda: _assert_equal(
+            # Word's StartFragment/conditional comments must not leak into the
+            # text slot; the list number keeps one space ("1. ").
+            TabledownApp._converted_clipboard(
+                None,
+                {"html": HTML_WORD_LIST_DOC, "text": "회의 안건\r1.\t예산 검토\r항목\t금액\r서버\t1,200\r"},
+            )["text"],
+            "회의 안건\n\n1. 예산 검토\n\n| 항목 | 금액 |\n| --- | --- |\n| 서버 | 1,200 |",
+        ),
+    )
+    check(
+        "html_document_drops_framework_comments",
+        lambda: _assert_equal(
+            TabledownApp._converted_clipboard(
+                None,
+                {"html": HTML_FRAMEWORK_COMMENTS_DOC, "text": "주간 현황\n업데이트\n팀\t건수\nA\t3"},
+            )["text"],
+            "주간 현황\n\n업데이트\n\n| 팀 | 건수 |\n| --- | --- |\n| A | 3 |",
         ),
     )
     check(
