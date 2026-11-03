@@ -287,6 +287,9 @@ Markdown 에디터도 HTML을 우선할 수 있다. Obsidian 1.13.7에서는 `te
   10,000셀·범위당 2,048셀이고, 초과/읽기 실패도 기존 수식 export를 막지 않고 일부 표시로 degrade한다.
   수식의 정적 참조값은 선택 영역 밖·다른 시트에서도 읽혀 clipboard XML에 들어간다는 privacy scope(개인정보 범위)를
   README·Windows PRIVACY와 동기화할 것. 외부 통합문서를 자동으로 열거나 참조를 재귀 추적하지 말 것.
+  지원하지 않는 참조(3-D·전체 행/열·spill `E2#`)는 **시트 이름까지 가린 뒤** 이름 검사를 하므로 그 조각이
+  `defined_name_or_unsupported_syntax`로 중복 보고되지 않는다. spill은 `spill_reference` 사유로 일부 표시한다.
+  LET/LAMBDA가 선언한 지역 이름(`_xlpm.` 접두 포함)은 그 호출 범위 안에서는 정의된 이름이 아니다(2026-11-03).
 - **수식 XML의 해석 보조 metadata는 기존 core(핵심) 필드에 additive로만 추가**:
   선택·참조 셀은 native type을 `값종류=blank|number|text|boolean|error`로 보존하고, 루트는
   `계산모드`·`계산상태`·`계산결과상태`·`값기준="Excel현재원시값"`을 기록한다. Windows는

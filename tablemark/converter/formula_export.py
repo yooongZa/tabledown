@@ -705,10 +705,6 @@ _A1_REFERENCE_PATTERN = re.compile(
     rf"(?:[ \t\r\n]*:[ \t\r\n]*(?P<end>{_CELL_REFERENCE}))?"
     rf"(?![\w.#(])"
 )
-_WHOLE_ROW_OR_COLUMN_REFERENCE_PATTERN = re.compile(
-    r"(?i)(?<![A-Za-z0-9_.])(?:\$?[1-9][0-9]*\s*:\s*\$?[1-9][0-9]*|"
-    r"\$?[A-Z]{1,3}\s*:\s*\$?[A-Z]{1,3})(?![A-Za-z0-9_.])"
-)
 _POSSIBLE_NAME_PATTERN = re.compile(
     r"[A-Za-z_\u0080-\uffff][A-Za-z0-9_.\u0080-\uffff]*"
 )
@@ -737,6 +733,23 @@ _THREE_DIMENSIONAL_PATTERN = re.compile(
     rf"{_CELL_REFERENCE}(?:[ \t\r\n]*:[ \t\r\n]*{_CELL_REFERENCE})?"
     rf"(?![A-Za-z0-9_.#(])"
 )
+# The optional sheet qualifier is part of the span so the sheet name is
+# masked with the range and never re-read as a defined name.
+_WHOLE_ROW_OR_COLUMN_REFERENCE_PATTERN = re.compile(
+    rf"(?i)(?:(?<![A-Za-z0-9_.\]\':]){_SHEET_REFERENCE}!)?"
+    r"(?<![A-Za-z0-9_.])(?:\$?[1-9][0-9]*\s*:\s*\$?[1-9][0-9]*|"
+    r"\$?[A-Z]{1,3}\s*:\s*\$?[A-Z]{1,3})(?![A-Za-z0-9_.])"
+)
+# E2# addresses a dynamic-array spill range whose size is only known to Excel.
+_SPILL_REFERENCE_PATTERN = re.compile(
+    rf"(?:(?<![A-Za-z0-9_.\]\':]){_SHEET_REFERENCE}!)?"
+    rf"(?<![A-Za-z0-9_.]){_CELL_REFERENCE}#"
+)
+# LET/LAMBDA declare formula-local names; they reference no workbook cells.
+_LOCAL_NAME_FUNCTION_PATTERN = re.compile(
+    r"(?i)(?<![A-Za-z0-9_.])(?:_xlfn\.)?(?P<function>LET|LAMBDA)\s*\("
+)
+_LOCAL_PARAMETER_PREFIX = "_XLPM."
 
 
 def extract_formula_reference_targets(
@@ -843,19 +856,25 @@ def _formula_reference_occurrences(
     # Preserve those known references without claiming complete enrichment.
     if _CALCULATED_RANGE_PATTERN.search(searchable):
         add_issue("calculated_range_reference")
-    if _WHOLE_ROW_OR_COLUMN_REFERENCE_PATTERN.search(searchable):
-        add_issue("whole_row_or_column_reference")
-    three_dimensional_matches = tuple(
-        _THREE_DIMENSIONAL_PATTERN.finditer(searchable)
-    )
-    if three_dimensional_matches:
-        add_issue("three_dimensional_reference")
+    # Mask each unsupported reference form, sheet qualifier included, so its
+    # pieces ("A", "C", the sheet name) are not reported again as defined
+    # names. 3-D first: "Jan:Mar!B2" must not be read as a column range.
+    for pattern, issue in (
+        (_THREE_DIMENSIONAL_PATTERN, "three_dimensional_reference"),
+        (_WHOLE_ROW_OR_COLUMN_REFERENCE_PATTERN, "whole_row_or_column_reference"),
+        (_SPILL_REFERENCE_PATTERN, "spill_reference"),
+    ):
+        unsupported_matches = tuple(pattern.finditer(searchable))
+        if not unsupported_matches:
+            continue
+        add_issue(issue)
         searchable_characters = list(searchable)
-        for match in three_dimensional_matches:
+        for match in unsupported_matches:
             searchable_characters[match.start() : match.end()] = " " * (
                 match.end() - match.start()
             )
         searchable = "".join(searchable_characters)
+    local_name_scopes = _local_name_scopes(searchable)
 
     matched_spans: list[tuple[int, int]] = []
     occurrences: list[_FormulaReferenceOccurrence] = []
@@ -950,10 +969,82 @@ def _formula_reference_occurrences(
         # substitutes only A1 references written explicitly in the formula.
         if following.startswith("(") or token.upper() in {"TRUE", "FALSE"}:
             continue
+        if _is_local_name(token, match.start(), local_name_scopes):
+            continue
         add_issue("defined_name_or_unsupported_syntax")
         break
 
     return tuple(occurrences), tuple(issues)
+
+
+def _local_name_scopes(
+    searchable: str,
+) -> tuple[tuple[int, int, frozenset[str]], ...]:
+    """Return ``(open, close, names)`` for each LET/LAMBDA call.
+
+    LET declares names at its odd-numbered arguments before the final
+    calculation; LAMBDA declares every argument but the last. Names are
+    upper-cased without Excel's ``_xlpm.`` storage prefix. Unbalanced calls
+    are skipped, so their names stay reportable.
+    """
+
+    scopes = []
+    for match in _LOCAL_NAME_FUNCTION_PATTERN.finditer(searchable):
+        open_index = match.end() - 1
+        arguments, close_index = _call_arguments(searchable, open_index)
+        if close_index is None or len(arguments) < 2:
+            continue
+        if match.group("function").upper() == "LET":
+            declared = arguments[0:-1:2]
+        else:
+            declared = arguments[:-1]
+        names = frozenset(
+            _local_name_key(argument.strip())
+            for argument in declared
+            if _POSSIBLE_NAME_PATTERN.fullmatch(argument.strip())
+        )
+        if names:
+            scopes.append((open_index, close_index, names))
+    return tuple(scopes)
+
+
+def _call_arguments(text: str, open_index: int) -> tuple[list[str], int | None]:
+    """Split a call's top-level arguments; strings must already be masked."""
+
+    arguments: list[str] = []
+    depth = 0
+    start = open_index + 1
+    for index in range(open_index, len(text)):
+        character = text[index]
+        if character in "({":
+            depth += 1
+        elif character in ")}":
+            depth -= 1
+            if depth == 0:
+                arguments.append(text[start:index])
+                return arguments, index
+        elif character == "," and depth == 1:
+            arguments.append(text[start:index])
+            start = index + 1
+    return arguments, None
+
+
+def _local_name_key(token: str) -> str:
+    key = token.upper()
+    if key.startswith(_LOCAL_PARAMETER_PREFIX):
+        key = key[len(_LOCAL_PARAMETER_PREFIX) :]
+    return key
+
+
+def _is_local_name(
+    token: str,
+    position: int,
+    scopes: tuple[tuple[int, int, frozenset[str]], ...],
+) -> bool:
+    key = _local_name_key(token)
+    return any(
+        start < position < end and key in names for start, end, names in scopes
+    )
 
 
 def _substitute_formula_reference_values(

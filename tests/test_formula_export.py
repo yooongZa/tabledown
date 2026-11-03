@@ -879,6 +879,45 @@ class FormulaExportTests(unittest.TestCase):
             ),
         )
 
+    def test_unsupported_reference_pieces_are_not_reported_as_names(self):
+        # Column letters and sheet qualifiers of an unsupported reference used
+        # to fall through to the name check and add a false defined-name reason.
+        cases = {
+            "=VLOOKUP(A2,코드표!A:C,3,0)": (
+                ["$A$2"], ("whole_row_or_column_reference",)),
+            '=SUMIFS(D:D,A:A,"서울")': ([], ("whole_row_or_column_reference",)),
+            "=SUM('단가 표'!$A:$C)+SUM(1:1)": (
+                [], ("whole_row_or_column_reference",)),
+            "=SUM(E2#)": ([], ("spill_reference",)),
+            "=SUM(Sheet2!E2#)+B1": (["$B$1"], ("spill_reference",)),
+            "=SUM(Jan:Mar!B2)": ([], ("three_dimensional_reference",)),
+        }
+        for formula, (addresses, expected_issues) in cases.items():
+            with self.subTest(formula=formula):
+                targets, issues = analyze_formula_references(formula, "Sheet1")
+                self.assertEqual([target.address for target in targets], addresses)
+                self.assertEqual(issues, expected_issues)
+
+    def test_let_and_lambda_parameters_are_local_names(self):
+        for formula in (
+            "=LET(x,A1*2,x+B1)",
+            "=LET(_xlpm.x,A1*2,_xlpm.x+B1)",
+            "=LAMBDA(a,b,a+b)(A1,B1)",
+        ):
+            with self.subTest(formula=formula):
+                targets, issues = analyze_formula_references(formula, "Sheet1")
+                self.assertEqual(
+                    [target.address for target in targets], ["$A$1", "$B$1"]
+                )
+                self.assertEqual(issues, ())
+        _targets, issues = analyze_formula_references(
+            "=MAP(A1:A3,LAMBDA(v,v*2))", "Sheet1"
+        )
+        self.assertEqual(issues, ())
+        # A name used outside the LET that declares it is still unresolved.
+        _targets, issues = analyze_formula_references("=LET(x,1,x)+y", "Sheet1")
+        self.assertEqual(issues, ("defined_name_or_unsupported_syntax",))
+
     def test_escapes_metadata_address_value_and_formula_attributes(self):
         selection = ExcelFormulaSelection(
             workbook='Q&A "최종".xlsx',

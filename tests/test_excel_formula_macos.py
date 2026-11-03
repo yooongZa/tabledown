@@ -400,7 +400,8 @@ class ExcelFormulaReaderTests(unittest.TestCase):
         )
         self.assertEqual(selection.cells[0].formula_a1, formula)
         self.assertEqual(selection.cells[0].references[0].cells[0].value, "source-a1")
-        self.assertFalse(selection.cells[0].references_complete)
+        # 값 is a LET-local name, so A1 is the formula's only reference.
+        self.assertTrue(selection.cells[0].references_complete)
         self.assertIsNone(selection.cells[1].formula_a1)
         self.assertEqual(selection.cells[3].formula_a1, "=B2*2")
         self.assertEqual(selection.cells[3].references[0].cells[0].value, "value-1")
