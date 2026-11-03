@@ -2082,6 +2082,7 @@ class FormulaExportActionPortableTests(unittest.TestCase):
                 self.assertIn("추정" if lang == "ko" else "inferred", t("help.message", lang))
                 self.assertIn("제목·항목명" if lang == "ko" else "headers and item names", t("help.message", lang))
                 with (
+                    mock.patch.object(self.module, "excel_window_is_foreground", return_value=True),
                     mock.patch.object(app, "copy_selected_excel_formulas") as original,
                     mock.patch.object(app, "copy_selected_excel_formulas_for_ai") as compact,
                 ):
@@ -2259,7 +2260,10 @@ class LoginMenuTests(unittest.TestCase):
             hotkey.MOD_CONTROL | hotkey.MOD_ALT | hotkey.MOD_NOREPEAT,
         )
         self.assertEqual(app._formula_hotkey._vk, hotkey.VK_E)
-        with mock.patch.object(app, "copy_selected_excel_formulas") as export:
+        from tabledown_windows import app as app_module
+
+        with mock.patch.object(app_module, "excel_window_is_foreground", return_value=True), \
+             mock.patch.object(app, "copy_selected_excel_formulas") as export:
             app._formula_hotkey._callback()
         export.assert_called_once_with(None, None)
 
